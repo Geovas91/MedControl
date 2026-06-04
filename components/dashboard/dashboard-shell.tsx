@@ -31,7 +31,16 @@ const navItems = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings }
 ];
 
-export function DashboardShell({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
+type DashboardShellProps = {
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  account?: {
+    name: string;
+    subtitle: string;
+  };
+};
+
+export function DashboardShell({ children, footer, account }: DashboardShellProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -69,8 +78,8 @@ export function DashboardShell({ children, footer }: { children: React.ReactNode
       </nav>
       <div className="mt-auto border-t border-slate-200 p-4">
         <div className="rounded-md bg-slate-50 p-3">
-          <p className="text-sm font-semibold text-ink">Dr. Morgan</p>
-          <p className="text-xs text-slate-500">Primary care clinic</p>
+          <p className="truncate text-sm font-semibold text-ink">{account?.name ?? "Dr. Morgan"}</p>
+          <p className="truncate text-xs text-slate-500">{account?.subtitle ?? "Primary care clinic"}</p>
         </div>
         {footer ? <div className="mt-3">{footer}</div> : null}
       </div>
