@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, CalendarDays, Mail, Phone } from "lucide-react";
+import { ArrowLeft, CalendarDays, ClipboardList, Mail, Phone, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { patients } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
+import { getMedicalNotesForPatient } from "@/lib/mock-medical-notes";
 
 export function generateStaticParams() {
   return patients.map((patient) => ({ id: patient.id }));
@@ -13,6 +14,7 @@ export function generateStaticParams() {
 export default async function PatientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
   const patient = patients.find((item) => item.id === resolvedParams.id);
+  const patientNotes = getMedicalNotesForPatient(resolvedParams.id);
 
   if (!patient) {
     notFound();
@@ -81,6 +83,42 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
             <h2 className="font-bold text-ink">Clinical notes</h2>
             <p className="mt-4 rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-700">{patient.notes}</p>
           </div>
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-clinic" />
+              <h2 className="text-lg font-bold text-ink">Medical notes</h2>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">Recent mock notes for this fictional patient.</p>
+          </div>
+          <ButtonLink href="/dashboard/medical-notes/new" variant="secondary">
+            <Plus className="h-4 w-4" />
+            Create medical note
+          </ButtonLink>
+        </div>
+
+        <div className="mt-5 grid gap-3">
+          {patientNotes.map((note) => (
+            <article key={note.id} className="rounded-md border border-slate-200 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="font-semibold text-ink">{note.templateName}</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {note.specialty} · {formatDate(note.date)} · {note.doctorName}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">{note.clinicalImpression}</p>
+                </div>
+                <Badge variant={note.status === "Finalized" ? "green" : "amber"}>{note.status}</Badge>
+              </div>
+            </article>
+          ))}
+          {patientNotes.length === 0 ? (
+            <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-500">No mock medical notes yet.</p>
+          ) : null}
         </div>
       </section>
     </>

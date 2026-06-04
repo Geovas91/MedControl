@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  ClipboardList,
   CreditCard,
   LayoutDashboard,
   Menu,
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/patients", label: "Patients", icon: UsersRound },
+  { href: "/dashboard/medical-notes", label: "Medical Notes", icon: ClipboardList },
   { href: "/dashboard/appointments", label: "Appointments", icon: CalendarDays },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings }
