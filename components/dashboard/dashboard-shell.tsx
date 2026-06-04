@@ -28,7 +28,7 @@ export function DashboardShell({ children, footer }: { children: React.ReactNode
   const [open, setOpen] = useState(false);
 
   const sidebar = (
-    <aside className="flex h-full w-72 flex-col border-r border-slate-200 bg-white">
+    <aside className="flex h-full w-[min(18rem,calc(100vw-2rem))] flex-col border-r border-slate-200 bg-white">
       <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-5">
         <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
           <Stethoscope className="h-5 w-5" />
@@ -96,7 +96,7 @@ export function DashboardShell({ children, footer }: { children: React.ReactNode
             className="absolute inset-0 bg-slate-950/40"
             onClick={() => setOpen(false)}
           />
-          <div className="relative h-full w-72 bg-white shadow-soft">
+          <div className="relative h-full w-[min(18rem,calc(100vw-2rem))] bg-white shadow-soft">
             <button
               type="button"
               aria-label="Close navigation"
@@ -111,7 +111,7 @@ export function DashboardShell({ children, footer }: { children: React.ReactNode
       ) : null}
 
       <main className="lg:pl-72">
-        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+        <div className="mx-auto w-full max-w-7xl px-4 py-5 pb-10 sm:px-6 lg:px-8 lg:py-6">{children}</div>
       </main>
     </div>
   );

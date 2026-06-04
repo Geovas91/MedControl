@@ -73,4 +73,4 @@ lib/
 
 ## Data
 
-The app currently reads from `lib/mock-data.ts`. No Supabase, Prisma, database, or API integration is connected yet.
+The app currently reads from `lib/mock-data.ts`. The sample records are fictional and intended for UI development only. No Supabase, Prisma, database, or API integration is connected yet.
