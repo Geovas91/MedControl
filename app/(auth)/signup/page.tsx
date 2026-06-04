@@ -14,7 +14,9 @@ export default function SignupPage() {
           <span className="font-bold text-ink">MedControl</span>
         </Link>
         <h1 className="text-2xl font-bold text-ink">Create your clinic workspace</h1>
-        <p className="mt-2 text-sm text-slate-500">This UI is ready for future auth and organization setup.</p>
+        <p className="mt-2 text-sm text-slate-500">
+          Registration remains UI-first while Supabase Auth, profiles, and clinic memberships are phased in.
+        </p>
         <form className="mt-6 grid gap-4">
           <Field label="Clinic name" htmlFor="clinic">
             <Input id="clinic" placeholder="Northside Family Clinic" />
@@ -32,6 +34,9 @@ export default function SignupPage() {
             Create account
           </Button>
         </form>
+        <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">
+          TODO: create the auth user, profile, clinic, and clinic membership in a server action once RLS is validated.
+        </p>
         <p className="mt-6 text-center text-sm text-slate-500">
           Already have an account?{" "}
           <Link href="/login" className="font-semibold text-clinic">
