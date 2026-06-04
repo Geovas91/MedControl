@@ -10,8 +10,9 @@ export function generateStaticParams() {
   return patients.map((patient) => ({ id: patient.id }));
 }
 
-export default function PatientDetailPage({ params }: { params: { id: string } }) {
-  const patient = patients.find((item) => item.id === params.id);
+export default async function PatientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  const patient = patients.find((item) => item.id === resolvedParams.id);
 
   if (!patient) {
     notFound();

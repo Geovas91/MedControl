@@ -1,10 +1,10 @@
 # MedControl
 
-MedControl is a Next.js 14 SaaS starter for doctors and small clinics. It uses mock data only, so it can be run and reviewed without a database or external services.
+MedControl is a Next.js 16 SaaS starter for doctors and small clinics. It uses mock data only, so it can be run and reviewed without a database or external services.
 
 ## Tech Stack
 
-- Next.js 14
+- Next.js 16
 - TypeScript
 - Tailwind CSS
 - App Router
@@ -22,6 +22,8 @@ MedControl is a Next.js 14 SaaS starter for doctors and small clinics. It uses m
 - Clean medical SaaS UI for desktop and mobile
 
 ## Getting Started
+
+Use Node.js 20.9 or newer.
 
 Install dependencies:
 
