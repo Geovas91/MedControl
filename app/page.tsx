@@ -1,8 +1,12 @@
 import {
   ArrowRight,
+  Bot,
   CalendarCheck,
   CheckCircle2,
   CreditCard,
+  FileSignature,
+  MessageCircle,
+  Plug,
   ShieldCheck,
   Sparkles,
   UsersRound
@@ -43,15 +47,29 @@ const pricing = [
     name: "Small Clinic",
     price: "$79",
     detail: "For teams that need shared visibility across front desk and providers.",
-    perks: ["Multiple doctors", "Clinic dashboard", "Priority support"],
+    perks: ["Multiple doctors", "Clinic dashboard", "Calendar integrations", "Digital consent signing"],
     highlighted: true
   },
   {
-    name: "Growth",
+    name: "Premium Clinic",
     price: "Custom",
-    detail: "For expanding practices that want integrations and migration support.",
-    perks: ["Data migration", "Custom workflows", "Integration planning"]
+    detail: "For expanding clinics that need reminders, consent workflows, and multi-doctor operations.",
+    perks: [
+      "Appointment confirmation bot",
+      "WhatsApp/SMS reminders",
+      "Calendar integrations",
+      "Digital consent signing",
+      "Multi-doctor clinic workflows"
+    ]
   }
+];
+
+const comparison = [
+  { feature: "Patient, appointment, and payment workspace", solo: true, clinic: true, premium: true },
+  { feature: "Calendar integrations", solo: false, clinic: true, premium: true },
+  { feature: "Digital consent signing", solo: false, clinic: true, premium: true },
+  { feature: "WhatsApp/SMS reminders", solo: false, clinic: false, premium: true },
+  { feature: "Appointment confirmation bot", solo: false, clinic: false, premium: true }
 ];
 
 export default function LandingPage() {
@@ -195,6 +213,48 @@ export default function LandingPage() {
                 </ul>
               </article>
             ))}
+          </div>
+
+          <div className="mt-10 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div className="grid gap-4 border-b border-slate-200 p-5 md:grid-cols-[1fr_auto] md:items-center">
+              <div>
+                <h3 className="text-xl font-bold text-ink">Feature comparison</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  Advanced integrations remain mock-only until authentication, permissions, and secure data storage are
+                  connected.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-clinic">
+                <Plug className="h-5 w-5" />
+                <FileSignature className="h-5 w-5" />
+                <MessageCircle className="h-5 w-5" />
+                <Bot className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Feature</th>
+                    <th className="px-5 py-3 font-semibold">Solo</th>
+                    <th className="px-5 py-3 font-semibold">Clinic</th>
+                    <th className="px-5 py-3 font-semibold">Premium</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {comparison.map((item) => (
+                    <tr key={item.feature}>
+                      <td className="px-5 py-3 font-medium text-ink">{item.feature}</td>
+                      {[item.solo, item.clinic, item.premium].map((included, index) => (
+                        <td key={index} className="px-5 py-3 text-slate-600">
+                          {included ? <CheckCircle2 className="h-4 w-4 text-clinic" /> : "Add-on"}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>

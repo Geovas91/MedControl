@@ -6,6 +6,9 @@ import {
   CalendarDays,
   ClipboardList,
   CreditCard,
+  FileSignature,
+  MessageSquareText,
+  Plug,
   LayoutDashboard,
   Menu,
   Settings,
@@ -21,7 +24,10 @@ const navItems = [
   { href: "/dashboard/patients", label: "Patients", icon: UsersRound },
   { href: "/dashboard/medical-notes", label: "Medical Notes", icon: ClipboardList },
   { href: "/dashboard/appointments", label: "Appointments", icon: CalendarDays },
+  { href: "/dashboard/consents", label: "Consents", icon: FileSignature },
+  { href: "/dashboard/bot", label: "Bot", icon: MessageSquareText },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
+  { href: "/dashboard/settings/integrations", label: "Integrations", icon: Plug },
   { href: "/dashboard/settings", label: "Settings", icon: Settings }
 ];
 
