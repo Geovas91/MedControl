@@ -373,57 +373,63 @@ create policy "Clinic owners and admins can update clinics" on public.clinics fo
   using (public.has_clinic_role(id, array['owner', 'admin']))
   with check (public.has_clinic_role(id, array['owner', 'admin']));
 
-create policy "Clinic members can read memberships" on public.clinic_members for select using (public.is_clinic_member(clinic_id));
+create policy "Users can read own clinic memberships" on public.clinic_members for select using (user_id = auth.uid());
 create policy "Clinic owners and admins can manage memberships" on public.clinic_members for all
   using (public.has_clinic_role(clinic_id, array['owner', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 
-create policy "Clinic members can read patients" on public.patients for select using (public.is_clinic_member(clinic_id));
+create policy "Scheduling and clinical roles can read patients" on public.patients for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor', 'assistant']));
 create policy "Doctors and admins can insert patients" on public.patients for insert
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 create policy "Doctors and admins can update patients" on public.patients for update
   using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 
-create policy "Clinic members can read appointments" on public.appointments for select using (public.is_clinic_member(clinic_id));
+create policy "Scheduling and clinical roles can read appointments" on public.appointments for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor', 'assistant']));
 create policy "Doctors and admins can insert appointments" on public.appointments for insert
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 create policy "Doctors and admins can update appointments" on public.appointments for update
   using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 
-create policy "Clinic members can read payments" on public.payments for select using (public.is_clinic_member(clinic_id));
-create policy "Doctors and admins can insert payments" on public.payments for insert
-  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
-create policy "Doctors and admins can update payments" on public.payments for update
-  using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
-  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
+create policy "Owners admins and doctors can read payments" on public.payments for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor']));
+create policy "Owners and admins can insert payments" on public.payments for insert
+  with check (public.has_clinic_role(clinic_id, array['owner', 'admin']));
+create policy "Owners and admins can update payments" on public.payments for update
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin']))
+  with check (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 
-create policy "Clinic members can read medical note templates" on public.medical_note_templates for select using (public.is_clinic_member(clinic_id));
+create policy "Clinical roles can read medical note templates" on public.medical_note_templates for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor']));
 create policy "Doctors and admins can manage medical note templates" on public.medical_note_templates for all
   using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 
-create policy "Clinic members can read medical notes" on public.medical_notes for select using (public.is_clinic_member(clinic_id));
+create policy "Clinical roles can read medical notes" on public.medical_notes for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor']));
 create policy "Doctors and admins can insert medical notes" on public.medical_notes for insert
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 create policy "Doctors and admins can update medical notes" on public.medical_notes for update
   using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 
-create policy "Clinic members can read consents" on public.consents for select using (public.is_clinic_member(clinic_id));
+create policy "Clinical roles can read consents" on public.consents for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor']));
 create policy "Doctors and admins can insert consents" on public.consents for insert
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 create policy "Doctors and admins can update consents" on public.consents for update
   using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 
-create policy "Clinic members can read consent signatures" on public.consent_signatures for select
+create policy "Clinical roles can read consent signatures" on public.consent_signatures for select
   using (
     exists (
       select 1 from public.consents
       where consents.id = consent_signatures.consent_id
-        and public.is_clinic_member(consents.clinic_id)
+        and public.has_clinic_role(consents.clinic_id, array['owner', 'admin', 'doctor'])
     )
   );
 create policy "Doctors and admins can insert consent signatures" on public.consent_signatures for insert
@@ -435,30 +441,35 @@ create policy "Doctors and admins can insert consent signatures" on public.conse
     )
   );
 
-create policy "Clinic members can read calendar integrations" on public.calendar_integrations for select using (public.is_clinic_member(clinic_id));
+create policy "Clinic owners and admins can read calendar integrations" on public.calendar_integrations for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 create policy "Clinic owners and admins can manage calendar integrations" on public.calendar_integrations for all
   using (public.has_clinic_role(clinic_id, array['owner', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 
-create policy "Clinic members can read appointment invites" on public.appointment_invites for select using (public.is_clinic_member(clinic_id));
+create policy "Scheduling and clinical roles can read appointment invites" on public.appointment_invites for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor', 'assistant']));
 create policy "Doctors and admins can insert appointment invites" on public.appointment_invites for insert
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 create policy "Doctors and admins can update appointment invites" on public.appointment_invites for update
   using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
 
-create policy "Clinic members can read bot settings" on public.bot_settings for select using (public.is_clinic_member(clinic_id));
+create policy "Clinic owners and admins can read bot settings" on public.bot_settings for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 create policy "Clinic owners and admins can manage bot settings" on public.bot_settings for all
   using (public.has_clinic_role(clinic_id, array['owner', 'admin']))
   with check (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 
-create policy "Clinic members can read bot logs" on public.bot_logs for select using (public.is_clinic_member(clinic_id));
-create policy "Doctors and admins can insert bot logs" on public.bot_logs for insert
-  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
+create policy "Clinic owners and admins can read bot logs" on public.bot_logs for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin']));
+create policy "Clinic owners and admins can insert bot logs" on public.bot_logs for insert
+  with check (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 
-create policy "Clinic members can read audit logs" on public.audit_logs for select using (public.is_clinic_member(clinic_id));
-create policy "Doctors and admins can insert audit logs" on public.audit_logs for insert
-  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']));
+create policy "Clinic owners and admins can read audit logs" on public.audit_logs for select
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin']));
+create policy "Clinic owners and admins can insert audit logs" on public.audit_logs for insert
+  with check (public.has_clinic_role(clinic_id, array['owner', 'admin']));
 
 comment on column public.calendar_integrations.access_token_encrypted is
   'Placeholder only. Real provider tokens must be encrypted or stored through a secure secret management process before production use.';

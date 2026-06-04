@@ -56,11 +56,17 @@ Helper functions centralize clinic access checks:
 Policies follow these rules:
 
 - Users can read and update only their own profile.
-- Clinic members can read clinic records they belong to.
-- Clinic owners/admins can update clinic data and manage clinic members.
-- Clinic members can read clinic-scoped operational records.
-- Doctors/admins can insert and update patients, appointments, payments, medical notes, consents, invites, bot logs, and audit logs.
-- Clinic owners/admins manage bot settings and calendar integrations.
+- Clinic members can read basic clinic records they belong to.
+- Users can read their own clinic membership rows. Clinic owners/admins can manage all memberships for a clinic.
+- Patients can be read by owners, admins, doctors, and assistants. Assistant access is included only for scheduling/front-desk workflows and should be revisited if a clinic wants stricter patient-directory separation.
+- Appointments and appointment invites can be read by owners, admins, doctors, and assistants for scheduling workflows.
+- Payments can be read by owners, admins, and doctors. Only owners/admins can insert or update payments. Assistants do not read payments by default.
+- Medical note templates and medical notes can be read by owners, admins, and doctors. Assistants do not read medical notes by default.
+- Consents can be read by owners, admins, and doctors. Assistants do not read full `consent_text` by default; a future limited view may expose only pending/signed status if needed for front-desk follow-up.
+- Consent signatures can be read by owners, admins, and doctors. Assistants do not read signatures by default.
+- Calendar integrations and bot settings are owner/admin only.
+- Bot logs are owner/admin only in the initial schema. A future phase may add doctor access limited to logs for their own appointments.
+- Audit logs are owner/admin only.
 - No broad anon policies are created for sensitive tables.
 
 ## 4. Auth Flow
@@ -84,7 +90,7 @@ The `clinic_members` table controls access:
 - `owner`: can manage clinic settings, memberships, integrations, and bot settings.
 - `admin`: can manage clinic operations and many settings.
 - `doctor`: can manage clinical workflow records inside the clinic.
-- `assistant`: can read clinic workflow records and support front-desk operations.
+- `assistant`: can support scheduling/front-desk operations. In the initial RLS model, assistants can read appointment and patient scheduling context, but not payments, medical notes, full consent records, consent signatures, calendar integrations, bot settings/logs, or audit logs by default.
 
 All clinic-scoped tables include `clinic_id`. This keeps RLS policies simple and makes future multi-clinic switching explicit.
 
