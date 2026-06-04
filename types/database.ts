@@ -504,5 +504,6 @@ export type Database = {
       consent_status: "pending" | "signed" | "expired" | "revoked";
       calendar_integration_status: "connected" | "disconnected" | "expired" | "failed";
     };
+    CompositeTypes: Record<string, never>;
   };
 };

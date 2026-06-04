@@ -79,9 +79,16 @@ The app uses the official Supabase SSR approach with:
 - `lib/supabase/server.ts` for Server Components, Server Actions, and Route Handlers.
 - `proxy.ts` plus `lib/supabase/proxy.ts` for cookie-based session refresh.
 
-The current `/login`, `/signup`, and `/register` pages remain UI-first. Auth actions should be added in Phase 1 through server actions or client-side form handlers.
+The `/login`, `/signup`, and `/register` pages now post to server actions that use Supabase Auth:
 
-Dashboard routes are not protected yet. Add route guards only after profiles and clinic membership onboarding are working.
+- `signInAction` calls `supabase.auth.signInWithPassword()`.
+- `signUpAction` calls `supabase.auth.signUp()` with `full_name` and `clinic_name` metadata.
+- `signOutAction` calls `supabase.auth.signOut()`.
+- `/auth/callback` exchanges the PKCE code for a session and redirects back into the app.
+
+The app continues to run in mock mode if Supabase environment variables are missing. In that state, auth actions show a configuration error instead of attempting a network request.
+
+Dashboard routes are not protected yet. Add route guards only after profiles and clinic membership onboarding are working. The dashboard shell can display the current Supabase user and sign out, but mock data remains visible for development.
 
 ## 5. Multi-Clinic And Multi-Doctor Access Model
 
