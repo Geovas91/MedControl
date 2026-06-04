@@ -7,13 +7,14 @@ import { patients } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
 
 type PatientsPageProps = {
-  searchParams: {
+  searchParams: Promise<{
     q?: string;
-  };
+  }>;
 };
 
-export default function PatientsPage({ searchParams }: PatientsPageProps) {
-  const query = searchParams.q?.trim().toLowerCase() ?? "";
+export default async function PatientsPage({ searchParams }: PatientsPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const query = resolvedSearchParams.q?.trim().toLowerCase() ?? "";
   const filteredPatients = query
     ? patients.filter((patient) =>
         [patient.name, patient.email, patient.phone, patient.condition].some((value) => value.toLowerCase().includes(query))
@@ -31,7 +32,12 @@ export default function PatientsPage({ searchParams }: PatientsPageProps) {
       <form className="mb-5">
         <div className="relative max-w-xl">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input name="q" defaultValue={searchParams.q} placeholder="Search patients by name, phone, email, or condition" className="pl-10" />
+          <Input
+            name="q"
+            defaultValue={resolvedSearchParams.q}
+            placeholder="Search patients by name, phone, email, or condition"
+            className="pl-10"
+          />
         </div>
       </form>
 
