@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getAppBaseUrl, hasSupabaseConfig } from "@/lib/supabase/config";
+import { getAppBaseUrl, getSupabaseConfigError, hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 function asString(value: FormDataEntryValue | null) {
@@ -21,8 +21,9 @@ export async function signInAction(formData: FormData) {
     redirect(`/login?${encodedParam("error", "Enter your email and password.")}`);
   }
 
-  if (!hasSupabaseConfig()) {
-    redirect(`/login?${encodedParam("error", "Supabase environment variables are not configured yet.")}`);
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    redirect(`/login?${encodedParam("error", configError)}`);
   }
 
   const supabase = await createClient();
@@ -49,8 +50,9 @@ export async function signUpAction(formData: FormData) {
     redirect(`/register?${encodedParam("error", "Complete all required fields.")}`);
   }
 
-  if (!hasSupabaseConfig()) {
-    redirect(`/register?${encodedParam("error", "Supabase environment variables are not configured yet.")}`);
+  const configError = getSupabaseConfigError();
+  if (configError) {
+    redirect(`/register?${encodedParam("error", configError)}`);
   }
 
   const supabase = await createClient();

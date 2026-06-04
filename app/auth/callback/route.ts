@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { hasSupabaseConfig } from "@/lib/supabase/config";
+import { getSupabaseConfigError } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 function getSafeRedirectPath(value: string | null) {
@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get("code");
   const next = getSafeRedirectPath(requestUrl.searchParams.get("next"));
 
-  if (!hasSupabaseConfig()) {
+  const configError = getSupabaseConfigError();
+  if (configError) {
     return NextResponse.redirect(
-      new URL("/login?error=Supabase%20environment%20variables%20are%20not%20configured%20yet.", requestUrl.origin)
+      new URL(`/login?error=${encodeURIComponent(configError)}`, requestUrl.origin)
     );
   }
 
