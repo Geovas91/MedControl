@@ -1,5 +1,6 @@
 import type { Appointment, Patient, Payment } from "@/lib/types";
 
+// All mock records are fictional and intended for UI development only.
 export const patients: Patient[] = [
   {
     id: "pat-001",

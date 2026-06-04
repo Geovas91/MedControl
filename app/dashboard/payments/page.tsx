@@ -30,10 +30,11 @@ export default function PaymentsPage() {
         </div>
         <div className="divide-y divide-slate-200">
           {payments.map((payment) => (
-            <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-4 px-5 py-4 md:grid-cols-[1fr_0.8fr_0.5fr_0.5fr_auto] md:items-center">
+            <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-4 px-4 py-4 sm:px-5 md:grid-cols-[1fr_0.8fr_0.5fr_0.5fr_auto] md:items-center">
               <div>
                 <p className="font-semibold text-ink">{payment.patientName}</p>
                 <p className="text-sm text-slate-500 md:hidden">{payment.concept} · {formatCurrency(payment.amount)}</p>
+                <p className="mt-1 text-xs text-slate-400 md:hidden">{formatDate(payment.date)}</p>
               </div>
               <p className="hidden text-sm text-slate-600 md:block">{payment.concept}</p>
               <p className="hidden text-sm text-slate-600 md:block">{formatDate(payment.date)}</p>

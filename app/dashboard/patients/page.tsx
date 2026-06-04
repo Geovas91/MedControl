@@ -48,7 +48,7 @@ export default function PatientsPage({ searchParams }: PatientsPageProps) {
             <Link
               key={patient.id}
               href={`/dashboard/patients/${patient.id}`}
-              className="grid gap-3 px-5 py-4 transition hover:bg-slate-50 lg:grid-cols-[1.1fr_0.8fr_0.8fr_0.7fr_0.5fr] lg:items-center"
+              className="grid gap-4 px-4 py-4 transition hover:bg-slate-50 sm:px-5 lg:grid-cols-[1.1fr_0.8fr_0.8fr_0.7fr_0.5fr] lg:items-center lg:gap-3"
             >
               <div className="flex items-center gap-3">
                 <div className="grid h-10 w-10 place-items-center rounded-md bg-teal-50 text-clinic">
@@ -59,12 +59,19 @@ export default function PatientsPage({ searchParams }: PatientsPageProps) {
                   <p className="text-sm text-slate-500">{patient.age} years · {patient.gender}</p>
                 </div>
               </div>
-              <div className="text-sm text-slate-600">
+              <div className="grid gap-1 text-sm text-slate-600">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Contact</p>
                 <p>{patient.phone}</p>
-                <p>{patient.email}</p>
+                <p className="break-words">{patient.email}</p>
               </div>
-              <p className="text-sm text-slate-600">{patient.condition}</p>
-              <p className="text-sm text-slate-600">{formatDate(patient.nextVisit)}</p>
+              <div className="text-sm text-slate-600">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Condition</p>
+                <p>{patient.condition}</p>
+              </div>
+              <div className="text-sm text-slate-600">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Next visit</p>
+                <p>{formatDate(patient.nextVisit)}</p>
+              </div>
               <Badge variant={patient.status === "Active" ? "green" : patient.status === "Follow-up" ? "amber" : "slate"}>
                 {patient.status}
               </Badge>

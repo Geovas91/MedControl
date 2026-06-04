@@ -22,11 +22,11 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <h2 className="text-lg font-bold text-ink">Today&apos;s agenda</h2>
           <div className="mt-4 grid gap-3">
             {appointments.map((appointment) => (
-              <div key={appointment.id} className="flex flex-col gap-3 rounded-md border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div key={appointment.id} className="flex flex-col gap-3 rounded-md border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
                 <div>
                   <p className="font-semibold text-ink">{appointment.time} · {appointment.patientName}</p>
                   <p className="text-sm text-slate-500">{appointment.type} with {appointment.doctor}</p>
