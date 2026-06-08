@@ -6,6 +6,12 @@ import { Input } from "@/components/ui/input";
 import { patients } from "@/lib/mock-data";
 import { formatDate } from "@/lib/utils";
 
+const patientStatusLabels: Record<string, string> = {
+  Active: "Activo",
+  "Follow-up": "Seguimiento",
+  Inactive: "Inactivo"
+};
+
 type PatientsPageProps = {
   searchParams: Promise<{
     q?: string;
@@ -24,9 +30,9 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
   return (
     <>
       <PageHeader
-        title="Patients"
-        description="Search, review, and prepare records before each visit."
-        action={{ label: "New patient", href: "/dashboard/patients/new", icon: <Plus className="h-4 w-4" /> }}
+        title="Pacientes"
+        description="Busca, revisa y prepara expedientes antes de cada visita."
+        action={{ label: "Nuevo paciente", href: "/dashboard/patients/new", icon: <Plus className="h-4 w-4" /> }}
       />
 
       <form className="mb-5">
@@ -35,7 +41,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
           <Input
             name="q"
             defaultValue={resolvedSearchParams.q}
-            placeholder="Search patients by name, phone, email, or condition"
+            placeholder="Buscar por nombre, teléfono, email o motivo"
             className="pl-10"
           />
         </div>
@@ -43,11 +49,11 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
 
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="hidden grid-cols-[1.1fr_0.8fr_0.8fr_0.7fr_0.5fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
-          <span>Patient</span>
-          <span>Contact</span>
-          <span>Condition</span>
-          <span>Next visit</span>
-          <span>Status</span>
+          <span>Paciente</span>
+          <span>Contacto</span>
+          <span>Motivo</span>
+          <span>Próxima visita</span>
+          <span>Estado</span>
         </div>
         <div className="divide-y divide-slate-200">
           {filteredPatients.map((patient) => (
@@ -62,33 +68,33 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
                 </div>
                 <div>
                   <p className="font-semibold text-ink">{patient.name}</p>
-                  <p className="text-sm text-slate-500">{patient.age} years · {patient.gender}</p>
+                  <p className="text-sm text-slate-500">{patient.age} años · {patient.gender}</p>
                 </div>
               </div>
               <div className="grid gap-1 text-sm text-slate-600">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Contact</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Contacto</p>
                 <p>{patient.phone}</p>
                 <p className="break-words">{patient.email}</p>
               </div>
               <div className="text-sm text-slate-600">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Condition</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Motivo</p>
                 <p>{patient.condition}</p>
               </div>
               <div className="text-sm text-slate-600">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Next visit</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 lg:hidden">Próxima visita</p>
                 <p>{formatDate(patient.nextVisit)}</p>
               </div>
               <Badge variant={patient.status === "Active" ? "green" : patient.status === "Follow-up" ? "amber" : "slate"}>
-                {patient.status}
+                {patientStatusLabels[patient.status] ?? patient.status}
               </Badge>
             </Link>
           ))}
           {filteredPatients.length === 0 ? (
             <div className="px-5 py-12 text-center text-sm text-slate-500">
-              No patients found.
+              No se encontraron pacientes.
               <Link href="/dashboard/patients/new" className="ml-2 inline-flex items-center gap-1 font-semibold text-clinic">
                 <Pencil className="h-3.5 w-3.5" />
-                Create one
+                Crear paciente
               </Link>
             </div>
           ) : null}

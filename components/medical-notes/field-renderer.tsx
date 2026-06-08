@@ -33,7 +33,7 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
           value={typeof value === "string" ? value : ""}
           onChange={(event) => onChange(field.id, event.target.value)}
         >
-          <option value="">Select an option</option>
+          <option value="">Selecciona una opción</option>
           {field.options?.map((option) => (
             <option key={option} value={option}>
               {option}
@@ -66,7 +66,7 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
     return (
       <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-4">
         <p className="text-sm font-medium text-ink">{field.label}</p>
-        <div className="mt-8 border-t border-slate-300 pt-2 text-xs text-slate-500">Signature placeholder</div>
+        <div className="mt-8 border-t border-slate-300 pt-2 text-xs text-slate-500">Firma demo</div>
       </div>
     );
   }
@@ -90,8 +90,8 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
 export function getDisplayValue(values: MedicalNoteFormValues, fieldId: string) {
   const value = values[fieldId];
   if (typeof value === "boolean") {
-    return value ? "Yes" : "No";
+    return value ? "Sí" : "No";
   }
 
-  return value || "Not recorded";
+  return value || "Sin registro";
 }

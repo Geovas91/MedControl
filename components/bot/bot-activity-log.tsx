@@ -9,10 +9,18 @@ const resultVariant = {
   "No response": "slate"
 } as const;
 
+const resultLabels: Record<string, string> = {
+  Confirmed: "Confirmada",
+  "Needs follow-up": "Requiere seguimiento",
+  "Reschedule requested": "Solicita reprogramar",
+  Cancelled: "Cancelada",
+  "No response": "Sin respuesta"
+};
+
 export function BotActivityLog({ items }: { items: BotActivityLogItem[] }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="font-bold text-ink">Mock bot activity log</h2>
+      <h2 className="font-bold text-ink">Actividad demo del bot</h2>
       <div className="mt-4 grid gap-3">
         {items.map((item) => (
           <article key={item.id} className="grid gap-3 rounded-md border border-slate-200 p-4 lg:grid-cols-[1fr_1fr_auto]">
@@ -22,10 +30,10 @@ export function BotActivityLog({ items }: { items: BotActivityLogItem[] }) {
             </div>
             <div className="text-sm text-slate-600">
               <p>{item.messageSent}</p>
-              <p>Response: {item.patientResponse}</p>
+              <p>Respuesta: {item.patientResponse}</p>
             </div>
             <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-              <Badge variant={resultVariant[item.result]}>{item.result}</Badge>
+              <Badge variant={resultVariant[item.result]}>{resultLabels[item.result] ?? item.result}</Badge>
               <span className="text-xs text-slate-500">{item.timestamp}</span>
             </div>
           </article>

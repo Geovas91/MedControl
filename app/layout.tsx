@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: "MedControl | Clinic management for modern care teams",
-  description: "A clean SaaS workspace for doctors and small clinics to manage patients, appointments, and payments."
+  title: "MedControl | Gestión para médicos y clínicas pequeñas",
+  description: "SaaS médico para gestionar pacientes, citas, notas, consentimientos y pagos en clínicas pequeñas."
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="es-MX">
       <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
   );

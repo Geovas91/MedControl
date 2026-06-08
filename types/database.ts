@@ -53,6 +53,37 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["clinics"]["Insert"]>;
       };
+      clinic_subscriptions: {
+        Row: {
+          id: string;
+          clinic_id: string;
+          plan_id: "basic" | "plus" | "pro";
+          status: "inactive" | "trialing" | "active" | "past_due" | "cancelled";
+          billing_provider: "paypal";
+          provider_subscription_id: string | null;
+          provider_plan_id: string | null;
+          current_period_start: Timestamp | null;
+          current_period_end: Timestamp | null;
+          cancel_at_period_end: boolean;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          clinic_id: string;
+          plan_id: "basic" | "plus" | "pro";
+          status?: "inactive" | "trialing" | "active" | "past_due" | "cancelled";
+          billing_provider?: "paypal";
+          provider_subscription_id?: string | null;
+          provider_plan_id?: string | null;
+          current_period_start?: Timestamp | null;
+          current_period_end?: Timestamp | null;
+          cancel_at_period_end?: boolean;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["clinic_subscriptions"]["Insert"]>;
+      };
       clinic_members: {
         Row: {
           id: string;
@@ -73,6 +104,119 @@ export type Database = {
           updated_at?: Timestamp;
         };
         Update: Partial<Database["public"]["Tables"]["clinic_members"]["Insert"]>;
+      };
+      paypal_webhook_events: {
+        Row: {
+          id: string;
+          event_id: string;
+          event_type: string;
+          provider_subscription_id: string | null;
+          processing_status: "processed" | "ignored" | "failed";
+          created_at: Timestamp;
+          processed_at: Timestamp | null;
+        };
+        Insert: {
+          id?: string;
+          event_id: string;
+          event_type: string;
+          provider_subscription_id?: string | null;
+          processing_status?: "processed" | "ignored" | "failed";
+          created_at?: Timestamp;
+          processed_at?: Timestamp | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["paypal_webhook_events"]["Insert"]>;
+      };
+      doctor_public_profiles: {
+        Row: {
+          id: string;
+          clinic_id: string;
+          profile_id: string | null;
+          clinic_member_id: string | null;
+          slug: string;
+          display_name: string;
+          professional_title: string | null;
+          specialty: string | null;
+          subspecialty: string | null;
+          professional_license: string | null;
+          specialty_license: string | null;
+          bio: string | null;
+          years_experience: number | null;
+          languages: string[];
+          services: string[];
+          consultation_mode: "presencial" | "online" | "hibrida";
+          address_line: string | null;
+          city: string | null;
+          state: string | null;
+          country: string;
+          phone: string | null;
+          whatsapp: string | null;
+          public_email: string | null;
+          website_url: string | null;
+          profile_image_url: string | null;
+          is_published: boolean;
+          accepts_new_patients: boolean;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          clinic_id: string;
+          profile_id?: string | null;
+          clinic_member_id?: string | null;
+          slug: string;
+          display_name: string;
+          professional_title?: string | null;
+          specialty?: string | null;
+          subspecialty?: string | null;
+          professional_license?: string | null;
+          specialty_license?: string | null;
+          bio?: string | null;
+          years_experience?: number | null;
+          languages?: string[];
+          services?: string[];
+          consultation_mode?: "presencial" | "online" | "hibrida";
+          address_line?: string | null;
+          city?: string | null;
+          state?: string | null;
+          country?: string;
+          phone?: string | null;
+          whatsapp?: string | null;
+          public_email?: string | null;
+          website_url?: string | null;
+          profile_image_url?: string | null;
+          is_published?: boolean;
+          accepts_new_patients?: boolean;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["doctor_public_profiles"]["Insert"]>;
+      };
+      doctor_reviews: {
+        Row: {
+          id: string;
+          doctor_public_profile_id: string;
+          clinic_id: string;
+          appointment_id: string;
+          patient_id: string;
+          rating: number;
+          is_verified: boolean;
+          is_visible: boolean;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          doctor_public_profile_id: string;
+          clinic_id: string;
+          appointment_id: string;
+          patient_id: string;
+          rating: number;
+          is_verified?: boolean;
+          is_visible?: boolean;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["doctor_reviews"]["Insert"]>;
       };
       patients: {
         Row: {
@@ -474,6 +618,25 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
       };
+      platform_admins: {
+        Row: {
+          id: string;
+          user_id: string;
+          email: string | null;
+          role: "owner" | "admin" | "support";
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          email?: string | null;
+          role?: "owner" | "admin" | "support";
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_admins"]["Insert"]>;
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -488,6 +651,72 @@ export type Database = {
       is_clinic_member: {
         Args: { clinic_id: string };
         Returns: boolean;
+      };
+      is_platform_admin: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      has_platform_admin_role: {
+        Args: { allowed_roles: string[] };
+        Returns: boolean;
+      };
+      create_personal_clinic_for_current_user: {
+        Args: { clinic_name: string; full_name?: string | null; email?: string | null };
+        Returns: string;
+      };
+      count_clinic_doctors_for_current_user: {
+        Args: { target_clinic_id: string };
+        Returns: number;
+      };
+      list_clinic_members_for_current_user: {
+        Args: { target_clinic_id: string };
+        Returns: Array<{
+          id: string;
+          clinic_id: string;
+          user_id: string;
+          full_name: string | null;
+          email: string | null;
+          role: Database["public"]["Enums"]["clinic_member_role"];
+          status: Database["public"]["Enums"]["clinic_member_status"];
+          created_at: Timestamp;
+        }>;
+      };
+      add_clinic_member_by_email_for_current_user: {
+        Args: {
+          target_clinic_id: string;
+          member_email: string;
+          member_role: Database["public"]["Enums"]["clinic_member_role"];
+        };
+        Returns: string;
+      };
+      create_verified_doctor_review_for_completed_appointment: {
+        Args: {
+          target_doctor_public_profile_id: string;
+          target_appointment_id: string;
+          target_patient_id: string;
+          target_rating: number;
+        };
+        Returns: string;
+      };
+      can_create_doctor_review_for_completed_appointment: {
+        Args: {
+          target_doctor_public_profile_id: string;
+          target_appointment_id: string;
+          target_patient_id: string;
+        };
+        Returns: boolean;
+      };
+      get_public_doctor_review_summary: {
+        Args: { target_doctor_public_profile_id: string };
+        Returns: Array<{
+          average_rating: number | null;
+          review_count: number;
+          rating_1: number;
+          rating_2: number;
+          rating_3: number;
+          rating_4: number;
+          rating_5: number;
+        }>;
       };
     };
     Enums: {

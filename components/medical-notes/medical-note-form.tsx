@@ -16,13 +16,13 @@ type MedicalNoteFormProps = {
 };
 
 const doctorName = "Dr. Morgan";
-const licenseNumber = "Demo license";
+const licenseNumber = "Cédula demo";
 
 export function MedicalNoteForm({ templates, patients }: MedicalNoteFormProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState(templates[0]?.id ?? "");
   const [selectedPatientId, setSelectedPatientId] = useState(patients[0]?.id ?? "");
   const [values, setValues] = useState<MedicalNoteFormValues>({});
-  const [statusMessage, setStatusMessage] = useState("Form is ready for demo input.");
+  const [statusMessage, setStatusMessage] = useState("El formulario está listo para captura demo.");
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === selectedTemplateId) ?? templates[0],
@@ -40,7 +40,7 @@ export function MedicalNoteForm({ templates, patients }: MedicalNoteFormProps) {
   function handleTemplateChange(templateId: string) {
     setSelectedTemplateId(templateId);
     setValues({});
-    setStatusMessage("Template changed. Preview reset for the selected specialty.");
+    setStatusMessage("Plantilla actualizada. La vista previa se reinició para la especialidad seleccionada.");
   }
 
   const previewValues: MedicalNoteFormValues = {
@@ -54,7 +54,7 @@ export function MedicalNoteForm({ templates, patients }: MedicalNoteFormProps) {
   };
 
   if (!selectedTemplate || !selectedPatient) {
-    return <p className="text-sm text-slate-500">Templates or patients are missing.</p>;
+    return <p className="text-sm text-slate-500">Faltan plantillas o pacientes demo.</p>;
   }
 
   return (
@@ -63,15 +63,15 @@ export function MedicalNoteForm({ templates, patients }: MedicalNoteFormProps) {
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-800">
           <div className="flex gap-2">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>Demo data only. Do not enter real patient information yet.</p>
+            <p>Solo datos demo. No ingreses información real de pacientes todavía.</p>
           </div>
         </div>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-bold text-ink">Note setup</h2>
+          <h2 className="text-lg font-bold text-ink">Configuración de nota</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <TemplateSelector templates={templates} selectedTemplateId={selectedTemplateId} onChange={handleTemplateChange} />
-            <Field label="Patient" htmlFor="patient">
+            <Field label="Paciente" htmlFor="patient">
               <Select id="patient" value={selectedPatientId} onChange={(event) => setSelectedPatientId(event.target.value)}>
                 {patients.map((patient) => (
                   <option key={patient.id} value={patient.id}>
@@ -82,10 +82,10 @@ export function MedicalNoteForm({ templates, patients }: MedicalNoteFormProps) {
             </Field>
           </div>
           <div className="mt-5 rounded-md bg-slate-50 p-4 text-sm">
-            <p className="font-semibold text-ink">Doctor information</p>
+            <p className="font-semibold text-ink">Información del médico</p>
             <p className="mt-1 text-slate-600">{doctorName}</p>
-            <p className="text-slate-500">Professional license: {licenseNumber}</p>
-            <p className="text-slate-500">Specialty: {selectedTemplate.specialty}</p>
+            <p className="text-slate-500">Cédula profesional: {licenseNumber}</p>
+            <p className="text-slate-500">Especialidad: {selectedTemplate.specialty}</p>
           </div>
         </section>
 
@@ -104,16 +104,16 @@ export function MedicalNoteForm({ templates, patients }: MedicalNoteFormProps) {
         ))}
 
         <div className="sticky bottom-0 z-10 flex flex-col gap-2 border-t border-slate-200 bg-slate-50 py-4 sm:flex-row">
-          <Button type="button" onClick={() => setStatusMessage("Draft saved locally for demo purposes.")}>
+          <Button type="button" onClick={() => setStatusMessage("Borrador guardado localmente para fines demo.")}>
             <Save className="h-4 w-4" />
-            Save draft
+            Guardar borrador
           </Button>
-          <Button type="button" variant="secondary" onClick={() => setStatusMessage("Note marked as finalized in demo mode.")}>
-            Mark as finalized
+          <Button type="button" variant="secondary" onClick={() => setStatusMessage("Nota marcada como finalizada en modo demo.")}>
+            Marcar como finalizada
           </Button>
-          <Button type="button" variant="secondary" onClick={() => setStatusMessage("Print preview is ready in the panel.")}>
+          <Button type="button" variant="secondary" onClick={() => setStatusMessage("La vista previa de impresión está lista en el panel.")}>
             <Printer className="h-4 w-4" />
-            Print preview
+            Vista de impresión
           </Button>
         </div>
         <p className="text-sm text-slate-500">{statusMessage}</p>

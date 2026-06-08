@@ -1,43 +1,82 @@
 import { Bell, Building2, Plug, ShieldCheck, UserRoundCog } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { getOnboardingStatus } from "@/lib/onboarding";
+import { getClinicPlanContext } from "@/lib/supabase/subscriptions";
 
 const settings = [
   {
-    title: "Clinic profile",
-    description: "Practice name, address, phone, and basic front desk details.",
+    title: "Perfil de clínica",
+    description: "Nombre comercial, dirección, teléfono y datos básicos de recepción.",
     icon: Building2
   },
   {
-    title: "Team access",
-    description: "Doctor and staff roles will be configured when authentication is connected.",
+    title: "Acceso del equipo",
+    description: "Roles de médicos y personal administrativo dentro de la clínica.",
     icon: UserRoundCog
   },
   {
-    title: "Notifications",
-    description: "Appointment reminders and billing alerts can live here later.",
+    title: "Notificaciones",
+    description: "Recordatorios de citas y alertas de pagos para próximas fases.",
     icon: Bell
   },
   {
-    title: "Privacy controls",
-    description: "Future audit logs, data export, and security settings for clinic workflows.",
+    title: "Controles de privacidad",
+    description: "Bitácoras, exportación de datos y ajustes de seguridad para flujos clínicos.",
     icon: ShieldCheck
   },
   {
-    title: "Integrations",
-    description: "Calendar sync, ICS invitations, and messaging provider scaffolding.",
+    title: "Integraciones",
+    description: "Sincronización de calendario, invitaciones ICS y proveedores de mensajería en preparación.",
     icon: Plug,
     href: "/dashboard/settings/integrations"
   }
 ];
 
-export default function SettingsPage() {
+function formatDoctorUsage(currentDoctorCount: number, doctorLimit: number | null) {
+  if (doctorLimit === null) {
+    return "Médicos ilimitados";
+  }
+
+  return `${currentDoctorCount} de ${doctorLimit} médicos`;
+}
+
+export default async function SettingsPage() {
+  const onboardingStatus = await getOnboardingStatus();
+  const planContext =
+    onboardingStatus.state === "complete"
+      ? await getClinicPlanContext(onboardingStatus.membership.clinic_id)
+      : { data: null, error: null };
+
   return (
     <>
       <PageHeader
-        title="Settings"
-        description="Placeholder configuration area for the clinic workspace. No external services are connected yet."
+        title="Configuración"
+        description="Área de configuración del espacio clínico. Los servicios externos todavía no están conectados."
       />
+
+      {planContext.data ? (
+        <section className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-500">Plan actual</p>
+              <p className="mt-1 text-lg font-bold text-ink">{planContext.data.plan.name}</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-500">Médicos registrados</p>
+              <p className="mt-1 text-lg font-bold text-ink">
+                {formatDoctorUsage(planContext.data.currentDoctorCount, planContext.data.doctorLimit)}
+              </p>
+            </div>
+            <div>
+                  <p className="text-sm font-semibold text-slate-500">Estado de suscripción</p>
+                  <p className="mt-1 text-lg font-bold text-ink">
+                {planContext.data.subscription?.status ?? "Pendiente"}
+              </p>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-2">
         {settings.map((item) => {
@@ -52,7 +91,7 @@ export default function SettingsPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
               {item.href ? (
                 <ButtonLink href={item.href} variant="secondary" className="mt-5">
-                  Open integrations
+                  Abrir integraciones
                 </ButtonLink>
               ) : null}
             </article>

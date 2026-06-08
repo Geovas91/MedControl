@@ -11,20 +11,20 @@ function toIcsDate(value: string) {
 export function generateAppointmentIcs(appointment: CalendarSafeAppointment) {
   const now = new Date().toISOString();
   const description = [
-    `Appointment with ${appointment.doctor}`,
-    "Calendar invitations should not include sensitive clinical information."
+    `Cita con ${appointment.doctor}`,
+    "Las invitaciones de calendario no deben incluir información clínica sensible."
   ].join("\\n");
 
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//MedControl//Mock Appointment Calendar//EN",
+    "PRODID:-//MedControl//Calendario Demo de Citas//ES",
     "BEGIN:VEVENT",
     `UID:${appointment.id}@medcontrol.mock`,
     `DTSTAMP:${toIcsDate(now)}`,
     `DTSTART:${toIcsDate(appointment.startsAt)}`,
     `DTEND:${toIcsDate(appointment.endsAt)}`,
-    `SUMMARY:${escapeIcsText(`${appointment.type} appointment`)}`,
+    `SUMMARY:${escapeIcsText(`Cita de ${appointment.type}`)}`,
     `DESCRIPTION:${escapeIcsText(description)}`,
     `LOCATION:${escapeIcsText(appointment.location)}`,
     `STATUS:${appointment.status === "Completed" ? "CONFIRMED" : "TENTATIVE"}`,

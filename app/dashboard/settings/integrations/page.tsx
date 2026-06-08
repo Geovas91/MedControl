@@ -12,22 +12,29 @@ const providerIcon = {
   email: Mail
 };
 
+const syncDirectionLabels: Record<string, string> = {
+  "MedControl to Google Calendar": "MedControl hacia Google Calendar",
+  "Google Calendar to MedControl": "Google Calendar hacia MedControl",
+  "Two-way sync": "Sincronización bidireccional"
+};
+
 export default function IntegrationsPage() {
   const sampleIcs = generateAppointmentIcs(calendarSafeAppointments[0]);
 
   return (
     <>
       <PageHeader
-        title="Calendar integrations"
-        description="Mock setup for calendar sync, appointment invitations, and future reminder delivery."
+        title="Integraciones de calendario"
+        description="Configuración demo para sincronización, invitaciones de citas y recordatorios futuros."
       />
 
       <section className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
         <div className="flex gap-2">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Real OAuth, calendar sync, email, WhatsApp, and SMS delivery are not implemented yet. Do not add production
-            credentials or real patient data. Calendar invitations should not include sensitive clinical information.
+            Próximamente: OAuth real, sincronización de calendario, email, WhatsApp y SMS todavía no están implementados.
+            No agregues credenciales de producción ni datos reales de pacientes. Los tokens de calendario deberán
+            almacenarse cifrados antes de producción.
           </p>
         </div>
       </section>
@@ -48,26 +55,28 @@ export default function IntegrationsPage() {
                     <p className="mt-1 text-sm leading-6 text-slate-600">{integration.description}</p>
                   </div>
                 </div>
-                <Badge variant={integration.status === "Connected" ? "green" : "slate"}>{integration.status}</Badge>
+                <Badge variant={integration.status === "Connected" ? "green" : "slate"}>
+                  {integration.status === "Connected" ? "Demo conectado" : "Próximamente"}
+                </Badge>
               </div>
 
               {integration.provider === "google" ? (
                 <div className="mt-5 grid gap-3 text-sm text-slate-600">
                   <p>
-                    <span className="font-semibold text-slate-700">Selected calendar:</span>{" "}
+                    <span className="font-semibold text-slate-700">Calendario seleccionado:</span>{" "}
                     {integration.selectedCalendar}
                   </p>
                   <p>
-                    <span className="font-semibold text-slate-700">Last sync:</span> {integration.lastSync}
+                    <span className="font-semibold text-slate-700">Última sincronización:</span> {integration.lastSync}
                   </p>
                   <p>
-                    <span className="font-semibold text-slate-700">Sync direction:</span>{" "}
-                    {integration.syncDirection}
+                    <span className="font-semibold text-slate-700">Dirección de sincronización:</span>{" "}
+                    {integration.syncDirection ? syncDirectionLabels[integration.syncDirection] : "No configurada"}
                   </p>
-                  <p className="rounded-md bg-amber-50 p-3 text-amber-800">Google OAuth is not implemented yet.</p>
+                  <p className="rounded-md bg-amber-50 p-3 text-amber-800">Google OAuth todavía no está implementado.</p>
                   <Button type="button" variant="secondary">
                     <RefreshCw className="h-4 w-4" />
-                    Connect Google Calendar
+                    Próximamente: conectar Google Calendar
                   </Button>
                 </div>
               ) : null}
@@ -77,19 +86,19 @@ export default function IntegrationsPage() {
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Button type="button" variant="secondary">
                       <Download className="h-4 w-4" />
-                      Generate .ics
+                      Generar .ics demo
                     </Button>
                     <Button type="button" variant="secondary">
                       <Download className="h-4 w-4" />
-                      Download .ics
+                      Descargar .ics demo
                     </Button>
                     <Button type="button" variant="secondary">
                       <Mail className="h-4 w-4" />
-                      Attach to email
+                      Adjuntar a email demo
                     </Button>
                     <Button type="button" variant="secondary">
                       <Copy className="h-4 w-4" />
-                      Copy feed URL
+                      Copiar URL demo
                     </Button>
                   </div>
                   <pre className="max-h-44 overflow-auto rounded-md bg-slate-950 p-3 text-xs text-slate-100">

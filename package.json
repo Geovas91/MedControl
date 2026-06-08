@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "check:supabase": "node scripts/check-supabase-config.mjs"
   },
   "engines": {
     "node": ">=20.9.0"
