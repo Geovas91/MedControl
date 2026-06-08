@@ -16,9 +16,9 @@ export function ConsentSigningPage({ consent }: { consent: ConsentSigningToken }
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-700">
             <CheckCircle2 className="h-7 w-7" />
           </div>
-          <h1 className="mt-5 text-2xl font-bold text-ink">Signature submitted</h1>
+          <h1 className="mt-5 text-2xl font-bold text-ink">Firma enviada</h1>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            This is a mock success screen. No legal signature was validated and no real patient information was stored.
+            Esta es una pantalla demo. No se validó una firma legal ni se almacenó información real de pacientes.
           </p>
         </section>
       </main>
@@ -38,36 +38,36 @@ export function ConsentSigningPage({ consent }: { consent: ConsentSigningToken }
 
         <section className="rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-700">
           <p>{consent.consentText}</p>
-          <p className="mt-3 font-semibold text-ink">Privacy notice reminder</p>
+          <p className="mt-3 font-semibold text-ink">Recordatorio de aviso de privacidad</p>
           <p className="mt-1">{consent.privacyNotice}</p>
         </section>
 
         <p className="rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-800">
-          This consent template must be reviewed and customized by a legal/healthcare compliance professional before
-          real use.
+          Esta plantilla de consentimiento debe revisarse y personalizarse por un profesional legal y de cumplimiento
+          sanitario antes de cualquier uso real.
         </p>
 
         <label className="flex gap-3 text-sm leading-6 text-slate-700">
           <input type="checkbox" className="mt-1 h-4 w-4 rounded border-slate-300 text-clinic" />
-          I have read and understood this consent.
+          He leído y entendido este consentimiento.
         </label>
         <label className="flex gap-3 text-sm leading-6 text-slate-700">
           <input type="checkbox" className="mt-1 h-4 w-4 rounded border-slate-300 text-clinic" />
-          I consent to the processing of my personal and health-related data.
+          Acepto el tratamiento de mis datos personales y datos relacionados con salud.
         </label>
 
         <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
           <PenLine className="mx-auto h-6 w-6 text-clinic" />
-          <p className="mt-2 text-sm font-semibold text-ink">Signature pad placeholder</p>
-          <p className="mt-1 text-xs text-slate-500">Real signature capture and validation are not implemented.</p>
+          <p className="mt-2 text-sm font-semibold text-ink">Área de firma demo</p>
+          <p className="mt-1 text-xs text-slate-500">La captura y validación de firma real todavía no están implementadas.</p>
         </div>
 
-        <Field label="Full name" htmlFor="full-name">
-          <Input id="full-name" placeholder="Type your full name" />
+        <Field label="Nombre completo" htmlFor="full-name">
+          <Input id="full-name" placeholder="Escribe tu nombre completo" />
         </Field>
 
         <Button type="button" onClick={() => setSubmitted(true)}>
-          Submit signature
+          Enviar firma demo
         </Button>
       </form>
     </main>

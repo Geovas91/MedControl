@@ -7,8 +7,8 @@ export default function NewMedicalNotePage() {
   return (
     <>
       <PageHeader
-        title="Create medical note"
-        description="Choose a general or specialty template and preview a professional note document."
+        title="Crear nota médica"
+        description="Elige una plantilla general o por especialidad y revisa la vista previa del documento."
       />
       <MedicalNoteForm templates={medicalNoteTemplates} patients={patients} />
     </>

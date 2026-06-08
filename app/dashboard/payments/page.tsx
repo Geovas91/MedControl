@@ -5,6 +5,11 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { payments } from "@/lib/mock-data";
 
+const paymentStatusLabels: Record<string, string> = {
+  Paid: "Pagado",
+  Pending: "Pendiente"
+};
+
 export default function PaymentsPage() {
   const paid = payments.filter((payment) => payment.status === "Paid").reduce((sum, payment) => sum + payment.amount, 0);
   const pending = payments
@@ -13,20 +18,20 @@ export default function PaymentsPage() {
 
   return (
     <>
-      <PageHeader title="Payments" description="Track collected income and pending patient balances with mock records." />
+      <PageHeader title="Pagos" description="Consulta ingresos cobrados y saldos pendientes con registros de ejemplo." />
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Collected income" value={formatCurrency(paid)} detail="Paid invoices in mock data" icon={<Banknote className="h-5 w-5" />} />
-        <StatCard label="Pending balance" value={formatCurrency(pending)} detail="Outstanding patient payments" icon={<CreditCard className="h-5 w-5" />} />
-        <StatCard label="Total charges" value={formatCurrency(paid + pending)} detail="All tracked payment records" icon={<ReceiptText className="h-5 w-5" />} />
+        <StatCard label="Ingresos cobrados" value={formatCurrency(paid)} detail="Pagos liquidados en datos de ejemplo" icon={<Banknote className="h-5 w-5" />} />
+        <StatCard label="Saldo pendiente" value={formatCurrency(pending)} detail="Pagos de pacientes por revisar" icon={<CreditCard className="h-5 w-5" />} />
+        <StatCard label="Cargos totales" value={formatCurrency(paid + pending)} detail="Todos los registros de pago" icon={<ReceiptText className="h-5 w-5" />} />
       </div>
 
       <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="grid grid-cols-[1fr_auto] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid-cols-[1fr_0.8fr_0.5fr_0.5fr_auto]">
-          <span>Patient</span>
-          <span className="hidden md:block">Concept</span>
-          <span className="hidden md:block">Date</span>
-          <span className="hidden md:block">Amount</span>
-          <span>Status</span>
+          <span>Paciente</span>
+          <span className="hidden md:block">Concepto</span>
+          <span className="hidden md:block">Fecha</span>
+          <span className="hidden md:block">Monto</span>
+          <span>Estado</span>
         </div>
         <div className="divide-y divide-slate-200">
           {payments.map((payment) => (
@@ -39,7 +44,7 @@ export default function PaymentsPage() {
               <p className="hidden text-sm text-slate-600 md:block">{payment.concept}</p>
               <p className="hidden text-sm text-slate-600 md:block">{formatDate(payment.date)}</p>
               <p className="hidden text-sm font-semibold text-ink md:block">{formatCurrency(payment.amount)}</p>
-              <Badge variant={payment.status === "Paid" ? "green" : "amber"}>{payment.status}</Badge>
+              <Badge variant={payment.status === "Paid" ? "green" : "amber"}>{paymentStatusLabels[payment.status] ?? payment.status}</Badge>
             </div>
           ))}
         </div>

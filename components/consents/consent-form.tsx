@@ -9,61 +9,61 @@ export function ConsentForm() {
     <form className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <section className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Patient" htmlFor="patient">
+          <Field label="Paciente" htmlFor="patient">
             <Select id="patient" defaultValue="Alicia Ramirez">
               {patients.map((patient) => (
                 <option key={patient.id}>{patient.name}</option>
               ))}
             </Select>
           </Field>
-          <Field label="Consent type" htmlFor="consent-type">
-            <Select id="consent-type" defaultValue="General patient consent">
-              <option>General patient consent</option>
-              <option>Privacy and data processing</option>
-              <option>Telemedicine consent</option>
-              <option>Procedure information consent</option>
+          <Field label="Tipo de consentimiento" htmlFor="consent-type">
+            <Select id="consent-type" defaultValue="Consentimiento general de paciente">
+              <option>Consentimiento general de paciente</option>
+              <option>Privacidad y tratamiento de datos</option>
+              <option>Consentimiento para telemedicina</option>
+              <option>Consentimiento informativo de procedimiento</option>
             </Select>
           </Field>
-          <Field label="Doctor / clinic" htmlFor="doctor-clinic">
-            <Input id="doctor-clinic" defaultValue="MedControl Clinic" />
+          <Field label="Médico / clínica" htmlFor="doctor-clinic">
+            <Input id="doctor-clinic" defaultValue="Clínica MedControl" />
           </Field>
-          <Field label="Validity period" htmlFor="validity">
-            <Select id="validity" defaultValue="12 months">
-              <option>30 days</option>
-              <option>6 months</option>
-              <option>12 months</option>
-              <option>24 months</option>
+          <Field label="Periodo de vigencia" htmlFor="validity">
+            <Select id="validity" defaultValue="12 meses">
+              <option>30 días</option>
+              <option>6 meses</option>
+              <option>12 meses</option>
+              <option>24 meses</option>
             </Select>
           </Field>
-          <Field label="Consent text version" htmlFor="version">
+          <Field label="Versión del texto" htmlFor="version">
             <Input id="version" defaultValue="v1.0-demo" />
           </Field>
-          <Field label="Signing link" htmlFor="signing-link">
+          <Field label="Enlace de firma" htmlFor="signing-link">
             <Input id="signing-link" readOnly value="https://app.medcontrol.local/consent/sign/demo-token" />
           </Field>
         </div>
 
         <p className="rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-800">
-          This consent template must be reviewed and customized by a legal/healthcare compliance professional before
-          real use.
+          Esta plantilla debe revisarse y personalizarse por un profesional legal y de cumplimiento sanitario antes de
+          uso real.
         </p>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
           <Button type="button" variant="secondary">
             <Copy className="h-4 w-4" />
-            Copy signing link
+            Copiar enlace de firma
           </Button>
           <Button type="button">
             <QrCode className="h-4 w-4" />
-            Generate QR
+            Generar QR
           </Button>
         </div>
       </section>
 
       <aside className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="font-bold text-ink">QR preview</h2>
+        <h2 className="font-bold text-ink">Vista previa QR</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Mock QR for the public signing page. It does not create a real legal signature or store data.
+          QR demo para la página pública de firma. No crea una firma legal real ni almacena datos.
         </p>
         <div className="mt-5 flex justify-center">
           <QrCodePlaceholder />

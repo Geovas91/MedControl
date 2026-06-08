@@ -7,6 +7,7 @@ import {
   ClipboardList,
   CreditCard,
   FileSignature,
+  Globe2,
   MessageSquareText,
   Plug,
   LayoutDashboard,
@@ -20,15 +21,18 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/patients", label: "Patients", icon: UsersRound },
-  { href: "/dashboard/medical-notes", label: "Medical Notes", icon: ClipboardList },
-  { href: "/dashboard/appointments", label: "Appointments", icon: CalendarDays },
-  { href: "/dashboard/consents", label: "Consents", icon: FileSignature },
+  { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
+  { href: "/dashboard/patients", label: "Pacientes", icon: UsersRound },
+  { href: "/dashboard/medical-notes", label: "Notas médicas", icon: ClipboardList },
+  { href: "/dashboard/appointments", label: "Citas", icon: CalendarDays },
+  { href: "/dashboard/consents", label: "Consentimientos", icon: FileSignature },
   { href: "/dashboard/bot", label: "Bot", icon: MessageSquareText },
-  { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
-  { href: "/dashboard/settings/integrations", label: "Integrations", icon: Plug },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings }
+  { href: "/dashboard/payments", label: "Pagos", icon: CreditCard },
+  { href: "/dashboard/billing", label: "Facturación", icon: CreditCard },
+  { href: "/dashboard/members", label: "Miembros", icon: UsersRound },
+  { href: "/dashboard/directory", label: "Directorio", icon: Globe2 },
+  { href: "/dashboard/settings/integrations", label: "Integraciones", icon: Plug },
+  { href: "/dashboard/settings", label: "Configuración", icon: Settings }
 ];
 
 type DashboardShellProps = {
@@ -52,7 +56,7 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
         </div>
         <div>
           <p className="text-sm font-bold text-ink">MedControl</p>
-          <p className="text-xs text-slate-500">Clinic workspace</p>
+          <p className="text-xs text-slate-500">Espacio clínico</p>
         </div>
       </div>
       <nav className="grid gap-1 p-3">
@@ -97,7 +101,7 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
         </Link>
         <button
           type="button"
-          aria-label="Open navigation"
+          aria-label="Abrir navegación"
           onClick={() => setOpen(true)}
           className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-700"
         >
@@ -109,14 +113,14 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
         <div className="fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
-            aria-label="Close navigation"
+            aria-label="Cerrar navegación"
             className="absolute inset-0 bg-slate-950/40"
             onClick={() => setOpen(false)}
           />
           <div className="relative h-full w-[min(18rem,calc(100vw-2rem))] bg-white shadow-soft">
             <button
               type="button"
-              aria-label="Close navigation"
+              aria-label="Cerrar navegación"
               onClick={() => setOpen(false)}
               className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700"
             >
@@ -128,7 +132,13 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
       ) : null}
 
       <main className="lg:pl-72">
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 pb-10 sm:px-6 lg:px-8 lg:py-6">{children}</div>
+        <div className="mx-auto w-full max-w-7xl px-4 py-5 pb-10 sm:px-6 lg:px-8 lg:py-6">
+          <section className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            <p className="font-semibold">Ambiente de demostración</p>
+            <p>Algunos módulos muestran datos de ejemplo y todavía no deben usarse con pacientes reales.</p>
+          </section>
+          {children}
+        </div>
       </main>
     </div>
   );

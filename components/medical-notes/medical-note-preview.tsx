@@ -12,26 +12,26 @@ export function MedicalNotePreview({ template, values, patientName, doctorName }
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none">
       <header className="border-b border-slate-200 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-clinic">MedControl Clinic</p>
-        <h2 className="mt-1 text-xl font-bold text-ink">Medical note preview</h2>
-        <p className="mt-1 text-sm text-slate-500">Demo print preview. Do not use with real patient information yet.</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-clinic">Clínica MedControl</p>
+        <h2 className="mt-1 text-xl font-bold text-ink">Vista previa de nota médica</h2>
+        <p className="mt-1 text-sm text-slate-500">Vista previa demo. No usar todavía con información real de pacientes.</p>
       </header>
 
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         <div>
-          <dt className="font-semibold text-slate-500">Doctor</dt>
+          <dt className="font-semibold text-slate-500">Médico</dt>
           <dd className="text-ink">{doctorName || "Dr. Morgan"}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-slate-500">Patient</dt>
-          <dd className="text-ink">{patientName || "Select a patient"}</dd>
+          <dt className="font-semibold text-slate-500">Paciente</dt>
+          <dd className="text-ink">{patientName || "Selecciona paciente"}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-slate-500">Template</dt>
+          <dt className="font-semibold text-slate-500">Plantilla</dt>
           <dd className="text-ink">{template.name}</dd>
         </div>
         <div>
-          <dt className="font-semibold text-slate-500">Specialty</dt>
+          <dt className="font-semibold text-slate-500">Especialidad</dt>
           <dd className="text-ink">{template.specialty}</dd>
         </div>
       </dl>
@@ -53,9 +53,9 @@ export function MedicalNotePreview({ template, values, patientName, doctorName }
       </div>
 
       <footer className="mt-8 border-t border-slate-200 pt-4">
-        <div className="mt-8 max-w-xs border-t border-slate-300 pt-2 text-sm text-slate-600">Doctor signature placeholder</div>
+        <div className="mt-8 max-w-xs border-t border-slate-300 pt-2 text-sm text-slate-600">Firma del médico demo</div>
         <p className="mt-6 text-xs text-slate-400">
-          Demo mode footer: this preview is for interface testing only and is not connected to a database.
+          Modo demo: esta vista previa es solo para pruebas de interfaz y no está conectada a una base de datos.
         </p>
       </footer>
     </article>

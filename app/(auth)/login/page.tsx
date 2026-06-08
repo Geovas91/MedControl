@@ -23,9 +23,9 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
           </div>
           <span className="font-bold text-ink">MedControl</span>
         </Link>
-        <h1 className="text-2xl font-bold text-ink">Welcome back</h1>
+        <h1 className="text-2xl font-bold text-ink">Bienvenido de nuevo</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Sign in with Supabase Auth when your project environment variables are configured.
+          Inicia sesión con Supabase Auth cuando las variables de entorno del proyecto estén configuradas.
         </p>
         {params?.error ? (
           <p className="mt-5 rounded-md bg-rose-50 p-3 text-sm leading-6 text-rose-700">{params.error}</p>
@@ -37,25 +37,25 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
           <Field label="Email" htmlFor="email">
             <Input id="email" name="email" type="email" autoComplete="email" placeholder="doctor@clinic.com" required />
           </Field>
-          <Field label="Password" htmlFor="password">
+          <Field label="Contraseña" htmlFor="password">
             <Input
               id="password"
               name="password"
               type="password"
               autoComplete="current-password"
-              placeholder="Password"
+              placeholder="Contraseña"
               required
             />
           </Field>
-          <AuthSubmitButton idleLabel="Sign in" pendingLabel="Signing in..." />
+          <AuthSubmitButton idleLabel="Iniciar sesión" pendingLabel="Iniciando sesión..." />
         </form>
         <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">
-          Dashboard route guards will be enabled after profile and clinic membership onboarding is connected.
+          El dashboard se valida con sesión, onboarding y membresía de clínica.
         </p>
         <p className="mt-6 text-center text-sm text-slate-500">
-          New to MedControl?{" "}
+          ¿Nuevo en MedControl?{" "}
           <Link href="/register" className="font-semibold text-clinic">
-            Create account
+            Crear cuenta
           </Link>
         </p>
       </section>

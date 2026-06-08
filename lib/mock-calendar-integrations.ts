@@ -5,40 +5,40 @@ export const calendarIntegrations: CalendarIntegration[] = [
     id: "google-calendar",
     provider: "google",
     name: "Google Calendar",
-    description: "Prepare a future OAuth connection for syncing appointment blocks.",
+    description: "Preparación de una conexión OAuth futura para sincronizar bloques de citas.",
     status: "Not connected",
-    selectedCalendar: "Primary clinic calendar",
-    lastSync: "Never",
+    selectedCalendar: "Calendario principal de la clínica",
+    lastSync: "Nunca",
     syncDirection: "MedControl to Google Calendar",
-    enabledFeatures: ["OAuth placeholder", "Calendar selection", "Sync direction preview"]
+    enabledFeatures: ["OAuth pendiente", "Selección de calendario", "Vista previa de sincronización"]
   },
   {
     id: "icalendar",
     provider: "icalendar",
     name: "iCalendar / ICS",
-    description: "Generate safe calendar files for mock appointment invitations.",
+    description: "Genera archivos de calendario seguros para invitaciones de ejemplo.",
     status: "Connected",
-    selectedCalendar: "MedControl feed placeholder",
+    selectedCalendar: "Feed demo de MedControl",
     lastSync: "2026-06-04 09:20",
-    enabledFeatures: ["Generate .ics", "Download .ics", "Public feed placeholder"]
+    enabledFeatures: ["Generar .ics", "Descargar .ics", "Feed público pendiente"]
   },
   {
     id: "whatsapp-bot",
     provider: "whatsapp",
-    name: "WhatsApp appointment bot",
-    description: "Premium reminder bot scaffold for future messaging providers.",
+    name: "Bot de citas por WhatsApp",
+    description: "Base del bot premium de recordatorios para futuros proveedores de mensajería.",
     status: "Not connected",
-    lastSync: "Not available",
-    enabledFeatures: ["Template preview", "Opt-in reminder", "Delivery disabled"]
+    lastSync: "No disponible",
+    enabledFeatures: ["Vista previa de plantilla", "Recordatorio con opt-in", "Envío deshabilitado"]
   },
   {
     id: "email-invitations",
     provider: "email",
-    name: "Email invitations",
-    description: "Mock appointment invitation emails with optional ICS attachment.",
+    name: "Invitaciones por email",
+    description: "Invitaciones de cita demo con adjunto ICS opcional.",
     status: "Not connected",
-    lastSync: "Not available",
-    enabledFeatures: ["Email invite placeholder", "ICS attachment placeholder"]
+    lastSync: "No disponible",
+    enabledFeatures: ["Invitación por email pendiente", "Adjunto ICS pendiente"]
   }
 ];
 
@@ -48,28 +48,28 @@ export const appointmentInvitations: AppointmentInvitation[] = [
     invitePreference: "Send Google Calendar invite",
     calendarInviteStatus: "Pending",
     reminderStatus: "Scheduled",
-    location: "Room 2, MedControl Clinic"
+    location: "Consultorio 2, Clínica MedControl"
   },
   {
     appointmentId: "apt-002",
     invitePreference: "Generate iCalendar invite",
     calendarInviteStatus: "Sent",
     reminderStatus: "Not scheduled",
-    location: "Lab review desk"
+    location: "Área de revisión de laboratorio"
   },
   {
     appointmentId: "apt-003",
     invitePreference: "Send WhatsApp reminder",
     calendarInviteStatus: "Not sent",
     reminderStatus: "Sent",
-    location: "Surgery follow-up room"
+    location: "Consultorio de seguimiento quirúrgico"
   },
   {
     appointmentId: "apt-004",
     invitePreference: "Do not send invite",
     calendarInviteStatus: "Accepted",
     reminderStatus: "Sent",
-    location: "Exam room 1"
+    location: "Consultorio 1"
   }
 ];
 
@@ -78,10 +78,10 @@ export const calendarSafeAppointments: CalendarSafeAppointment[] = [
     id: "apt-001",
     patientName: "Alicia Ramirez",
     doctor: "Dr. Morgan",
-    type: "Follow-up",
+    type: "Seguimiento",
     startsAt: "2026-06-04T09:00:00-06:00",
     endsAt: "2026-06-04T09:30:00-06:00",
-    location: "Room 2, MedControl Clinic",
+    location: "Consultorio 2, Clínica MedControl",
     status: "Confirmed"
   }
 ];

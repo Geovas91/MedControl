@@ -23,9 +23,9 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           </div>
           <span className="font-bold text-ink">MedControl</span>
         </Link>
-        <h1 className="text-2xl font-bold text-ink">Create your clinic workspace</h1>
+        <h1 className="text-2xl font-bold text-ink">Crea tu espacio clínico</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Create a Supabase Auth user. Clinic workspace provisioning will be completed in the next onboarding phase.
+          Crea un usuario con Supabase Auth. La clínica y membresía se completan en el flujo de onboarding.
         </p>
         {params?.error ? (
           <p className="mt-5 rounded-md bg-rose-50 p-3 text-sm leading-6 text-rose-700">{params.error}</p>
@@ -34,36 +34,36 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           <p className="mt-5 rounded-md bg-emerald-50 p-3 text-sm leading-6 text-emerald-700">{params.message}</p>
         ) : null}
         <form action={signUpAction} className="mt-6 grid gap-4">
-          <Field label="Clinic name" htmlFor="clinic">
-            <Input id="clinic" name="clinic" autoComplete="organization" placeholder="Northside Family Clinic" required />
+          <Field label="Nombre de la clínica" htmlFor="clinic">
+            <Input id="clinic" name="clinic" autoComplete="organization" placeholder="Clínica Familiar Norte" required />
           </Field>
-          <Field label="Your name" htmlFor="full_name">
+          <Field label="Tu nombre" htmlFor="full_name">
             <Input id="full_name" name="full_name" autoComplete="name" placeholder="Dr. Alex Morgan" required />
           </Field>
-          <Field label="Work email" htmlFor="email">
+          <Field label="Email de trabajo" htmlFor="email">
             <Input id="email" name="email" type="email" autoComplete="email" placeholder="doctor@clinic.com" required />
           </Field>
-          <Field label="Password" htmlFor="password">
+          <Field label="Contraseña" htmlFor="password">
             <Input
               id="password"
               name="password"
               type="password"
               autoComplete="new-password"
               minLength={6}
-              placeholder="Minimum 6 characters"
+              placeholder="Mínimo 6 caracteres"
               required
             />
           </Field>
-          <AuthSubmitButton idleLabel="Create account" pendingLabel="Creating account..." />
+          <AuthSubmitButton idleLabel="Crear cuenta" pendingLabel="Creando cuenta..." />
         </form>
         <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">
-          This phase creates the auth user and stores signup metadata. Clinic and membership records are still part of
-          the next onboarding phase.
+          Esta fase crea el usuario de autenticación y guarda metadata de registro. La clínica y membresía se completan
+          en onboarding.
         </p>
         <p className="mt-6 text-center text-sm text-slate-500">
-          Already have an account?{" "}
+          ¿Ya tienes cuenta?{" "}
           <Link href="/login" className="font-semibold text-clinic">
-            Sign in
+            Iniciar sesión
           </Link>
         </p>
       </section>

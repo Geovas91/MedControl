@@ -6,58 +6,58 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 export default function NewPatientPage() {
   return (
     <>
-      <PageHeader title="Create patient" description="Capture a new patient profile. Submission is mocked until persistence is added later." />
+      <PageHeader title="Crear paciente" description="Captura un perfil de ejemplo. El envío sigue en modo demo hasta agregar persistencia real." />
       <form className="grid gap-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Full name" htmlFor="name">
-            <Input id="name" placeholder="Patient full name" />
+          <Field label="Nombre completo" htmlFor="name">
+            <Input id="name" placeholder="Nombre completo del paciente" />
           </Field>
           <Field label="Email" htmlFor="email">
             <Input id="email" type="email" placeholder="patient@example.com" />
           </Field>
-          <Field label="Phone" htmlFor="phone">
-            <Input id="phone" placeholder="+1 (555) 000-0000" />
+          <Field label="Teléfono" htmlFor="phone">
+            <Input id="phone" placeholder="+52 55 0000 0000" />
           </Field>
-          <Field label="Date of birth" htmlFor="dob">
+          <Field label="Fecha de nacimiento" htmlFor="dob">
             <Input id="dob" type="date" />
           </Field>
-          <Field label="Gender" htmlFor="gender">
+          <Field label="Género" htmlFor="gender">
             <Select id="gender" defaultValue="">
               <option value="" disabled>
-                Select gender
+                Selecciona género
               </option>
-              <option>Female</option>
-              <option>Male</option>
-              <option>Non-binary</option>
-              <option>Prefer not to say</option>
+              <option>Femenino</option>
+              <option>Masculino</option>
+              <option>No binario</option>
+              <option>Prefiere no decir</option>
             </Select>
           </Field>
-          <Field label="Status" htmlFor="status">
-            <Select id="status" defaultValue="Active">
-              <option>Active</option>
-              <option>Follow-up</option>
-              <option>Inactive</option>
+          <Field label="Estado" htmlFor="status">
+            <Select id="status" defaultValue="Activo">
+              <option>Activo</option>
+              <option>Seguimiento</option>
+              <option>Inactivo</option>
             </Select>
           </Field>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Primary condition" htmlFor="condition">
-            <Input id="condition" placeholder="Reason for care" />
+          <Field label="Motivo principal" htmlFor="condition">
+            <Input id="condition" placeholder="Motivo de atención" />
           </Field>
-          <Field label="Next visit" htmlFor="nextVisit">
+          <Field label="Próxima visita" htmlFor="nextVisit">
             <Input id="nextVisit" type="date" />
           </Field>
         </div>
-        <Field label="Allergies" htmlFor="allergies">
-          <Input id="allergies" placeholder="Penicillin, Sulfa drugs" />
+        <Field label="Alergias" htmlFor="allergies">
+          <Input id="allergies" placeholder="Penicilina, sulfas" />
         </Field>
-        <Field label="Clinical notes" htmlFor="notes">
-          <Textarea id="notes" placeholder="Relevant notes, medication, or follow-up instructions" />
+        <Field label="Notas clínicas" htmlFor="notes">
+          <Textarea id="notes" placeholder="Notas relevantes, medicamento o indicaciones de seguimiento" />
         </Field>
         <div className="flex justify-end">
           <Button type="button">
             <Save className="h-4 w-4" />
-            Save mock patient
+            Guardar paciente demo
           </Button>
         </div>
       </form>
