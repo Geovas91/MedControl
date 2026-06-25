@@ -8,7 +8,7 @@ export const consentRecords: ConsentRecord[] = [
     patientName: "Alicia Ramirez",
     consentType: "General patient consent",
     status: "Pending",
-    doctorOrClinic: "MedControl Clinic",
+    doctorOrClinic: "CliniControl Clinic",
     validityPeriod: "12 months",
     textVersion: "v1.0-demo",
     createdDate: "2026-06-01",
@@ -35,7 +35,7 @@ export const consentRecords: ConsentRecord[] = [
     patientName: "Marco Silva",
     consentType: "Telemedicine consent",
     status: "Expired",
-    doctorOrClinic: "MedControl Clinic",
+    doctorOrClinic: "CliniControl Clinic",
     validityPeriod: "30 days",
     textVersion: "v0.9-demo",
     createdDate: "2026-04-12",
@@ -46,7 +46,7 @@ export const consentRecords: ConsentRecord[] = [
 
 export const demoSigningToken: ConsentSigningToken = {
   token: "demo-token",
-  clinicName: "MedControl Clinic",
+  clinicName: "CliniControl Clinic",
   doctorName: "Dr. Morgan",
   patientName: "Alicia Ramirez",
   consentType: "General patient consent",

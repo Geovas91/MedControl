@@ -9,7 +9,7 @@ export const calendarIntegrations: CalendarIntegration[] = [
     status: "Not connected",
     selectedCalendar: "Calendario principal de la clínica",
     lastSync: "Nunca",
-    syncDirection: "MedControl to Google Calendar",
+    syncDirection: "CliniControl to Google Calendar",
     enabledFeatures: ["OAuth pendiente", "Selección de calendario", "Vista previa de sincronización"]
   },
   {
@@ -18,7 +18,7 @@ export const calendarIntegrations: CalendarIntegration[] = [
     name: "iCalendar / ICS",
     description: "Genera archivos de calendario seguros para invitaciones de ejemplo.",
     status: "Connected",
-    selectedCalendar: "Feed demo de MedControl",
+    selectedCalendar: "Feed demo de CliniControl",
     lastSync: "2026-06-04 09:20",
     enabledFeatures: ["Generar .ics", "Descargar .ics", "Feed público pendiente"]
   },
@@ -48,7 +48,7 @@ export const appointmentInvitations: AppointmentInvitation[] = [
     invitePreference: "Send Google Calendar invite",
     calendarInviteStatus: "Pending",
     reminderStatus: "Scheduled",
-    location: "Consultorio 2, Clínica MedControl"
+    location: "Consultorio 2, Clínica CliniControl"
   },
   {
     appointmentId: "apt-002",
@@ -81,7 +81,7 @@ export const calendarSafeAppointments: CalendarSafeAppointment[] = [
     type: "Seguimiento",
     startsAt: "2026-06-04T09:00:00-06:00",
     endsAt: "2026-06-04T09:30:00-06:00",
-    location: "Consultorio 2, Clínica MedControl",
+    location: "Consultorio 2, Clínica CliniControl",
     status: "Confirmed"
   }
 ];

@@ -1,4 +1,4 @@
--- MedControl internal clinic subscription state.
+-- CliniControl internal clinic subscription state.
 -- This prepares PayPal subscription metadata without checkout, webhooks, card data, or sensitive provider payloads.
 
 create table public.clinic_subscriptions (
@@ -64,7 +64,7 @@ create policy "Platform owners and admins can delete clinic subscriptions"
   using (public.has_platform_admin_role(array['owner', 'admin']));
 
 comment on table public.clinic_subscriptions is
-  'Internal clinic subscription state for MedControl plans. PayPal checkout, webhooks, card data, and sensitive provider payloads are intentionally not implemented here.';
+  'Internal clinic subscription state for CliniControl plans. PayPal checkout, webhooks, card data, and sensitive provider payloads are intentionally not implemented here.';
 comment on column public.clinic_subscriptions.provider_subscription_id is
   'External PayPal subscription identifier when available. Do not store sensitive provider payloads.';
 comment on column public.clinic_subscriptions.provider_plan_id is

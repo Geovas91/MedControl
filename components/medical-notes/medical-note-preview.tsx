@@ -12,7 +12,7 @@ export function MedicalNotePreview({ template, values, patientName, doctorName }
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm print:border-0 print:shadow-none">
       <header className="border-b border-slate-200 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-clinic">Clínica MedControl</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-clinic">Clínica CliniControl</p>
         <h2 className="mt-1 text-xl font-bold text-ink">Vista previa de nota médica</h2>
         <p className="mt-1 text-sm text-slate-500">Vista previa demo. No usar todavía con información real de pacientes.</p>
       </header>

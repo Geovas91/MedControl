@@ -72,7 +72,7 @@ export const paypalPlanEnvKeysByPlan = {
 export const commercialPlans = [
   {
     id: "basic",
-    name: "MedControl Básico",
+    name: "CliniControl Básico",
     description: "Para médicos independientes que quieren ordenar pacientes, agenda, notas y pagos desde el primer día.",
     monthlyPriceMxn: 349,
     currency: "MXN",
@@ -106,7 +106,7 @@ export const commercialPlans = [
   },
   {
     id: "plus",
-    name: "MedControl Plus",
+    name: "CliniControl Plus",
     description: "Para clínicas pequeñas que necesitan coordinar médicos, asistentes, pacientes y pagos en un solo lugar.",
     monthlyPriceMxn: 799,
     currency: "MXN",
@@ -145,7 +145,7 @@ export const commercialPlans = [
   },
   {
     id: "pro",
-    name: "MedControl Pro",
+    name: "CliniControl Pro",
     description: "Para clínicas en crecimiento que requieren roles avanzados, reportes ampliados y automatización operativa.",
     monthlyPriceMxn: 1299,
     currency: "MXN",

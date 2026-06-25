@@ -12,7 +12,7 @@ export default function AdminHomePage() {
         <p className="text-sm font-semibold uppercase text-clinic">Portal interno</p>
         <h1 className="mt-1 text-2xl font-bold tracking-normal text-ink">Resumen administrativo</h1>
         <p className="mt-1 max-w-2xl text-sm text-slate-500">
-          Vista inicial para supervisar operación, cuentas y suscripciones de la plataforma MedControl.
+          Vista inicial para supervisar operación, cuentas y suscripciones de la plataforma CliniControl.
         </p>
       </div>
 

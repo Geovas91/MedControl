@@ -21,7 +21,7 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
           <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
             <Stethoscope className="h-5 w-5" />
           </div>
-          <span className="font-bold text-ink">MedControl</span>
+          <span className="font-bold text-ink">CliniControl</span>
         </Link>
         <h1 className="text-2xl font-bold text-ink">Bienvenido de nuevo</h1>
         <p className="mt-2 text-sm text-slate-500">
@@ -53,7 +53,7 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
           El dashboard se valida con sesión, onboarding y membresía de clínica.
         </p>
         <p className="mt-6 text-center text-sm text-slate-500">
-          ¿Nuevo en MedControl?{" "}
+          ¿Nuevo en CliniControl?{" "}
           <Link href="/register" className="font-semibold text-clinic">
             Crear cuenta
           </Link>

@@ -25,7 +25,7 @@ export function ConsentForm() {
             </Select>
           </Field>
           <Field label="Médico / clínica" htmlFor="doctor-clinic">
-            <Input id="doctor-clinic" defaultValue="Clínica MedControl" />
+            <Input id="doctor-clinic" defaultValue="Clínica CliniControl" />
           </Field>
           <Field label="Periodo de vigencia" htmlFor="validity">
             <Select id="validity" defaultValue="12 meses">
@@ -39,7 +39,7 @@ export function ConsentForm() {
             <Input id="version" defaultValue="v1.0-demo" />
           </Field>
           <Field label="Enlace de firma" htmlFor="signing-link">
-            <Input id="signing-link" readOnly value="https://app.medcontrol.local/consent/sign/demo-token" />
+            <Input id="signing-link" readOnly value="https://app.clinicontrol.local/consent/sign/demo-token" />
           </Field>
         </div>
 

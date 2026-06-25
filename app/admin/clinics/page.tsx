@@ -16,7 +16,7 @@ export default function AdminClinicsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-normal text-ink">Clínicas</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500">
-            Supervisión mock de clínicas registradas en la plataforma MedControl.
+            Supervisión mock de clínicas registradas en la plataforma CliniControl.
           </p>
         </div>
         <Button type="button">

@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { defaultLocale, getHtmlLang, getMessages } from "@/config/i18n";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
+const defaultMessages = getMessages(defaultLocale);
 
 export const metadata: Metadata = {
-  title: "MedControl | Gestión para médicos y clínicas pequeñas",
-  description: "SaaS médico para gestionar pacientes, citas, notas, consentimientos y pagos en clínicas pequeñas."
+  title: defaultMessages.metadata.title,
+  description: defaultMessages.metadata.description
 };
 
 export default function RootLayout({
@@ -15,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es-MX">
+    <html lang={getHtmlLang(defaultLocale)}>
       <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
   );

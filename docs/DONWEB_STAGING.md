@@ -1,16 +1,16 @@
 # DonWeb Staging Deploy
 
-Esta guía describe cómo preparar MedControl para staging público controlado en DonWeb usando GitHub, Supabase online y PayPal sandbox. No es una guía de producción abierta.
+Esta guía describe cómo preparar CliniControl para staging público controlado en DonWeb usando GitHub, Supabase online y PayPal sandbox. No es una guía de producción abierta.
 
 ## Ruta Principal
 
-La ruta principal documentada para MedControl es:
+La ruta principal documentada para CliniControl es:
 
 ```text
 GitHub -> DonWeb Cloud Server / CloudPanel / VPS -> Supabase online -> PayPal sandbox
 ```
 
-MedControl usa Next.js 16 con App Router, SSR, route handlers, proxy de sesión Supabase y webhook de PayPal. Por eso la opción recomendada en DonWeb es un servidor Node tradicional donde puedas ejecutar procesos persistentes.
+CliniControl usa Next.js 16 con App Router, SSR, route handlers, proxy de sesión Supabase y webhook de PayPal. Por eso la opción recomendada en DonWeb es un servidor Node tradicional donde puedas ejecutar procesos persistentes.
 
 ## Opción A Recomendada: DonWeb Cloud Server / CloudPanel / VPS
 
@@ -44,7 +44,7 @@ Usar solo si el plan contratado en DonWeb soporta correctamente:
 - Route handlers para APIs.
 - Webhooks públicos con HTTPS.
 
-Si el plan cPanel/hosting Node no soporta bien procesos persistentes, SSR de Next.js o webhooks, no es la opción recomendada para MedControl.
+Si el plan cPanel/hosting Node no soporta bien procesos persistentes, SSR de Next.js o webhooks, no es la opción recomendada para CliniControl.
 
 ## Docker
 
@@ -111,7 +111,11 @@ Configurar en el panel/app/servidor de DonWeb. No poner valores reales en docume
 | Variable | Obligatoria | Nota |
 | --- | --- | --- |
 | `SUPABASE_SERVICE_ROLE_KEY` | Sí para admin/webhooks/server admin client | Nunca debe tener prefijo `NEXT_PUBLIC`. |
+| `APP_ENV` | Sí | Usar `staging`. |
 | `APP_BASE_URL` | Sí | Dominio HTTPS de DonWeb, por ejemplo `https://TU-DOMINIO-DONWEB.com`. |
+| `APP_STAGING_URL` | Recomendado | Fallback del dominio DonWeb staging. |
+| `APP_PRODUCTION_URL` | No en staging | Dominio futuro de producción. |
+| `NEXT_PUBLIC_DEFAULT_LOCALE` | Sí | Mantener `es` durante staging. |
 | `PAYPAL_CLIENT_ID` | Sí para PayPal sandbox | Server-side. |
 | `PAYPAL_CLIENT_SECRET` | Sí para PayPal sandbox | Nunca debe tener prefijo `NEXT_PUBLIC`. |
 | `PAYPAL_ENV` | Sí | Debe ser `sandbox`. |
@@ -126,10 +130,14 @@ Ejemplo sin secretos:
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_DEFAULT_LOCALE=es
 NEXT_PUBLIC_ENABLE_DEMO_CONSENT=false
 NEXT_PUBLIC_PAYPAL_CLIENT_ID=
 SUPABASE_SERVICE_ROLE_KEY=
+APP_ENV=staging
 APP_BASE_URL=https://TU-DOMINIO-DONWEB.com
+APP_STAGING_URL=https://TU-DOMINIO-DONWEB.com
+APP_PRODUCTION_URL=https://TU-DOMINIO-PRODUCCION.com
 PAYPAL_CLIENT_ID=
 PAYPAL_CLIENT_SECRET=
 PAYPAL_ENV=sandbox

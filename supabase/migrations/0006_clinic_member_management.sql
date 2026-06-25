@@ -1,5 +1,5 @@
 -- Clinic member management helpers for dashboard team administration.
--- These functions keep RLS narrow while allowing owners/admins to list and add existing MedControl users.
+-- These functions keep RLS narrow while allowing owners/admins to list and add existing CliniControl users.
 
 create or replace function public.list_clinic_members_for_current_user(target_clinic_id uuid)
 returns table (
@@ -86,7 +86,7 @@ begin
   limit 1;
 
   if target_user_id is null then
-    raise exception 'No existe un usuario de MedControl con ese correo. Pídele que cree su cuenta antes de agregarlo.';
+    raise exception 'No existe un usuario de CliniControl con ese correo. Pídele que cree su cuenta antes de agregarlo.';
   end if;
 
   select clinic_members.id, clinic_members.role::text
@@ -110,11 +110,11 @@ begin
     active_doctor_count := public.count_clinic_doctors_for_current_user(target_clinic_id);
 
     if current_plan_id = 'basic' and active_doctor_count >= 1 then
-      raise exception 'Tu plan MedControl Básico permite 1 médico. Para agregar más médicos, cambia a MedControl Plus.';
+      raise exception 'Tu plan CliniControl Básico permite 1 médico. Para agregar más médicos, cambia a CliniControl Plus.';
     end if;
 
     if current_plan_id = 'plus' and active_doctor_count >= 5 then
-      raise exception 'Tu plan MedControl Plus permite hasta 5 médicos por clínica. Para agregar más médicos, cambia a MedControl Pro.';
+      raise exception 'Tu plan CliniControl Plus permite hasta 5 médicos por clínica. Para agregar más médicos, cambia a CliniControl Pro.';
     end if;
   end if;
 
@@ -132,4 +132,4 @@ $$;
 comment on function public.list_clinic_members_for_current_user(uuid) is
   'Lists members for a clinic visible to the authenticated user without exposing unrelated clinics.';
 comment on function public.add_clinic_member_by_email_for_current_user(uuid, text, text) is
-  'Adds an existing MedControl user to a clinic and enforces doctor limits for Basic and Plus plans.';
+  'Adds an existing CliniControl user to a clinic and enforces doctor limits for Basic and Plus plans.';

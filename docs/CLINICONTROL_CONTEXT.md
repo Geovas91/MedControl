@@ -1,12 +1,12 @@
-# MedControl Context
+# CliniControl Context
 
-Este documento resume el contexto vigente de MedControl. No incluye credenciales reales, datos reales de pacientes ni secretos de producción.
+Este documento resume el contexto vigente de CliniControl. No incluye credenciales reales, datos reales de pacientes ni secretos de producción.
 
 ## Objetivo
 
-MedControl es un SaaS médico para doctores independientes y clínicas pequeñas de México. Su objetivo es ordenar la operación administrativa y clínica básica: pacientes, citas, pagos, notas médicas, consentimientos, miembros de clínica, planes comerciales, directorio público y recordatorios.
+CliniControl es un SaaS médico para doctores independientes y clínicas pequeñas de México. Su objetivo es ordenar la operación administrativa y clínica básica: pacientes, citas, pagos, notas médicas, consentimientos, miembros de clínica, planes comerciales, directorio público y recordatorios.
 
-MedControl no reemplaza el juicio médico, diagnóstico, tratamiento, consentimiento legal ni revisión profesional. Antes de producción se requiere revisión legal, privacidad y seguridad.
+CliniControl no reemplaza el juicio médico, diagnóstico, tratamiento, consentimiento legal ni revisión profesional. Antes de producción se requiere revisión legal, privacidad y seguridad.
 
 ## Stack
 
@@ -78,9 +78,9 @@ MedControl no reemplaza el juicio médico, diagnóstico, tratamiento, consentimi
 
 Los planes no deben cambiarse sin instrucción explícita.
 
-- MedControl Básico: $349 MXN/mes + IVA, 1 médico.
-- MedControl Plus: $799 MXN/mes + IVA, hasta 5 médicos por clínica.
-- MedControl Pro: $1,299 MXN/mes + IVA, médicos ilimitados sujeto a uso razonable.
+- CliniControl Básico: $349 MXN/mes + IVA, 1 médico.
+- CliniControl Plus: $799 MXN/mes + IVA, hasta 5 médicos por clínica.
+- CliniControl Pro: $1,299 MXN/mes + IVA, médicos ilimitados sujeto a uso razonable.
 
 Reglas globales:
 
@@ -142,7 +142,11 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+APP_ENV=staging
 APP_BASE_URL=
+APP_STAGING_URL=
+APP_PRODUCTION_URL=
+NEXT_PUBLIC_DEFAULT_LOCALE=es
 NEXT_PUBLIC_ENABLE_DEMO_CONSENT=false
 ```
 

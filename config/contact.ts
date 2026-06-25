@@ -1,9 +1,9 @@
-// TODO: Replace with the real MedControl sales WhatsApp number.
+// TODO: Replace with the real CliniControl sales WhatsApp number.
 export const salesWhatsAppPhonePlaceholder = "521XXXXXXXXXX";
 export const salesWhatsAppPhone = salesWhatsAppPhonePlaceholder;
 
 export const salesWhatsAppMessage =
-  "Hola, me interesa conocer más sobre MedControl y sus planes para médicos y clínicas.";
+  "Hola, me interesa conocer más sobre CliniControl y sus planes para médicos y clínicas.";
 
 export function isSalesWhatsAppConfigured() {
   return salesWhatsAppPhone !== salesWhatsAppPhonePlaceholder && /^\d{10,15}$/.test(salesWhatsAppPhone);

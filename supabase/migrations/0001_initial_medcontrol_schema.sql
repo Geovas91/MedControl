@@ -1,4 +1,4 @@
--- MedControl initial Supabase schema.
+-- CliniControl initial Supabase schema.
 -- This migration prepares the data model and RLS architecture; the UI remains mock-first.
 
 create extension if not exists pgcrypto;

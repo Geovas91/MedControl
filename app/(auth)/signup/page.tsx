@@ -21,7 +21,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
             <Stethoscope className="h-5 w-5" />
           </div>
-          <span className="font-bold text-ink">MedControl</span>
+          <span className="font-bold text-ink">CliniControl</span>
         </Link>
         <h1 className="text-2xl font-bold text-ink">Crea tu espacio clínico</h1>
         <p className="mt-2 text-sm text-slate-500">

@@ -1,6 +1,6 @@
-# MedControl Supabase Architecture
+# CliniControl Supabase Architecture
 
-MedControl is still mock-first in the UI. This document explains the Supabase schema, auth model, RLS strategy, and rollout plan for replacing mock data incrementally.
+CliniControl is still mock-first in the UI. This document explains the Supabase schema, auth model, RLS strategy, and rollout plan for replacing mock data incrementally.
 
 ## 1. Schema Overview
 

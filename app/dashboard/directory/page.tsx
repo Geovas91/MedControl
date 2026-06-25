@@ -80,7 +80,7 @@ export default async function DashboardDirectoryPage({ searchParams }: Dashboard
     <>
       <PageHeader
         title="Directorio médico"
-        description="Configura el perfil público que aparecerá en el directorio de médicos registrados en MedControl."
+        description="Configura el perfil público que aparecerá en el directorio de médicos registrados en CliniControl."
         action={
           publicUrl
             ? {
