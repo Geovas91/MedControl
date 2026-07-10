@@ -1,31 +1,47 @@
 import type { BillingProvider, DoctorPlanLimit, PlanId } from "@/types/subscriptions";
+import type { Locale } from "@/config/i18n";
 
 export type BillingType = "subscription";
 export type BillingPeriod = "month";
-export type PlanCurrency = "MXN";
+export type PlanCurrency = "MXN" | "USD";
 export type PaypalPlanEnvKey = "PAYPAL_BASIC_PLAN_ID" | "PAYPAL_PLUS_PLAN_ID" | "PAYPAL_PRO_PLAN_ID";
+
+export type PlanLimits = {
+  doctors: string;
+  users: string;
+  clinic: string;
+  directoryProfiles: string;
+  fairUse?: string;
+};
 
 export type CommercialPlan = {
   id: PlanId;
   name: string;
   description: string;
   monthlyPriceMxn: number;
-  currency: PlanCurrency;
+  monthlyPriceUsd: number;
+  currency: "MXN";
   billingPeriod: BillingPeriod;
   taxLabel: "+ IVA";
+  translations: {
+    en: {
+      name: string;
+      description: string;
+      taxLabel: "+ applicable taxes";
+      ctaLabel: string;
+      badgeLabel?: string;
+      audience: string;
+      features: string[];
+      limits: PlanLimits;
+    };
+  };
   highlighted: boolean;
   ctaLabel: string;
   ctaHref: string;
   badgeLabel?: string;
   audience: string;
   features: string[];
-  limits: {
-    doctors: string;
-    users: string;
-    clinic: string;
-    directoryProfiles: string;
-    fairUse?: string;
-  };
+  limits: PlanLimits;
   billing: {
     provider: BillingProvider;
     type: BillingType;
@@ -48,6 +64,22 @@ const sharedFeatures = [
   "Sin comentarios escritos en reseñas",
   "Suscripción mensual vía PayPal",
   "Soporte base"
+] as const;
+
+const sharedFeaturesEn = [
+  "Personal clinic or registered clinic",
+  "Patient management",
+  "Appointment scheduling",
+  "Medical notes",
+  "Specialty-based templates",
+  "Payment tracking and lookup",
+  "Basic consents",
+  "Access to the public doctor directory",
+  "Public profiles for doctors",
+  "Verified star reviews",
+  "No written review comments",
+  "Monthly subscription via PayPal",
+  "Base support"
 ] as const;
 
 function paypalSubscriptionBilling(paypalPlanEnvKey: PaypalPlanEnvKey) {
@@ -75,6 +107,7 @@ export const commercialPlans = [
     name: "CliniControl Básico",
     description: "Para médicos independientes que quieren ordenar pacientes, agenda, notas y pagos desde el primer día.",
     monthlyPriceMxn: 349,
+    monthlyPriceUsd: 19,
     currency: "MXN",
     billingPeriod: "month",
     taxLabel: "+ IVA",
@@ -102,6 +135,35 @@ export const commercialPlans = [
       clinic: "Clínica personal incluida",
       directoryProfiles: "1 perfil público"
     },
+    translations: {
+      en: {
+        name: "CliniControl Basic",
+        description: "For independent doctors who want to organize patients, schedules, notes, and payments from day one.",
+        taxLabel: "+ applicable taxes",
+        ctaLabel: "Start with Basic",
+        audience: "Independent doctor",
+        features: [
+          "1 doctor",
+          "Personal clinic included",
+          "1 public profile in the doctor directory",
+          "Appointment scheduling",
+          "Patient management",
+          "Medical notes",
+          "Specialty-based templates",
+          "Basic consents",
+          "Payment tracking and lookup",
+          "Verified star reviews",
+          "Monthly subscription via PayPal",
+          "Email support"
+        ],
+        limits: {
+          doctors: "1 doctor",
+          users: "No additional administrative users",
+          clinic: "Personal clinic included",
+          directoryProfiles: "1 public profile"
+        }
+      }
+    },
     billing: basicPaypalBilling
   },
   {
@@ -109,6 +171,7 @@ export const commercialPlans = [
     name: "CliniControl Plus",
     description: "Para clínicas pequeñas que necesitan coordinar médicos, asistentes, pacientes y pagos en un solo lugar.",
     monthlyPriceMxn: 799,
+    monthlyPriceUsd: 45,
     currency: "MXN",
     billingPeriod: "month",
     taxLabel: "+ IVA",
@@ -141,6 +204,40 @@ export const commercialPlans = [
       clinic: "Clínica registrada",
       directoryProfiles: "Perfil público para cada médico"
     },
+    translations: {
+      en: {
+        name: "CliniControl Plus",
+        description: "For small clinics that need to coordinate doctors, assistants, patients, and payments in one place.",
+        taxLabel: "+ applicable taxes",
+        ctaLabel: "Choose Plus",
+        badgeLabel: "Most recommended",
+        audience: "Small clinics",
+        features: [
+          "Everything in Basic",
+          "Up to 5 doctors per clinic",
+          "Administrative users/assistants",
+          "Centralized patient management by clinic",
+          "Schedule by doctor",
+          "Clinic roles",
+          "Medical notes by doctor",
+          "Specialty-based templates",
+          "Consents by patient",
+          "Payment tracking and lookup",
+          "Basic appointment and payment reports",
+          "Calendar invitations",
+          "Public profile for each doctor",
+          "Verified reviews by doctor",
+          "Monthly subscription via PayPal",
+          "Priority support"
+        ],
+        limits: {
+          doctors: "Up to 5 doctors per clinic",
+          users: "Administrative users/assistants included",
+          clinic: "Registered clinic",
+          directoryProfiles: "Public profile for each doctor"
+        }
+      }
+    },
     billing: plusPaypalBilling
   },
   {
@@ -148,6 +245,7 @@ export const commercialPlans = [
     name: "CliniControl Pro",
     description: "Para clínicas en crecimiento que requieren roles avanzados, reportes ampliados y automatización operativa.",
     monthlyPriceMxn: 1299,
+    monthlyPriceUsd: 75,
     currency: "MXN",
     billingPeriod: "month",
     taxLabel: "+ IVA",
@@ -183,11 +281,102 @@ export const commercialPlans = [
       directoryProfiles: "Perfil público para cada médico",
       fairUse: "Sujeto a uso razonable"
     },
+    translations: {
+      en: {
+        name: "CliniControl Pro",
+        description: "For growing clinics that need advanced roles, expanded reports, and operational automation.",
+        taxLabel: "+ applicable taxes",
+        ctaLabel: "Choose Pro",
+        audience: "Growing clinics",
+        features: [
+          "Everything in Plus",
+          "Unlimited doctors per clinic",
+          "Administrative users/assistants with no defined limit",
+          "Advanced clinic role management",
+          "Centralized schedule by doctor",
+          "Centralized patient management",
+          "Medical notes by specialty",
+          "Specialty-based templates",
+          "Custom consents",
+          "Payment tracking and lookup",
+          "Expanded appointment and payment reports",
+          "Premium appointment confirmation bot",
+          "Advanced reminders",
+          "Advanced schedule configuration",
+          "Public profile for each doctor",
+          "Verified reviews by doctor",
+          "Monthly subscription via PayPal",
+          "Preferred support",
+          "Subject to fair use"
+        ],
+        limits: {
+          doctors: "Unlimited doctors per clinic",
+          users: "Administrative users/assistants with no defined limit",
+          clinic: "Registered clinic",
+          directoryProfiles: "Public profile for each doctor",
+          fairUse: "Subject to fair use"
+        }
+      }
+    },
     billing: proPaypalBilling
   }
 ] satisfies CommercialPlan[];
 
 export const commonCommercialFeatures = [...sharedFeatures];
+export const commonCommercialFeaturesEn = [...sharedFeaturesEn];
+
+export type LocalizedCommercialPlan = CommercialPlan & {
+  displayName: string;
+  displayDescription: string;
+  displayMonthlyPrice: number;
+  displayCurrency: PlanCurrency;
+  displayTaxLabel: "+ IVA" | "+ applicable taxes";
+  displayCtaLabel: string;
+  displayBadgeLabel?: string;
+  displayAudience: string;
+  displayFeatures: string[];
+  displayLimits: PlanLimits;
+};
+
+export function getLocalizedCommercialPlans(locale: Locale): LocalizedCommercialPlan[] {
+  return commercialPlans.map((plan) => {
+    if (locale === "en") {
+      const translation = plan.translations.en;
+
+      return {
+        ...plan,
+        displayName: translation.name,
+        displayDescription: translation.description,
+        displayMonthlyPrice: plan.monthlyPriceUsd,
+        displayCurrency: "USD",
+        displayTaxLabel: translation.taxLabel,
+        displayCtaLabel: translation.ctaLabel,
+        displayBadgeLabel: translation.badgeLabel,
+        displayAudience: translation.audience,
+        displayFeatures: translation.features,
+        displayLimits: translation.limits
+      };
+    }
+
+    return {
+      ...plan,
+      displayName: plan.name,
+      displayDescription: plan.description,
+      displayMonthlyPrice: plan.monthlyPriceMxn,
+      displayCurrency: "MXN",
+      displayTaxLabel: plan.taxLabel,
+      displayCtaLabel: plan.ctaLabel,
+      displayBadgeLabel: plan.badgeLabel,
+      displayAudience: plan.audience,
+      displayFeatures: plan.features,
+      displayLimits: plan.limits
+    };
+  });
+}
+
+export function getLocalizedCommonCommercialFeatures(locale: Locale) {
+  return locale === "en" ? [...commonCommercialFeaturesEn] : [...commonCommercialFeatures];
+}
 
 const doctorLimitsByPlan = {
   basic: 1,

@@ -1,24 +1,40 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { Inter } from "next/font/google";
-import { defaultLocale, getHtmlLang, getMessages } from "@/config/i18n";
+import { LanguageProvider } from "@/components/i18n/language-provider";
+import { defaultLocale, getHtmlLang, getMessages, isLocale, languageCookieName } from "@/config/i18n";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
-const defaultMessages = getMessages(defaultLocale);
 
-export const metadata: Metadata = {
-  title: defaultMessages.metadata.title,
-  description: defaultMessages.metadata.description
-};
+async function getRequestLocale() {
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get(languageCookieName)?.value;
 
-export default function RootLayout({
+  return isLocale(cookieLocale) ? cookieLocale : defaultLocale;
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const messages = getMessages(await getRequestLocale());
+
+  return {
+    title: messages.metadata.title,
+    description: messages.metadata.description
+  };
+}
+
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getRequestLocale();
+
   return (
-    <html lang={getHtmlLang(defaultLocale)}>
-      <body className={`${inter.className} antialiased`}>{children}</body>
+    <html lang={getHtmlLang(locale)}>
+      <body className={`${inter.className} antialiased`}>
+        <LanguageProvider initialLocale={locale}>{children}</LanguageProvider>
+      </body>
     </html>
   );
 }

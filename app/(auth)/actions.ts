@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { defaultLocale, getMessages, isLocale, languageCookieName } from "@/config/i18n";
 import { getAppBaseUrl, getSupabaseConfigError, hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -13,12 +15,20 @@ function encodedParam(name: "error" | "message", value: string) {
   return `${name}=${encodeURIComponent(value)}`;
 }
 
+async function getAuthMessages() {
+  const cookieStore = await cookies();
+  const locale = cookieStore.get(languageCookieName)?.value;
+
+  return getMessages(isLocale(locale) ? locale : defaultLocale).auth.messages;
+}
+
 export async function signInAction(formData: FormData) {
   const email = asString(formData.get("email"));
   const password = asString(formData.get("password"));
 
   if (!email || !password) {
-    redirect(`/login?${encodedParam("error", "Enter your email and password.")}`);
+    const messages = await getAuthMessages();
+    redirect(`/login?${encodedParam("error", messages.missingCredentials)}`);
   }
 
   const configError = getSupabaseConfigError();
@@ -47,7 +57,8 @@ export async function signUpAction(formData: FormData) {
   const password = asString(formData.get("password"));
 
   if (!clinicName || !fullName || !email || !password) {
-    redirect(`/register?${encodedParam("error", "Complete all required fields.")}`);
+    const messages = await getAuthMessages();
+    redirect(`/register?${encodedParam("error", messages.completeRequiredFields)}`);
   }
 
   const configError = getSupabaseConfigError();
@@ -73,10 +84,11 @@ export async function signUpAction(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
+  const messages = await getAuthMessages();
   redirect(
     `/login?${encodedParam(
       "message",
-      data.session ? "Account created. You can continue to the dashboard." : "Check your email to confirm your account."
+      data.session ? messages.accountCreated : messages.checkEmail
     )}`
   );
 }
@@ -88,5 +100,6 @@ export async function signOutAction() {
   }
 
   revalidatePath("/", "layout");
-  redirect(`/login?${encodedParam("message", "You have been signed out.")}`);
+  const messages = await getAuthMessages();
+  redirect(`/login?${encodedParam("message", messages.signedOut)}`);
 }

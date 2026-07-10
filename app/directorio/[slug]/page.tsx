@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Mail, MapPin, MessageCircle, Phone, Stethoscope } from "lucide-react";
+import { Mail, MapPin, MessageCircle, Phone } from "lucide-react";
+import { PublicHeader } from "@/components/public/public-header";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { ReviewSummary } from "@/components/directory/review-summary";
@@ -59,20 +59,7 @@ export default async function DirectoryProfilePage({ params }: DirectoryProfileP
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
-              <Stethoscope className="h-5 w-5" />
-            </div>
-            <span className="text-lg font-bold text-ink">CliniControl</span>
-          </Link>
-          <Link href="/directorio" className="inline-flex items-center gap-2 text-sm font-semibold text-clinic">
-            <ArrowLeft className="h-4 w-4" />
-            Directorio
-          </Link>
-        </div>
-      </header>
+      <PublicHeader icon="stethoscope" />
 
       <section className="border-b border-slate-200 bg-white py-12">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">

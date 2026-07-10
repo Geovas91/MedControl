@@ -14,6 +14,18 @@ body {
   margin: 0;
   background: #f7faf9;
   color: #16213f;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 button,
