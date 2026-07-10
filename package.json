@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "audit:brand": "node scripts/audit-brand.mjs",
     "check:supabase": "node scripts/check-supabase-config.mjs"
   },
   "engines": {

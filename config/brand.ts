@@ -1,6 +1,5 @@
 export const brandConfig = {
   appName: "CliniControl",
-  previousName: "MedControl",
   name: "CliniControl",
   shortName: "CliniControl",
   tagline: "Gestión inteligente para médicos y clínicas",
