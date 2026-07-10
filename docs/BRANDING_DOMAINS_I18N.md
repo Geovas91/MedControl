@@ -4,8 +4,8 @@
 
 - Product name: `CliniControl`.
 - Central brand configuration: `config/brand.ts`.
-- The GitHub repository remains `Geovas91/MedControl` until it is explicitly renamed in GitHub.
-- Stable database identifiers, migration filenames and existing lowercase technical identifiers may retain `medcontrol` to avoid compatibility breaks.
+- The GitHub repository keeps its historical name until it is explicitly renamed in GitHub.
+- Stable database identifiers, migration filenames and existing lowercase technical identifiers may keep historical values to avoid compatibility breaks.
 
 ## Domains
 
