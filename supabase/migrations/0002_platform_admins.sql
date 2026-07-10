@@ -1,5 +1,5 @@
--- MedControl platform administration access.
--- This table is separate from clinic roles and is used only for internal MedControl administrators.
+-- CliniControl platform administration access.
+-- This table is separate from clinic roles and is used only for internal CliniControl administrators.
 
 create table public.platform_admins (
   id uuid primary key default gen_random_uuid(),
@@ -73,4 +73,4 @@ create policy "Platform owners and admins can delete platform admins"
   using (public.has_platform_admin_role(array['owner', 'admin']));
 
 comment on table public.platform_admins is
-  'Internal MedControl platform administrators. This table is independent from clinic owner, doctor, assistant, and admin roles.';
+  'Internal CliniControl platform administrators. This table is independent from clinic owner, doctor, assistant, and admin roles.';

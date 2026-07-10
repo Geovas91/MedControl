@@ -37,7 +37,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
           <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
             <Stethoscope className="h-5 w-5" />
           </div>
-          <span className="font-bold text-ink">MedControl</span>
+          <span className="font-bold text-ink">CliniControl</span>
         </Link>
 
         <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">

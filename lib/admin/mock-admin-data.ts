@@ -53,21 +53,21 @@ export const adminClinics = [
 export const adminDoctors = [
   {
     name: "Dra. Elena Demo",
-    email: "elena.demo@medcontrol.local",
+    email: "elena.demo@clinicontrol.local",
     clinic: "Clínica Norte Demo",
     role: "Owner",
     status: "Activo"
   },
   {
     name: "Dr. Mateo Demo",
-    email: "mateo.demo@medcontrol.local",
+    email: "mateo.demo@clinicontrol.local",
     clinic: "Consultorio Vida Demo",
     role: "Doctor",
     status: "Invitado"
   },
   {
     name: "Dra. Sofía Demo",
-    email: "sofia.demo@medcontrol.local",
+    email: "sofia.demo@clinicontrol.local",
     clinic: "Centro Salud Sur Demo",
     role: "Admin",
     status: "En revisión"

@@ -8,8 +8,8 @@ import { getPublishedDoctorProfiles } from "@/lib/server/directory";
 import { getDoctorReviewSummaries } from "@/lib/server/reviews";
 
 export const metadata: Metadata = {
-  title: "Directorio médico | MedControl",
-  description: "Directorio público de médicos registrados en MedControl."
+  title: "Directorio médico | CliniControl",
+  description: "Directorio público de médicos registrados en CliniControl."
 };
 
 const consultationModeLabels = {
@@ -42,7 +42,7 @@ export default async function DirectoryPage({ searchParams }: DirectoryPageProps
             <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
               <Stethoscope className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold text-ink">MedControl</span>
+            <span className="text-lg font-bold text-ink">CliniControl</span>
           </Link>
           <ButtonLink href="/login" variant="secondary" className="h-10">
             Iniciar sesión
@@ -54,9 +54,9 @@ export default async function DirectoryPage({ searchParams }: DirectoryPageProps
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-wide text-clinic">Directorio médico público</p>
-            <h1 className="mt-3 text-4xl font-bold tracking-normal text-ink">Médicos registrados en MedControl</h1>
+            <h1 className="mt-3 text-4xl font-bold tracking-normal text-ink">Médicos registrados en CliniControl</h1>
             <p className="mt-4 text-lg leading-8 text-slate-600">
-              Encuentra perfiles públicos configurados por médicos y clínicas que usan MedControl. Este directorio no
+              Encuentra perfiles públicos configurados por médicos y clínicas que usan CliniControl. Este directorio no
               sustituye una valoración médica ni promete resultados clínicos.
             </p>
           </div>

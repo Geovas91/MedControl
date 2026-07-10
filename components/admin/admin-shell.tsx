@@ -24,7 +24,7 @@ export function AdminShell({ children, adminEmail }: { children: React.ReactNode
               <Stethoscope className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-bold text-ink">Administración MedControl</p>
+              <p className="text-sm font-bold text-ink">Administración CliniControl</p>
               <p className="text-xs text-slate-500">Portal interno</p>
             </div>
           </div>
@@ -66,7 +66,7 @@ export function AdminShell({ children, adminEmail }: { children: React.ReactNode
       <header className="border-b border-slate-200 bg-white px-4 py-4 lg:hidden">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm font-bold text-ink">Administración MedControl</p>
+            <p className="text-sm font-bold text-ink">Administración CliniControl</p>
             <p className="text-xs text-slate-500">Portal interno</p>
           </div>
           <Link href="/dashboard" className="text-sm font-semibold text-clinic">

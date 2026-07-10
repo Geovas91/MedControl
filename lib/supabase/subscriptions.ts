@@ -98,7 +98,7 @@ export async function getClinicPlanContext(clinicId: string): Promise<{
   const plan = getPlanById(planId);
 
   if (!plan) {
-    return { data: null, error: new Error(`Unknown MedControl plan: ${planId}`) };
+    return { data: null, error: new Error(`Unknown CliniControl plan: ${planId}`) };
   }
 
   const doctorCountRpcClient = supabase as unknown as DoctorCountRpcClient;
@@ -147,8 +147,8 @@ export async function validateCanAddDoctorToClinic(clinicId: string): Promise<Ad
 
   const message =
     context.planId === "basic"
-      ? "Tu plan MedControl Básico permite 1 médico. Para agregar más médicos, cambia a MedControl Plus."
-      : "Tu plan MedControl Plus permite hasta 5 médicos por clínica. Para agregar más médicos, cambia a MedControl Pro.";
+      ? "Tu plan CliniControl Básico permite 1 médico. Para agregar más médicos, cambia a CliniControl Plus."
+      : "Tu plan CliniControl Plus permite hasta 5 médicos por clínica. Para agregar más médicos, cambia a CliniControl Pro.";
 
   return {
     canAddDoctor: false,

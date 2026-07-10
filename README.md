@@ -1,6 +1,6 @@
-# MedControl
+# CliniControl
 
-MedControl es una aplicación SaaS para médicos y clínicas pequeñas en México. Este repositorio está preparado para staging público controlado, no para producción ni para uso con pacientes reales.
+CliniControl es una aplicación SaaS para médicos y clínicas pequeñas en México. Este repositorio está preparado para staging público controlado, no para producción ni para uso con pacientes reales.
 
 ## Estado Actual
 
@@ -24,13 +24,14 @@ MedControl es una aplicación SaaS para médicos y clínicas pequeñas en Méxic
 ## Seguridad y Staging
 
 - No uses datos reales de pacientes en staging.
-- MedControl no reemplaza el juicio clínico, diagnóstico, tratamiento ni revisión profesional.
+- CliniControl no reemplaza el juicio clínico, diagnóstico, tratamiento ni revisión profesional.
 - El flujo público de firma de consentimientos está deshabilitado por defecto y solo puede activarse para demo con `NEXT_PUBLIC_ENABLE_DEMO_CONSENT=true`.
 - Las integraciones de calendario son demo/proximamente. Antes de producción, los tokens de calendario deben almacenarse cifrados.
 - No subas credenciales reales al repositorio.
 - `.env.local` debe permanecer ignorado por Git.
 - `SUPABASE_SERVICE_ROLE_KEY` es server-only y nunca debe usarse en Client Components.
 - Guía DonWeb staging: `docs/DONWEB_STAGING.md`.
+- Runbook operativo DonWeb CloudPanel: `docs/DONWEB_CLOUDPANEL_RUNBOOK.md`.
 - Guía de deploy staging: `docs/STAGING_DEPLOY.md`.
 
 ## Pendiente Antes de Producción
@@ -53,7 +54,11 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+APP_ENV=staging
 APP_BASE_URL=
+APP_STAGING_URL=
+APP_PRODUCTION_URL=
+NEXT_PUBLIC_DEFAULT_LOCALE=es
 NEXT_PUBLIC_ENABLE_DEMO_CONSENT=false
 ```
 

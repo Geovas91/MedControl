@@ -55,7 +55,7 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
           <Stethoscope className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-sm font-bold text-ink">MedControl</p>
+          <p className="text-sm font-bold text-ink">CliniControl</p>
           <p className="text-xs text-slate-500">Espacio clínico</p>
         </div>
       </div>
@@ -97,7 +97,7 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
         <Link href="/dashboard" className="flex items-center gap-2 font-bold text-ink">
           <Stethoscope className="h-5 w-5 text-clinic" />
-          MedControl
+          CliniControl
         </Link>
         <button
           type="button"

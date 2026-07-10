@@ -13,8 +13,8 @@ const providerIcon = {
 };
 
 const syncDirectionLabels: Record<string, string> = {
-  "MedControl to Google Calendar": "MedControl hacia Google Calendar",
-  "Google Calendar to MedControl": "Google Calendar hacia MedControl",
+  "CliniControl to Google Calendar": "CliniControl hacia Google Calendar",
+  "Google Calendar to CliniControl": "Google Calendar hacia CliniControl",
   "Two-way sync": "Sincronización bidireccional"
 };
 

@@ -1,6 +1,6 @@
-# MedControl Staging Deploy
+# CliniControl Staging Deploy
 
-Esta guía prepara MedControl para un despliegue público de staging controlado con HTTPS. La ruta principal es GitHub + DonWeb + Supabase online + PayPal sandbox. Staging sirve para validar flujos, seguridad básica, Supabase online y PayPal sandbox; no es producción abierta.
+Esta guía prepara CliniControl para un despliegue público de staging controlado con HTTPS. La ruta principal es GitHub + DonWeb + Supabase online + PayPal sandbox. Staging sirve para validar flujos, seguridad básica, Supabase online y PayPal sandbox; no es producción abierta.
 
 ## Objetivo
 
@@ -67,16 +67,20 @@ No hardcodear valores reales en archivos versionados. Configurar estas variables
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Pública | Sí, o usar anon fallback | Key pública preferida para Supabase. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Pública | Solo si no se usa publishable key | Fallback legacy para Supabase. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Privada server-side | Sí para admin/webhooks/server helpers que usan admin client | Nunca usar en Client Components. |
+| `APP_ENV` | Privada/server env | Sí | Usar `staging` en DonWeb staging. |
 | `APP_BASE_URL` | Privada/server env | Sí | URL absoluta de la app para callbacks y links generados. |
+| `APP_STAGING_URL` | Privada/server env | Recomendado | Fallback del dominio de staging. |
+| `APP_PRODUCTION_URL` | Privada/server env | No en staging | Reserva el dominio futuro de producción. |
+| `NEXT_PUBLIC_DEFAULT_LOCALE` | Pública | Sí | Mantener `es` durante staging. |
 | `NEXT_PUBLIC_ENABLE_DEMO_CONSENT` | Pública | Sí | Mantener `false` en staging público controlado. |
 | `NEXT_PUBLIC_PAYPAL_CLIENT_ID` | Pública | Sí para probar botón PayPal sandbox | Client ID público sandbox para SDK de PayPal. |
 | `PAYPAL_CLIENT_ID` | Privada server-side | Sí para PayPal sandbox | Client ID server-side sandbox. |
 | `PAYPAL_CLIENT_SECRET` | Privada server-side | Sí para PayPal sandbox | Secret server-side sandbox. |
 | `PAYPAL_ENV` | Privada/server env | Sí | Debe ser `sandbox`. No usar `live` en staging. |
 | `PAYPAL_WEBHOOK_ID` | Privada server-side | Sí para webhook sandbox | ID del webhook sandbox configurado en PayPal. |
-| `PAYPAL_BASIC_PLAN_ID` | Privada/server env | Sí para probar Básico | Plan ID sandbox de MedControl Básico. |
-| `PAYPAL_PLUS_PLAN_ID` | Privada/server env | Sí para probar Plus | Plan ID sandbox de MedControl Plus. |
-| `PAYPAL_PRO_PLAN_ID` | Privada/server env | Sí para probar Pro | Plan ID sandbox de MedControl Pro. |
+| `PAYPAL_BASIC_PLAN_ID` | Privada/server env | Sí para probar Básico | Plan ID sandbox de CliniControl Básico. |
+| `PAYPAL_PLUS_PLAN_ID` | Privada/server env | Sí para probar Plus | Plan ID sandbox de CliniControl Plus. |
+| `PAYPAL_PRO_PLAN_ID` | Privada/server env | Sí para probar Pro | Plan ID sandbox de CliniControl Pro. |
 | `GOOGLE_CLIENT_ID` | Privada/server env | No | Placeholder. Integraciones Google están demo/proximamente. |
 | `GOOGLE_CLIENT_SECRET` | Privada server-side | No | Placeholder. No usar credenciales productivas todavía. |
 | `GOOGLE_REDIRECT_URI` | Privada/server env | No | Placeholder. No hay OAuth real. |
@@ -87,8 +91,12 @@ No hardcodear valores reales en archivos versionados. Configurar estas variables
 Valores de referencia:
 
 ```bash
+APP_ENV=staging
 APP_BASE_URL=http://localhost:3000
 APP_BASE_URL=https://TU-DOMINIO-DONWEB.com
+APP_STAGING_URL=https://TU-DOMINIO-DONWEB.com
+APP_PRODUCTION_URL=https://TU-DOMINIO-PRODUCCION.com
+NEXT_PUBLIC_DEFAULT_LOCALE=es
 NEXT_PUBLIC_ENABLE_DEMO_CONSENT=false
 PAYPAL_ENV=sandbox
 ```
@@ -144,9 +152,9 @@ Mantener `PAYPAL_ENV=sandbox`. No cambiar PayPal a live en staging.
 
 1. Crear o confirmar producto de suscripción en PayPal sandbox.
 2. Crear o confirmar planes sandbox para:
-   - MedControl Básico.
-   - MedControl Plus.
-   - MedControl Pro.
+   - CliniControl Básico.
+   - CliniControl Plus.
+   - CliniControl Pro.
 3. Configurar variables:
    - `NEXT_PUBLIC_PAYPAL_CLIENT_ID`
    - `PAYPAL_CLIENT_ID`

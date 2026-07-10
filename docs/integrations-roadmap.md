@@ -1,4 +1,4 @@
-# MedControl Integrations Roadmap
+# CliniControl Integrations Roadmap
 
 This document describes the future implementation plan for calendar integrations, patient consent QR signing, and the premium appointment confirmation bot. The current application remains frontend-only with mock data.
 

@@ -35,13 +35,13 @@ export async function generateMetadata({ params }: DirectoryProfilePageProps): P
 
   if (!profile) {
     return {
-      title: "Perfil médico | MedControl"
+      title: "Perfil médico | CliniControl"
     };
   }
 
   return {
-    title: `${profile.display_name}${profile.specialty ? ` | ${profile.specialty}` : ""} | MedControl`,
-    description: `Perfil público de ${profile.display_name} en el directorio médico de MedControl.`
+    title: `${profile.display_name}${profile.specialty ? ` | ${profile.specialty}` : ""} | CliniControl`,
+    description: `Perfil público de ${profile.display_name} en el directorio médico de CliniControl.`
   };
 }
 
@@ -65,7 +65,7 @@ export default async function DirectoryProfilePage({ params }: DirectoryProfileP
             <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
               <Stethoscope className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold text-ink">MedControl</span>
+            <span className="text-lg font-bold text-ink">CliniControl</span>
           </Link>
           <Link href="/directorio" className="inline-flex items-center gap-2 text-sm font-semibold text-clinic">
             <ArrowLeft className="h-4 w-4" />

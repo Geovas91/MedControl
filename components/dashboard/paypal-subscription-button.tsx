@@ -52,7 +52,7 @@ function loadPaypalScript(clientId: string) {
   }
 
   paypalScriptPromise = new Promise((resolve, reject) => {
-    const existingScript = document.querySelector<HTMLScriptElement>("script[data-medcontrol-paypal-sdk='true']");
+    const existingScript = document.querySelector<HTMLScriptElement>("script[data-clinicontrol-paypal-sdk='true']");
 
     if (existingScript) {
       existingScript.addEventListener("load", () => resolve(), { once: true });
@@ -65,7 +65,7 @@ function loadPaypalScript(clientId: string) {
       clientId
     )}&vault=true&intent=subscription`;
     script.async = true;
-    script.dataset.medcontrolPaypalSdk = "true";
+    script.dataset.clinicontrolPaypalSdk = "true";
     script.addEventListener("load", () => resolve(), { once: true });
     script.addEventListener("error", () => reject(new Error("No se pudo cargar PayPal.")), { once: true });
     document.body.appendChild(script);

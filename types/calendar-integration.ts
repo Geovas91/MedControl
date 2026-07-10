@@ -3,8 +3,8 @@ export type CalendarProvider = "google" | "icalendar" | "whatsapp" | "email";
 export type CalendarConnectionStatus = "Connected" | "Not connected";
 
 export type CalendarSyncDirection =
-  | "MedControl to Google Calendar"
-  | "Google Calendar to MedControl"
+  | "CliniControl to Google Calendar"
+  | "Google Calendar to CliniControl"
   | "Two-way sync";
 
 export type InvitationStatus = "Not sent" | "Sent" | "Accepted" | "Declined" | "Pending" | "Failed";

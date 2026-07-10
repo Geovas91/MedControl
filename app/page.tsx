@@ -75,7 +75,7 @@ export default function LandingPage() {
             <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
               <Sparkles className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold text-ink">MedControl</span>
+            <span className="text-lg font-bold text-ink">CliniControl</span>
           </div>
           <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
             <a href="#features" className="hover:text-clinic">
@@ -104,7 +104,7 @@ export default function LandingPage() {
               Gestión médica para clínicas en México
             </p>
             <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-ink sm:text-5xl lg:text-6xl">
-              MedControl
+              CliniControl
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
               Un SaaS claro para médicos y clínicas pequeñas que necesitan organizar pacientes, agenda, notas médicas,
@@ -163,7 +163,7 @@ export default function LandingPage() {
           <div className="max-w-2xl">
             <h2 className="text-3xl font-bold text-ink">Diseñado para el trabajo diario de consulta</h2>
             <p className="mt-3 text-slate-600">
-              MedControl empieza con lo esencial para atender pacientes, coordinar equipos y cerrar el día con claridad.
+              CliniControl empieza con lo esencial para atender pacientes, coordinar equipos y cerrar el día con claridad.
             </p>
           </div>
           <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
@@ -251,7 +251,7 @@ export default function LandingPage() {
                     <th className="px-5 py-3 font-semibold">Función</th>
                     {commercialPlans.map((plan) => (
                       <th key={plan.id} className="px-5 py-3 font-semibold">
-                        {plan.name.replace("MedControl ", "")}
+                        {plan.name.replace("CliniControl ", "")}
                       </th>
                     ))}
                   </tr>

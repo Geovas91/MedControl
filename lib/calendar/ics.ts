@@ -18,9 +18,9 @@ export function generateAppointmentIcs(appointment: CalendarSafeAppointment) {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//MedControl//Calendario Demo de Citas//ES",
+    "PRODID:-//CliniControl//Calendario Demo de Citas//ES",
     "BEGIN:VEVENT",
-    `UID:${appointment.id}@medcontrol.mock`,
+    `UID:${appointment.id}@clinicontrol.mock`,
     `DTSTAMP:${toIcsDate(now)}`,
     `DTSTART:${toIcsDate(appointment.startsAt)}`,
     `DTEND:${toIcsDate(appointment.endsAt)}`,

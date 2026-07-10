@@ -133,7 +133,7 @@ export default async function BillingPage() {
           <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-clinic" />
           <p>
             El botón registra la aprobación de PayPal y el webhook verificado será la fuente confiable para cambios
-            posteriores de estado. MedControl no almacena tarjetas ni credenciales financieras.
+            posteriores de estado. CliniControl no almacena tarjetas ni credenciales financieras.
           </p>
         </div>
       </section>

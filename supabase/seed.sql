@@ -1,4 +1,4 @@
--- Fictional MedControl seed data for local development only.
+-- Fictional CliniControl seed data for local development only.
 -- Do not use real patient, clinic, or provider information in seed files.
 
 insert into auth.users (
@@ -19,7 +19,7 @@ values (
   '00000000-0000-0000-0000-000000000000',
   'authenticated',
   'authenticated',
-  'demo.doctor@medcontrol.local',
+  'demo.doctor@clinicontrol.local',
   crypt('demo-password', gen_salt('bf')),
   now(),
   now(),
@@ -33,7 +33,7 @@ insert into public.profiles (id, full_name, email, phone, role)
 values (
   '00000000-0000-0000-0000-000000000001',
   'Dr. Demo Morgan',
-  'demo.doctor@medcontrol.local',
+  'demo.doctor@clinicontrol.local',
   '+52 55 0000 0000',
   'doctor'
 )
@@ -46,10 +46,10 @@ on conflict (id) do update set
 insert into public.clinics (id, name, legal_name, phone, email, address, timezone, plan)
 values (
   '10000000-0000-0000-0000-000000000001',
-  'MedControl Demo Clinic',
-  'MedControl Demo Clinic S.A. de C.V.',
+  'CliniControl Demo Clinic',
+  'CliniControl Demo Clinic S.A. de C.V.',
   '+52 55 0101 0101',
-  'clinic.demo@medcontrol.local',
+  'clinic.demo@clinicontrol.local',
   'Demo Street 123, Mexico City',
   'America/Mexico_City',
   'professional'
@@ -88,7 +88,7 @@ values
     '1984-03-12',
     'female',
     '+52 55 0202 0202',
-    'demo.alicia@medcontrol.local',
+    'demo.alicia@clinicontrol.local',
     'Demo allergy note',
     'Demo medication note',
     'Fictional history for UI testing only',
@@ -102,7 +102,7 @@ values
     '1990-08-21',
     'male',
     '+52 55 0303 0303',
-    'demo.marco@medcontrol.local',
+    'demo.marco@clinicontrol.local',
     null,
     null,
     'Fictional history for UI testing only',

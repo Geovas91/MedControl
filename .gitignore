@@ -4,6 +4,8 @@ out
 dist
 .env
 .env*.local
+.env.production
+.env.staging
 supabase/.temp
 npm-debug.log*
 yarn-debug.log*

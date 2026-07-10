@@ -17,7 +17,7 @@ export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
         </div>
         <div>
           <h2 className="font-bold text-ink">Agregar miembro</h2>
-          <p className="text-sm text-slate-500">Agrega un usuario que ya tenga cuenta en MedControl.</p>
+          <p className="text-sm text-slate-500">Agrega un usuario que ya tenga cuenta en CliniControl.</p>
         </div>
       </div>
 
