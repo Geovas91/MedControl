@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Building2, CreditCard, LayoutDashboard, Stethoscope, UsersRound } from "lucide-react";
+import { AppVersionLabel } from "@/components/app-version-label";
 import { cn } from "@/lib/utils";
 
 const adminNavItems = [
@@ -60,6 +61,7 @@ export function AdminShell({ children, adminEmail }: { children: React.ReactNode
           >
             Volver al dashboard
           </Link>
+          <AppVersionLabel className="mt-3" />
         </div>
       </aside>
 
@@ -90,7 +92,12 @@ export function AdminShell({ children, adminEmail }: { children: React.ReactNode
       </header>
 
       <main className="lg:pl-72">
-        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {children}
+          <footer className="mt-8 border-t border-slate-200 pt-4 lg:hidden">
+            <AppVersionLabel />
+          </footer>
+        </div>
       </main>
     </div>
   );

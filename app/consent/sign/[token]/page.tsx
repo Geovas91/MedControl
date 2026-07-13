@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { ConsentSigningPage } from "@/components/consents/consent-signing-page";
+import { featureFlags } from "@/config/features";
 import { consentRecords, demoSigningToken } from "@/lib/mock-consents";
 
 type ConsentSignPageProps = {
@@ -9,7 +10,7 @@ type ConsentSignPageProps = {
 };
 
 function isDemoConsentEnabled() {
-  return process.env.NEXT_PUBLIC_ENABLE_DEMO_CONSENT === "true";
+  return featureFlags.demoConsentEnabled;
 }
 
 export function generateStaticParams() {

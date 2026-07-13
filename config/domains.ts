@@ -1,15 +1,17 @@
+import { brandConfig } from "@/config/brand";
+
 const localAppUrl = "http://localhost:3000";
 
-export type AppEnvironment = "local" | "staging" | "production";
+export type AppEnvironment = "development" | "staging" | "production";
 
 function getAppEnvironment(): AppEnvironment {
-  const value = process.env.APP_ENV;
+  const value = process.env.NEXT_PUBLIC_APP_ENV || process.env.APP_ENV;
 
   if (value === "staging" || value === "production") {
     return value;
   }
 
-  return "local";
+  return "development";
 }
 
 function normalizeAppUrl(value: string | undefined) {
@@ -30,6 +32,9 @@ function normalizeAppUrl(value: string | undefined) {
 export const domainConfig = {
   environment: getAppEnvironment(),
   localAppUrl,
+  mexicoDomain: brandConfig.domains.mexico,
+  internationalDomain: brandConfig.domains.international,
+  stagingDomain: brandConfig.domains.staging,
   stagingAppUrl: normalizeAppUrl(process.env.APP_STAGING_URL),
   productionAppUrl: normalizeAppUrl(process.env.APP_PRODUCTION_URL)
 } as const;
