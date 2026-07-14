@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { getSalesWhatsAppUrl } from "@/config/contact";
 import { commercialPlans, commonCommercialFeatures } from "@/config/plans";
+import { AppVersionLabel } from "@/components/app-version-label";
 import { ButtonLink } from "@/components/ui/button";
 import { formatMXN } from "@/lib/format";
 
@@ -315,6 +316,12 @@ export default function LandingPage() {
           )}
         </div>
       </section>
+      <footer className="border-t border-slate-200 bg-slate-50 px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500">CliniControl para médicos y clínicas pequeñas.</p>
+          <AppVersionLabel />
+        </div>
+      </footer>
     </main>
   );
 }

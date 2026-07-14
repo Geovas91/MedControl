@@ -18,6 +18,7 @@ import {
   X
 } from "lucide-react";
 import { useState } from "react";
+import { AppVersionLabel } from "@/components/app-version-label";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -86,6 +87,7 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
           <p className="truncate text-xs text-slate-500">{account?.subtitle ?? "Primary care clinic"}</p>
         </div>
         {footer ? <div className="mt-3">{footer}</div> : null}
+        <AppVersionLabel className="mt-3" />
       </div>
     </aside>
   );
@@ -138,6 +140,9 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
             <p>Algunos módulos muestran datos de ejemplo y todavía no deben usarse con pacientes reales.</p>
           </section>
           {children}
+          <footer className="mt-8 border-t border-slate-200 pt-4 lg:hidden">
+            <AppVersionLabel />
+          </footer>
         </div>
       </main>
     </div>
