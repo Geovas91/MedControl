@@ -26,8 +26,8 @@ La clasificación será exclusivamente operativa. El aislamiento seguirá depend
 - Los registros existentes y las clínicas nuevas mantienen el comportamiento actual mediante el valor predeterminado `customer`.
 - Los equipos pueden identificar y limpiar tenants controlados sin inferir su propósito por nombre o dominio.
 - `tenant_type` puede servir para filtros administrativos futuros, pero no autoriza acceso ni desactiva controles.
-- Los UUIDs deterministas permiten regenerar los tenants demo de forma repetible.
-- `reset_demo.sql` queda limitado a los UUIDs administrados por los seeds y a filas que aún sean de tipo `demo`.
+- Los UUIDs deterministas permiten regenerar de forma repetible `demo1` como tenant demo y `demo2` como tenant persistente de QA.
+- `reset_demo.sql` queda limitado al UUID de `demo1` y exige tipo `demo`; `reset_qa.sql` queda limitado al UUID de `demo2` y exige tipo `qa`.
 
 ## Alternativas consideradas
 

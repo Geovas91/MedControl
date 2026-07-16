@@ -12,8 +12,8 @@ insert into public.clinics as existing_tenant (
 )
 values (
   '10000000-0000-4000-8000-000000000001',
-  'CliniControl Demo 1',
-  'CliniControl Demo 1',
+  'demo1',
+  null,
   'demo1@clinicontrol.local',
   'America/Mexico_City',
   'demo'

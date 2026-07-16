@@ -12,11 +12,11 @@ insert into public.clinics as existing_tenant (
 )
 values (
   '10000000-0000-4000-8000-000000000002',
-  'CliniControl Demo 2',
-  'CliniControl Demo 2',
+  'demo2',
+  null,
   'demo2@clinicontrol.local',
   'America/Mexico_City',
-  'demo'
+  'qa'
 )
 on conflict (id) do update
 set
@@ -25,6 +25,6 @@ set
   email = excluded.email,
   timezone = excluded.timezone,
   tenant_type = excluded.tenant_type
-where existing_tenant.tenant_type = 'demo';
+where existing_tenant.tenant_type = 'qa';
 
 commit;

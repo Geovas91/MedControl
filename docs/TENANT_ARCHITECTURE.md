@@ -28,14 +28,16 @@ Los registros existentes se clasifican como `customer` al aplicar la migración.
 
 ## Seeds controlados
 
-Los seeds modulares viven en `supabase/seeds/`. En esta primera base sólo crean registros de `public.clinics` con UUIDs deterministas. No crean usuarios ni contenido clínico.
+Los seeds modulares viven en `supabase/seeds/`. En esta primera base sólo crean registros de `public.clinics` con UUIDs deterministas. No crean usuarios ni contenido clínico. `demo1` es el tenant principal de demostración y usa `tenant_type = 'demo'`; `demo2` es un tenant persistente de QA y usa `tenant_type = 'qa'`.
 
-Para regenerar los tenants demo:
+Para regenerar `demo1`:
 
 1. Confirmar el entorno y la conexión administrativa.
 2. Ejecutar `supabase/seeds/reset_demo.sql`.
-3. Ejecutar `supabase/seeds/demo1.sql` y/o `supabase/seeds/demo2.sql`.
-4. Verificar que los registros resultantes tengan `tenant_type = 'demo'`.
+3. Ejecutar `supabase/seeds/demo1.sql`.
+4. Verificar que el registro resultante tenga `tenant_type = 'demo'`.
+
+Para regenerar `demo2`, ejecutar por separado `supabase/seeds/reset_qa.sql` y `supabase/seeds/demo2.sql`, y verificar que el registro resultante tenga `tenant_type = 'qa'`. `reset_demo.sql` nunca elimina `demo2`.
 
 Los comandos concretos y las salvaguardas están documentados en `supabase/seeds/README.md`.
 

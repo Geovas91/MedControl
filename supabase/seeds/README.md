@@ -4,10 +4,11 @@ Este directorio contiene seeds operativos, pequeños e idempotentes para entorno
 
 ## Archivos
 
-- `demo1.sql`: crea el tenant demo primario con un UUID estable.
-- `demo2.sql`: crea un segundo tenant demo independiente.
+- `demo1.sql`: crea `demo1`, el tenant principal para demostraciones, con tipo `demo` y UUID estable.
+- `demo2.sql`: crea `demo2`, un tenant persistente de QA con tipo `qa` y UUID estable.
 - `minimal.sql`: crea un tenant mínimo de desarrollo para pruebas de infraestructura.
-- `reset_demo.sql`: elimina exclusivamente los tenants administrados por `demo1.sql` y `demo2.sql` cuando siguen clasificados como `demo`.
+- `reset_demo.sql`: elimina exclusivamente `demo1` cuando sigue clasificado como `demo`.
+- `reset_qa.sql`: elimina exclusivamente `demo2` cuando sigue clasificado como `qa`.
 
 Supabase ejecuta `supabase/seed.sql` durante `supabase db reset`; no ejecuta automáticamente los archivos de este directorio. Estos seeds deben aplicarse de forma explícita después de las migraciones.
 
@@ -18,13 +19,21 @@ Supabase ejecuta `supabase/seed.sql` durante `supabase db reset`; no ejecuta aut
 3. Confirmar que el destino no es producción antes de ejecutar un reset.
 4. No añadir información real o sensible a estos archivos.
 
-## Regenerar los tenants demo
+## Regenerar el tenant demo principal
 
 Configura `SUPABASE_DB_URL` con la conexión del entorno controlado y ejecuta desde la raíz del repositorio:
 
 ```powershell
 psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/reset_demo.sql
 psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/demo1.sql
+```
+
+## Regenerar el tenant persistente de QA
+
+La regeneración de `demo2` es independiente y debe ser intencional:
+
+```powershell
+psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/reset_qa.sql
 psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/demo2.sql
 ```
 
@@ -34,4 +43,4 @@ Para preparar sólo el tenant mínimo de desarrollo:
 psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/minimal.sql
 ```
 
-`reset_demo.sql` usa UUIDs explícitos y exige `tenant_type = 'demo'`. No elimina otros tenants demo, tenants customer ni el tenant creado por `minimal.sql`. La eliminación de una clínica puede activar cascadas definidas por el esquema; por ello este script debe usarse únicamente para regenerar estos tenants demo controlados.
+`reset_demo.sql` usa el UUID explícito de `demo1` y exige `tenant_type = 'demo'`. `reset_qa.sql` usa el UUID explícito de `demo2` y exige `tenant_type = 'qa'`. Ninguno elimina otros tenants ni el tenant creado por `minimal.sql`. La eliminación de una clínica puede activar cascadas definidas por el esquema; por ello cada reset debe usarse únicamente para regenerar su tenant controlado.
