@@ -36,6 +36,7 @@ export type Database = {
           address: string | null;
           timezone: string;
           plan: Database["public"]["Enums"]["clinic_plan"];
+          tenant_type: Database["public"]["Enums"]["tenant_type"];
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -48,6 +49,7 @@ export type Database = {
           address?: string | null;
           timezone?: string;
           plan?: Database["public"]["Enums"]["clinic_plan"];
+          tenant_type?: Database["public"]["Enums"]["tenant_type"];
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -722,6 +724,7 @@ export type Database = {
     Enums: {
       profile_role: "doctor" | "admin" | "assistant";
       clinic_plan: "initial" | "professional" | "clinic";
+      tenant_type: "customer" | "demo" | "qa" | "internal" | "development";
       clinic_member_role: "owner" | "doctor" | "assistant" | "admin";
       clinic_member_status: "active" | "invited" | "suspended";
       patient_status: "active" | "inactive" | "follow_up";
