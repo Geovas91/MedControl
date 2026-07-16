@@ -61,7 +61,7 @@ export type Database = {
           clinic_id: string;
           plan_id: "basic" | "plus" | "pro";
           status: "inactive" | "trialing" | "active" | "past_due" | "cancelled";
-          billing_provider: "paypal";
+          billing_provider: "paypal" | "demo" | "manual";
           provider_subscription_id: string | null;
           provider_plan_id: string | null;
           current_period_start: Timestamp | null;
@@ -75,7 +75,7 @@ export type Database = {
           clinic_id: string;
           plan_id: "basic" | "plus" | "pro";
           status?: "inactive" | "trialing" | "active" | "past_due" | "cancelled";
-          billing_provider?: "paypal";
+          billing_provider?: "paypal" | "demo" | "manual";
           provider_subscription_id?: string | null;
           provider_plan_id?: string | null;
           current_period_start?: Timestamp | null;
