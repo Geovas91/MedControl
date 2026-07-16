@@ -1,4 +1,5 @@
--- Removes only the deterministic demo1 tenant managed by this directory.
+-- Removes only demo1 when its deterministic UUID and tenant type both match.
+-- Existing foreign keys cascade its clinic membership and subscription records.
 
 begin;
 
