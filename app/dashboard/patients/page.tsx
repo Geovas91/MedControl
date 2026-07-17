@@ -149,9 +149,11 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
         </div>
         <div className="divide-y divide-slate-200">
           {data.patients.map((patient) => (
-            <article
+            <Link
               key={patient.id}
-              className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[1.2fr_1fr_0.8fr_0.6fr] lg:items-center lg:gap-3"
+              href={`/dashboard/patients/${patient.id}`}
+              aria-label={`Ver detalle de ${patient.full_name}`}
+              className="grid gap-4 px-4 py-4 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-clinic sm:px-5 lg:grid-cols-[1.2fr_1fr_0.8fr_0.6fr] lg:items-center lg:gap-3"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-teal-50 text-clinic">
@@ -174,7 +176,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
               <Badge variant={statusVariant(patient.status)} className="w-fit">
                 {getPatientStatusLabel(patient.status)}
               </Badge>
-            </article>
+            </Link>
           ))}
 
           {data.patients.length === 0 ? (
