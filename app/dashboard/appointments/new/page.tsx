@@ -1,112 +1,89 @@
-import { CalendarPlus } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
+import { CreateAppointmentForm } from "@/components/appointments/create-appointment-form";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Button } from "@/components/ui/button";
-import { Field, Input, Select, Textarea } from "@/components/ui/input";
-import { patients } from "@/lib/mock-data";
+import { getAppointmentCreationOptions } from "@/lib/server/create-appointment";
 
-export default function NewAppointmentPage() {
+export const dynamic = "force-dynamic";
+
+type NewAppointmentPageProps = {
+  searchParams: Promise<{ patient?: string | string[] }>;
+};
+
+function AppointmentCreationUnavailable({
+  title,
+  description
+}: {
+  title: string;
+  description: string;
+}) {
   return (
     <>
-      <PageHeader title="Crear cita" description="Programa una cita de ejemplo para la agenda diaria." />
-      <form className="grid gap-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Paciente" htmlFor="patient">
-            <Select id="patient" defaultValue="">
-              <option value="" disabled>
-                Selecciona paciente
-              </option>
-              {patients.map((patient) => (
-                <option key={patient.id}>{patient.name}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Médico" htmlFor="doctor">
-            <Select id="doctor" defaultValue="Dr. Morgan">
-              <option>Dr. Morgan</option>
-              <option>Dr. Ellis</option>
-              <option>Dr. Patel</option>
-            </Select>
-          </Field>
-          <Field label="Fecha" htmlFor="date">
-            <Input id="date" type="date" />
-          </Field>
-          <Field label="Hora" htmlFor="time">
-            <Input id="time" type="time" />
-          </Field>
-          <Field label="Tipo de visita" htmlFor="type">
-            <Input id="type" placeholder="Seguimiento, consulta, revisión de laboratorio" />
-          </Field>
-          <Field label="Estado" htmlFor="status">
-            <Select id="status" defaultValue="Confirmada">
-              <option>Confirmada</option>
-              <option>En espera</option>
-              <option>Completada</option>
-            </Select>
-          </Field>
-          <Field label="Opción de invitación" htmlFor="invite-option">
-            <Select id="invite-option" defaultValue="Enviar invitación de Google Calendar">
-              <option>Enviar invitación de Google Calendar</option>
-              <option>Generar invitación iCalendar</option>
-              <option>Enviar invitación por email</option>
-              <option>Enviar recordatorio por WhatsApp</option>
-              <option>No enviar invitación</option>
-            </Select>
-          </Field>
-          <Field label="Estado de invitación" htmlFor="invite-status">
-            <Select id="invite-status" defaultValue="No enviada">
-              <option>No enviada</option>
-              <option>Enviada</option>
-              <option>Aceptada</option>
-              <option>Rechazada</option>
-              <option>Pendiente</option>
-              <option>Fallida</option>
-            </Select>
-          </Field>
-          <Field label="Ubicación o enlace en línea" htmlFor="location">
-            <Input id="location" placeholder="Consultorio 2 o enlace seguro" />
-          </Field>
-          <Field label="Estado de recordatorio" htmlFor="reminder-status">
-            <Select id="reminder-status" defaultValue="No programado">
-              <option>No programado</option>
-              <option>Programado</option>
-              <option>Enviado</option>
-              <option>Fallido</option>
-            </Select>
-          </Field>
-        </div>
-        <Field label="Notas de visita" htmlFor="notes">
-          <Textarea id="notes" placeholder="Motivo de visita o notas de recepción" />
-        </Field>
-        <section className="grid gap-3 rounded-md bg-slate-50 p-4 text-sm text-slate-600 md:grid-cols-2">
-          <p>
-            <span className="font-semibold text-slate-700">Paciente:</span> Paciente seleccionado
-          </p>
-          <p>
-            <span className="font-semibold text-slate-700">Médico:</span> Dr. Morgan
-          </p>
-          <p>
-            <span className="font-semibold text-slate-700">Fecha/hora:</span> Selección pendiente
-          </p>
-          <p>
-            <span className="font-semibold text-slate-700">Ubicación:</span> Ubicación pendiente
-          </p>
-          <p>
-            <span className="font-semibold text-slate-700">Estado de invitación:</span> No enviada
-          </p>
-          <p>
-            <span className="font-semibold text-slate-700">Estado de recordatorio:</span> No programado
-          </p>
-        </section>
-        <p className="rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-800">
-          Las invitaciones de calendario no deben incluir información clínica sensible.
-        </p>
-        <div className="flex justify-end">
-          <Button type="button">
-            <CalendarPlus className="h-4 w-4" />
-            Guardar cita demo
-          </Button>
-        </div>
-      </form>
+      <PageHeader title={title} description={description} />
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-sm text-slate-600">No es posible mostrar el formulario en este momento.</p>
+      </section>
+    </>
+  );
+}
+
+export default async function NewAppointmentPage({ searchParams }: NewAppointmentPageProps) {
+  const params = await searchParams;
+  const requestedPatientId = typeof params.patient === "string" ? params.patient : undefined;
+  const result = await getAppointmentCreationOptions(requestedPatientId);
+
+  if (result.state === "unauthenticated") {
+    redirect("/login");
+  }
+
+  if (result.state === "no_active_membership") {
+    return (
+      <AppointmentCreationUnavailable
+        title="Sin clínica activa"
+        description="Tu cuenta no tiene una membresía activa para crear citas."
+      />
+    );
+  }
+
+  if (result.state === "forbidden") {
+    return (
+      <AppointmentCreationUnavailable
+        title="Acceso de solo lectura"
+        description="Tu rol actual puede consultar la agenda, pero no crear citas."
+      />
+    );
+  }
+
+  if (result.state === "error") {
+    return (
+      <AppointmentCreationUnavailable
+        title="No fue posible preparar la cita"
+        description="El formulario no está disponible temporalmente. Intenta nuevamente más tarde."
+      />
+    );
+  }
+
+  return (
+    <>
+      <Link
+        href="/dashboard/appointments"
+        className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-clinic"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Volver a la agenda
+      </Link>
+      <PageHeader
+        title="Crear cita"
+        description="Programa una cita real para un paciente y médico de la clínica activa."
+      />
+      <CreateAppointmentForm
+        patients={result.data.patients}
+        doctors={result.data.doctors}
+        preselectedPatientId={result.data.preselectedPatientId}
+        clinicToday={result.data.clinicToday}
+        timeZone={result.data.timeZone}
+      />
     </>
   );
 }
