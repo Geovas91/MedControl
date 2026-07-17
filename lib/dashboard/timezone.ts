@@ -81,10 +81,36 @@ function formatLocalDate(value: LocalDate) {
 export function getClinicDayRange(timeZone: string, referenceDate = new Date()): ClinicDayRange {
   const formatter = localDateFormatter(timeZone);
   const localDate = getLocalDate(referenceDate, formatter);
+  return getClinicDateRange(timeZone, formatLocalDate(localDate));
+}
+
+export function getClinicDateRange(timeZone: string, localDateValue: string): ClinicDayRange {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDateValue);
+
+  if (!match) {
+    throw new RangeError(`Invalid local date: ${localDateValue}`);
+  }
+
+  const localDate = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3])
+  };
+  const validationDate = new Date(Date.UTC(localDate.year, localDate.month - 1, localDate.day));
+
+  if (
+    validationDate.getUTCFullYear() !== localDate.year ||
+    validationDate.getUTCMonth() + 1 !== localDate.month ||
+    validationDate.getUTCDate() !== localDate.day
+  ) {
+    throw new RangeError(`Invalid local date: ${localDateValue}`);
+  }
+
+  const formatter = localDateFormatter(timeZone);
   const followingDate = nextLocalDate(localDate);
 
   return {
-    localDate: formatLocalDate(localDate),
+    localDate: localDateValue,
     startIso: startOfLocalDate(localDate, timeZone, formatter).toISOString(),
     endIso: startOfLocalDate(followingDate, timeZone, formatter).toISOString()
   };

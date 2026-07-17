@@ -1,4 +1,5 @@
 import type { Database } from "@/types/database";
+export { getAppointmentStatusLabel } from "@/lib/appointments/query";
 
 type Enums = Database["public"]["Enums"];
 
@@ -104,18 +105,6 @@ export function getPatientSexLabel(value: string | null) {
   };
 
   return value ? labels[value] ?? value : "Sin registro";
-}
-
-export function getAppointmentStatusLabel(status: Enums["appointment_status"]) {
-  const labels: Record<Enums["appointment_status"], string> = {
-    scheduled: "Programada",
-    confirmed: "Confirmada",
-    waiting: "En espera",
-    completed: "Completada",
-    cancelled: "Cancelada"
-  };
-
-  return labels[status];
 }
 
 export function getPaymentStatusLabel(status: Enums["payment_status"]) {
