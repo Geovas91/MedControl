@@ -265,9 +265,14 @@ export default async function PatientDetailPage({
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-clinic" />
-            <h2 className="text-lg font-bold text-ink">Pagos recientes</h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-clinic" />
+              <h2 className="text-lg font-bold text-ink">Pagos recientes</h2>
+            </div>
+            <Link href={`/dashboard/payments?patient=${patient.id}`} className="text-sm font-semibold text-clinic hover:underline">
+              Ver todos los pagos
+            </Link>
           </div>
           <div className="mt-5 grid gap-3">
             {data.payments.length === 0 ? (
