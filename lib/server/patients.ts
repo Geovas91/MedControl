@@ -1,5 +1,6 @@
 import "server-only";
 
+import { canCreatePatients } from "@/lib/patients/create";
 import { getPatientPagination, type PatientListQuery } from "@/lib/patients/query";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
@@ -20,6 +21,7 @@ export type PatientListData = {
   page: number;
   pageCount: number;
   pageSize: number;
+  canCreate: boolean;
 };
 
 export type PatientListResult =
@@ -106,7 +108,8 @@ export async function getPatientsForActiveTenant(filters: PatientListQuery): Pro
       filteredTotal,
       page: pagination.page,
       pageCount: pagination.pageCount,
-      pageSize: filters.pageSize
+      pageSize: filters.pageSize,
+      canCreate: canCreatePatients(context.tenant.membership.role)
     }
   };
 }

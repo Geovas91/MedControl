@@ -13,6 +13,7 @@ import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { canCreateAppointments } from "@/lib/appointments/create";
+import { hasPatientCreatedMessage } from "@/lib/patients/create";
 import {
   calculatePatientAge,
   formatPatientCurrency,
@@ -129,8 +130,15 @@ function AppointmentList({
   );
 }
 
-export default async function PatientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PatientDetailPage({
+  params,
+  searchParams
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ created?: string | string[] }>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
   const result = await getPatientDetailForActiveTenant(id);
 
   if (result.state === "invalid_id" || result.state === "not_found") {
@@ -173,6 +181,12 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
         <ArrowLeft className="h-4 w-4" />
         Volver a pacientes
       </Link>
+
+      {hasPatientCreatedMessage(query.created) ? (
+        <p role="status" className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          El paciente se creó correctamente.
+        </p>
+      ) : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

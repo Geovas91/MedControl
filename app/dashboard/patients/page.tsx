@@ -80,7 +80,11 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
       <PageHeader
         title="Pacientes"
         description="Busca, revisa y prepara expedientes antes de cada visita."
-        action={{ label: "Nuevo paciente", href: "/dashboard/patients/new", icon: <Plus className="h-4 w-4" /> }}
+        action={
+          data.canCreate
+            ? { label: "Nuevo paciente", href: "/dashboard/patients/new", icon: <Plus className="h-4 w-4" /> }
+            : undefined
+        }
       />
 
       <form className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
@@ -184,9 +188,11 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
               {data.totalPatients === 0 ? (
                 <>
                   Esta clínica todavía no tiene pacientes.
-                  <Link href="/dashboard/patients/new" className="ml-2 font-semibold text-clinic hover:underline">
-                    Crear el primero
-                  </Link>
+                  {data.canCreate ? (
+                    <Link href="/dashboard/patients/new" className="ml-2 font-semibold text-clinic hover:underline">
+                      Crear el primero
+                    </Link>
+                  ) : null}
                 </>
               ) : (
                 <>
