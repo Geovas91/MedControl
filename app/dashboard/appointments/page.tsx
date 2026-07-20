@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   CalendarDays,
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { formatAppointmentDateLabel, formatAppointmentTimeRange } from "@/lib/appointments/format";
+import { canCreateAppointments } from "@/lib/appointments/create";
 import {
   addDaysToAppointmentDate,
   appointmentStatuses,
@@ -101,7 +103,22 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       <PageHeader
         title="Agenda diaria"
         description="Consulta las citas reales del tenant activo por fecha, paciente, médico y estado."
+        action={
+          canCreateAppointments(data.tenant.membership.role)
+            ? {
+                label: "Nueva cita",
+                href: "/dashboard/appointments/new",
+                icon: <CalendarPlus className="h-4 w-4" />
+              }
+            : undefined
+        }
       />
+
+      {data.created ? (
+        <p role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          La cita se creó correctamente.
+        </p>
+      ) : null}
 
       {data.query.dateWasNormalized ? (
         <p className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">

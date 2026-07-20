@@ -17,6 +17,7 @@ export type AppointmentSearchParams = {
   status?: RawQueryValue;
   doctor?: RawQueryValue;
   q?: RawQueryValue;
+  created?: RawQueryValue;
 };
 
 export type AppointmentQuery = {
@@ -58,7 +59,7 @@ export function isCanonicalAppointmentDate(value: string | undefined) {
   return date.getUTCFullYear() === year && date.getUTCMonth() + 1 === month && date.getUTCDate() === day;
 }
 
-function isCanonicalUuid(value: string | undefined) {
+export function isCanonicalAppointmentUuid(value: string | undefined) {
   return Boolean(
     value &&
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -91,10 +92,14 @@ export function normalizeAppointmentQuery(
   return {
     date: isCanonicalAppointmentDate(requestedDate) ? requestedDate! : clinicToday,
     status: appointmentStatuses.includes(status as AppointmentStatus) ? (status as AppointmentStatus) : null,
-    doctor: isCanonicalUuid(doctor) ? doctor! : null,
+    doctor: isCanonicalAppointmentUuid(doctor) ? doctor! : null,
     search: normalizeAppointmentSearch(searchParams.q),
     dateWasNormalized: requestedDate !== undefined && !isCanonicalAppointmentDate(requestedDate)
   };
+}
+
+export function hasAppointmentCreatedMessage(searchParams: AppointmentSearchParams) {
+  return singleValue(searchParams.created) === "1";
 }
 
 export function addDaysToAppointmentDate(value: string, amount: number) {

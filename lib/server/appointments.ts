@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  hasAppointmentCreatedMessage,
   matchesAppointmentSearch,
   normalizeAppointmentQuery,
   summarizeAppointmentStatuses,
@@ -59,6 +60,7 @@ export type AppointmentAgendaData = {
   appointments: AppointmentAgendaItem[];
   doctors: AppointmentDoctorOption[];
   totals: AppointmentDayTotals;
+  created: boolean;
 };
 
 export type AppointmentAgendaResult =
@@ -203,7 +205,8 @@ export async function getAppointmentAgendaForActiveTenant(
       clinicToday,
       doctors,
       totals: summarizeAppointmentStatuses(allDayRows.map((appointment) => appointment.status)),
-      appointments
+      appointments,
+      created: hasAppointmentCreatedMessage(searchParams)
     }
   };
 }

@@ -1,7 +1,18 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, ClipboardList, CreditCard, FileSignature, Mail, Phone } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CalendarPlus,
+  ClipboardList,
+  CreditCard,
+  FileSignature,
+  Mail,
+  Phone
+} from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { ButtonLink } from "@/components/ui/button";
+import { canCreateAppointments } from "@/lib/appointments/create";
 import {
   calculatePatientAge,
   formatPatientCurrency,
@@ -164,12 +175,20 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
       </Link>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div>
-          <Badge variant={patientStatusVariant(patient.status)}>{getPatientStatusLabel(patient.status)}</Badge>
-          <h1 className="mt-4 text-2xl font-bold text-ink sm:text-3xl">{patient.full_name}</h1>
-          <p className="mt-2 text-slate-500">
-            {age === null ? "Edad sin registro" : `${age} años`} · {getPatientSexLabel(patient.sex)}
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <Badge variant={patientStatusVariant(patient.status)}>{getPatientStatusLabel(patient.status)}</Badge>
+            <h1 className="mt-4 text-2xl font-bold text-ink sm:text-3xl">{patient.full_name}</h1>
+            <p className="mt-2 text-slate-500">
+              {age === null ? "Edad sin registro" : `${age} años`} · {getPatientSexLabel(patient.sex)}
+            </p>
+          </div>
+          {canCreateAppointments(data.tenant.membership.role) ? (
+            <ButtonLink href={`/dashboard/appointments/new?patient=${patient.id}`} className="shrink-0">
+              <CalendarPlus className="h-4 w-4" />
+              Agendar cita
+            </ButtonLink>
+          ) : null}
         </div>
 
         <dl className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
