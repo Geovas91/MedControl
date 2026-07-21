@@ -2,6 +2,13 @@ import "server-only";
 
 import { getClinicDateRange } from "@/lib/dashboard/timezone";
 import { logger } from "@/lib/logger";
+import { canCreateClinicalPayments } from "@/lib/payments/create";
+import {
+  mergeClinicalPaymentSummaries,
+  summarizeClinicalPayments,
+  type ClinicalPaymentCurrencySummary,
+  type ClinicalPaymentSummaryRow
+} from "@/lib/payments/format";
 import {
   buildClinicalPaymentDateFilter,
   buildClinicalPaymentSearchFilter,
@@ -11,12 +18,6 @@ import {
   type ClinicalPaymentSearchParams,
   type ClinicalPaymentStatus
 } from "@/lib/payments/query";
-import {
-  mergeClinicalPaymentSummaries,
-  summarizeClinicalPayments,
-  type ClinicalPaymentCurrencySummary,
-  type ClinicalPaymentSummaryRow
-} from "@/lib/payments/format";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -64,6 +65,7 @@ export type ClinicalPaymentData = {
   pageCount: number;
   visibleFrom: number;
   visibleTo: number;
+  canCreatePayments: boolean;
 };
 
 export type ClinicalPaymentResult =
@@ -367,7 +369,8 @@ export async function getClinicalPaymentsForActiveTenant(
       page: pagination.page,
       pageCount: pagination.pageCount,
       visibleFrom: filteredTotal === 0 ? 0 : pagination.from + 1,
-      visibleTo: Math.min(pagination.to + 1, filteredTotal)
+      visibleTo: Math.min(pagination.to + 1, filteredTotal),
+      canCreatePayments: canCreateClinicalPayments(context.tenant.membership.role)
     }
   };
 }
