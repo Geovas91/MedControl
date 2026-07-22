@@ -34,10 +34,15 @@ acceptance in CliniControl and is not represented as a certified electronic sign
 ## Atomic completion
 
 `sign_public_consent` locks the consent row by hash, rechecks pending state,
-expiration and revocation, validates the PNG length and format, inserts the
+expiration and revocation, validates a real PNG (magic bytes, IHDR dimensions no
+larger than 1600 by 800, and a 250 KB binary limit), inserts the
 signature, marks the consent signed, records `signed_at`, and marks the token used
 in one transaction. A second concurrent request cannot create a second signature.
 
 There is no new test runner in this repository. Manual testing after migration is
 still required for a valid link, expiration, revocation, concurrent submission,
-and touch drawing.
+and touch drawing. Also verify rejection of an empty signature, invalid base64,
+plain text disguised with the PNG prefix, a JPEG disguised as PNG, a truncated
+PNG, a file above 250 KB, and an IHDR width or height beyond the documented
+limits. Submit the same valid link from two browser sessions and confirm exactly
+one signature is created.

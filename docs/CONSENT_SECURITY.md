@@ -11,8 +11,17 @@ database rows. The server hashes the URL token before the first database call.
 
 Application logs contain only component, operation, status, and safe technical
 code. They must not contain token, hash, URL, document content, signature data,
-patient or signer identity, or identifiers. Signature PNG data is limited to a
-data-URL PNG under 350,000 characters; uploads and SVG are unsupported.
+patient or signer identity, or identifiers. Signature data must be a real PNG
+data URL: decoded bytes must have the PNG magic signature and IHDR header, be at
+most 250 KB, and have a nonzero width up to 1600 and height up to 800. SVG,
+arbitrary base64, and uploaded files are unsupported.
+
+The inspected `consent_signatures` schema does not have `clinic_id`, `created_by`,
+`signature_type`, or `signer_role`. The RPC derives its required `consent_id` and
+`patient_id` from the locked consent and receives the required signer name. Its
+remaining required fields have safe defaults: both acceptance flags default to
+false but are explicitly set true after validation, while `signed_at` and
+`created_at` default to `now()`.
 
 The route adds `Cache-Control: private, no-store`, `Referrer-Policy: no-referrer`,
 and `X-Robots-Tag: noindex, nofollow, noarchive`. This does not supply legal

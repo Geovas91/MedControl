@@ -73,11 +73,60 @@ set search_path = public, pg_temp
 as $$
 declare
   target public.consents%rowtype;
+  encoded_signature text;
+  decoded_signature bytea;
+  signature_width bigint;
+  signature_height bigint;
 begin
   if length(signer_name) < 2 or length(signer_name) > 160
     or not accepted_privacy or not accepted_sensitive_data
-    or length(signature_png) < 32 or length(signature_png) > 350000
-    or signature_png !~ '^data:image/png;base64,[A-Za-z0-9+/=]+$' then
+    or octet_length(signature_png) > 341358
+    or signature_png !~ '^data:image/png;base64,[A-Za-z0-9+/]+={0,2}$' then
+    return 'invalid';
+  end if;
+
+  encoded_signature := substring(signature_png from 23);
+  if encoded_signature = '' or length(encoded_signature) % 4 <> 0 then
+    return 'invalid';
+  end if;
+
+  begin
+    decoded_signature := decode(encoded_signature, 'base64');
+  exception
+    when others then
+      return 'invalid';
+  end;
+
+  if octet_length(decoded_signature) < 24 or octet_length(decoded_signature) > 256000
+    or get_byte(decoded_signature, 0) <> 137
+    or get_byte(decoded_signature, 1) <> 80
+    or get_byte(decoded_signature, 2) <> 78
+    or get_byte(decoded_signature, 3) <> 71
+    or get_byte(decoded_signature, 4) <> 13
+    or get_byte(decoded_signature, 5) <> 10
+    or get_byte(decoded_signature, 6) <> 26
+    or get_byte(decoded_signature, 7) <> 10
+    or get_byte(decoded_signature, 8) <> 0
+    or get_byte(decoded_signature, 9) <> 0
+    or get_byte(decoded_signature, 10) <> 0
+    or get_byte(decoded_signature, 11) <> 13
+    or get_byte(decoded_signature, 12) <> 73
+    or get_byte(decoded_signature, 13) <> 72
+    or get_byte(decoded_signature, 14) <> 68
+    or get_byte(decoded_signature, 15) <> 82 then
+    return 'invalid';
+  end if;
+
+  signature_width := get_byte(decoded_signature, 16)::bigint * 16777216
+    + get_byte(decoded_signature, 17)::bigint * 65536
+    + get_byte(decoded_signature, 18)::bigint * 256
+    + get_byte(decoded_signature, 19)::bigint;
+  signature_height := get_byte(decoded_signature, 20)::bigint * 16777216
+    + get_byte(decoded_signature, 21)::bigint * 65536
+    + get_byte(decoded_signature, 22)::bigint * 256
+    + get_byte(decoded_signature, 23)::bigint;
+  if signature_width = 0 or signature_height = 0
+    or signature_width > 1600 or signature_height > 800 then
     return 'invalid';
   end if;
 
