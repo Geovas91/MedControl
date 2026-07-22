@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
+import { canViewClinicalRecord } from "@/lib/clinical-record/permissions";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
@@ -135,6 +136,7 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
   }
 
   const now = new Date().toISOString();
+  const canViewClinical = canViewClinicalRecord(context.tenant.membership.role);
   const [
     upcomingResult,
     recentResult,
@@ -167,20 +169,24 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
       .eq("patient_id", id)
       .order("created_at", { ascending: false })
       .limit(5),
-    supabase
-      .from("medical_notes")
-      .select("id, status, specialty, clinical_impression, finalized_at, created_at")
-      .eq("clinic_id", clinicId)
-      .eq("patient_id", id)
-      .order("created_at", { ascending: false })
-      .limit(5),
-    supabase
-      .from("consents")
-      .select("id, consent_type, status, signed_at, expires_at, created_at")
-      .eq("clinic_id", clinicId)
-      .eq("patient_id", id)
-      .order("created_at", { ascending: false })
-      .limit(5),
+    canViewClinical
+      ? supabase
+          .from("medical_notes")
+          .select("id, status, specialty, clinical_impression, finalized_at, created_at")
+          .eq("clinic_id", clinicId)
+          .eq("patient_id", id)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: [], error: null }),
+    canViewClinical
+      ? supabase
+          .from("consents")
+          .select("id, consent_type, status, signed_at, expires_at, created_at")
+          .eq("clinic_id", clinicId)
+          .eq("patient_id", id)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: [], error: null }),
     supabase
       .from("doctor_public_profiles")
       .select("profile_id, display_name")

@@ -18,6 +18,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { canCreateAppointments } from "@/lib/appointments/create";
 import { canEditAppointments } from "@/lib/appointments/edit";
 import { canCreateClinicalPayments } from "@/lib/payments/create";
+import { canCreateClinicalNote, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
 import { hasPatientCreatedMessage } from "@/lib/patients/create";
 import { canEditPatients, hasPatientUpdatedMessage } from "@/lib/patients/edit";
 import {
@@ -36,6 +37,7 @@ import {
   getPatientDetailForActiveTenant,
   type PatientDetailAppointment
 } from "@/lib/server/patient-detail";
+import { getClinicalRecordForActiveTenant } from "@/lib/server/clinical-record";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -201,6 +203,10 @@ export default async function PatientDetailPage({
   const age = calculatePatientAge(patient.date_of_birth, data.localDate);
   const wasUpdated = hasPatientUpdatedMessage(query.updated);
   const wasCreated = !wasUpdated && hasPatientCreatedMessage(query.created);
+  const clinicalResult = canViewClinicalRecord(data.tenant.membership.role)
+    ? await getClinicalRecordForActiveTenant(id, {})
+    : null;
+  const clinicalData = clinicalResult?.state === "ready" ? clinicalResult.data : null;
 
   return (
     <>
@@ -302,6 +308,27 @@ export default async function PatientDetailPage({
           </div>
         </div>
       </section>
+
+      {clinicalData ? (
+        <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-clinic" />
+              <h2 className="text-lg font-bold text-ink">Expediente clínico</h2>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link href={`/dashboard/patients/${patient.id}/clinical-record`} className="text-sm font-semibold text-clinic hover:underline">Abrir expediente</Link>
+              {canCreateClinicalNote(data.tenant.membership.role) ? <ButtonLink href={`/dashboard/patients/${patient.id}/notes/new`} className="h-10 px-3"><CirclePlus className="h-4 w-4" />Nueva nota</ButtonLink> : null}
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Notas</p><p className="mt-1 text-2xl font-bold text-ink">{clinicalData.totalNotes}</p></div>
+            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Última nota</p><p className="mt-1 text-sm font-semibold text-ink">{clinicalData.notes[0] ? formatPatientTimestamp(clinicalData.notes[0].created_at, timeZone) : "Sin registro"}</p></div>
+            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Consentimientos</p><p className="mt-1 text-2xl font-bold text-ink">{clinicalData.consents.length}</p></div>
+            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Firmas registradas</p><p className="mt-1 text-2xl font-bold text-ink">{clinicalData.signatureCount}</p></div>
+          </div>
+        </section>
+      ) : null}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
