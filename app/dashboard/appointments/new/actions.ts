@@ -45,5 +45,6 @@ export async function createAppointmentAction(
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/appointments");
   revalidatePath(`/dashboard/patients/${result.patientId}`);
-  redirect(`/dashboard/appointments?date=${encodeURIComponent(result.date)}&created=1`);
+  revalidatePath(`/dashboard/appointments/${result.appointmentId}`);
+  redirect(`/dashboard/appointments/${result.appointmentId}?created=1`);
 }

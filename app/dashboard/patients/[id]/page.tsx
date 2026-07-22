@@ -6,6 +6,7 @@ import {
   CirclePlus,
   ClipboardList,
   CreditCard,
+  Eye,
   FileSignature,
   Mail,
   Pencil,
@@ -118,7 +119,12 @@ function AppointmentList({
         <article key={appointment.id} className="rounded-md border border-slate-200 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="font-semibold text-ink">{appointment.title}</p>
+              <Link
+                href={`/dashboard/appointments/${appointment.id}`}
+                className="font-semibold text-ink hover:text-clinic hover:underline"
+              >
+                {appointment.title}
+              </Link>
               <p className="mt-1 text-sm text-slate-500">
                 {formatPatientTimestamp(appointment.starts_at, timeZone)}
                 {appointment.appointment_type ? ` · ${appointment.appointment_type}` : ""}
@@ -131,6 +137,13 @@ function AppointmentList({
               <Badge variant={relatedStatusVariant(appointment.status)}>
                 {getAppointmentStatusLabel(appointment.status)}
               </Badge>
+              <Link
+                href={`/dashboard/appointments/${appointment.id}`}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-clinic hover:underline"
+              >
+                <Eye className="h-4 w-4" />
+                Ver
+              </Link>
               {canEdit ? (
                 <Link href={`/dashboard/appointments/${appointment.id}/edit`} className="inline-flex items-center gap-1 text-sm font-semibold text-clinic hover:underline">
                   <Pencil className="h-4 w-4" />

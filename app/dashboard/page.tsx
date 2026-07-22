@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CalendarDays, CreditCard, UsersRound, WalletCards } from "lucide-react";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -121,7 +122,12 @@ export default async function DashboardPage() {
                       {formatClinicTime(appointment.startsAt, data.tenant.clinic.timezone)} · {appointment.patientName}
                     </p>
                     <p className="text-sm text-slate-500">
-                      {appointment.title}
+                      <Link
+                        href={`/dashboard/appointments/${appointment.id}`}
+                        className="font-medium text-ink hover:text-clinic hover:underline"
+                      >
+                        {appointment.title}
+                      </Link>
                       {appointment.appointmentType ? ` · ${appointment.appointmentType}` : ""}
                     </p>
                   </div>
