@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Clock,
   MapPin,
+  Pencil,
   Search,
   Stethoscope,
   UserRound
@@ -13,6 +14,7 @@ import {
 import { redirect } from "next/navigation";
 import { formatAppointmentDateLabel, formatAppointmentTimeRange } from "@/lib/appointments/format";
 import { canCreateAppointments } from "@/lib/appointments/create";
+import { canEditAppointments } from "@/lib/appointments/edit";
 import {
   addDaysToAppointmentDate,
   appointmentStatuses,
@@ -114,9 +116,9 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         }
       />
 
-      {data.created ? (
+      {data.updated || data.created ? (
         <p role="status" className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-          La cita se creó correctamente.
+          {data.updated ? "La cita se actualizó correctamente." : "La cita se creó correctamente."}
         </p>
       ) : null}
 
@@ -254,9 +256,17 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
                     </p>
                   </div>
                 </div>
-                <Badge variant={statusVariant(appointment.status)} className="w-fit">
-                  {getAppointmentStatusLabel(appointment.status)}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                  <Badge variant={statusVariant(appointment.status)} className="w-fit">
+                    {getAppointmentStatusLabel(appointment.status)}
+                  </Badge>
+                  {canEditAppointments(data.tenant.membership.role) ? (
+                    <Link href={`/dashboard/appointments/${appointment.id}/edit`} className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-clinic ring-1 ring-teal-200 hover:bg-teal-50">
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </Link>
+                  ) : null}
+                </div>
               </article>
             );
           })}
