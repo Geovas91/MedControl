@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CalendarDays,
   CalendarPlus,
+  CirclePlus,
   ClipboardList,
   CreditCard,
   FileSignature,
@@ -13,6 +14,7 @@ import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { canCreateAppointments } from "@/lib/appointments/create";
+import { canCreateClinicalPayments } from "@/lib/payments/create";
 import { hasPatientCreatedMessage } from "@/lib/patients/create";
 import {
   calculatePatientAge,
@@ -270,9 +272,17 @@ export default async function PatientDetailPage({
               <CreditCard className="h-5 w-5 text-clinic" />
               <h2 className="text-lg font-bold text-ink">Pagos recientes</h2>
             </div>
-            <Link href={`/dashboard/payments?patient=${patient.id}`} className="text-sm font-semibold text-clinic hover:underline">
-              Ver todos los pagos
-            </Link>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link href={`/dashboard/payments?patient=${patient.id}`} className="text-sm font-semibold text-clinic hover:underline">
+                Ver todos los pagos
+              </Link>
+              {canCreateClinicalPayments(data.tenant.membership.role) ? (
+                <ButtonLink href={`/dashboard/payments/new?patient=${patient.id}`} className="h-10 px-3">
+                  <CirclePlus className="h-4 w-4" />
+                  Registrar pago
+                </ButtonLink>
+              ) : null}
+            </div>
           </div>
           <div className="mt-5 grid gap-3">
             {data.payments.length === 0 ? (

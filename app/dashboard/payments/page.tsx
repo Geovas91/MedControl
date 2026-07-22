@@ -1,10 +1,20 @@
 import Link from "next/link";
-import { Banknote, CalendarDays, ChevronLeft, ChevronRight, CreditCard, Search, UserRound } from "lucide-react";
+import {
+  Banknote,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CirclePlus,
+  CreditCard,
+  Search,
+  UserRound
+} from "lucide-react";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { hasClinicalPaymentCreatedMessage } from "@/lib/payments/create";
 import {
   formatClinicalPaymentCurrency,
   formatClinicalPaymentTimestamp
@@ -43,7 +53,8 @@ function PaymentsUnavailable({ title, description }: { title: string; descriptio
 }
 
 export default async function PaymentsPage({ searchParams }: PaymentsPageProps) {
-  const result = await getClinicalPaymentsForActiveTenant(await searchParams);
+  const params = await searchParams;
+  const result = await getClinicalPaymentsForActiveTenant(params);
 
   if (result.state === "unauthenticated") redirect("/login");
 
@@ -80,7 +91,22 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
       <PageHeader
         title="Pagos clínicos"
         description="Consulta los cobros de pacientes registrados por la clínica activa."
+        action={
+          data.canCreatePayments
+            ? {
+                label: "Registrar pago",
+                href: "/dashboard/payments/new",
+                icon: <CirclePlus className="h-4 w-4" />
+              }
+            : undefined
+        }
       />
+
+      {hasClinicalPaymentCreatedMessage(params.created) ? (
+        <p role="status" className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          El pago se registró correctamente.
+        </p>
+      ) : null}
 
       {data.query.filtersWereNormalized ? (
         <p className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -118,7 +144,9 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
           <span>Método</span>
           <Select name="method" defaultValue={data.query.method ?? ""} className="w-full">
             <option value="">Todos</option>
-            {data.methods.map((method) => <option key={method} value={method}>{method}</option>)}
+            {data.methods.map((method) => (
+              <option key={method} value={method}>{getClinicalPaymentMethodLabel(method)}</option>
+            ))}
           </Select>
         </label>
         <Button type="submit">Aplicar filtros</Button>

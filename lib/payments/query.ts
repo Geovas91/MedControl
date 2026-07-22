@@ -15,6 +15,7 @@ export type ClinicalPaymentSearchParams = {
   date_to?: RawQueryValue;
   q?: RawQueryValue;
   page?: RawQueryValue;
+  created?: RawQueryValue;
 };
 
 export type ClinicalPaymentQuery = {
@@ -140,7 +141,16 @@ export function getClinicalPaymentStatusLabel(status: ClinicalPaymentStatus) {
 }
 
 export function getClinicalPaymentMethodLabel(value: string | null) {
-  return value?.trim() || "Sin registro";
+  const normalized = value?.trim();
+  const labels: Record<string, string> = {
+    cash: "Efectivo",
+    card: "Tarjeta",
+    transfer: "Transferencia",
+    deposit: "Depósito",
+    other: "Otro"
+  };
+
+  return normalized ? labels[normalized] ?? normalized : "Sin registro";
 }
 
 export function getClinicalPaymentPagination(total: number, requestedPage: number) {
