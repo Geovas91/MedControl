@@ -47,7 +47,7 @@ export type AppointmentCreationOptionsResult =
   | { state: "error"; data: null };
 
 export type CreateAppointmentResult =
-  | { state: "success"; date: string; patientId: string }
+  | { state: "success"; appointmentId: string; date: string; patientId: string }
   | { state: "unauthenticated" }
   | { state: "no_active_membership" }
   | { state: "forbidden" }
@@ -310,13 +310,20 @@ export async function createAppointmentForActiveTenant(
     status: input.status
   } satisfies AppointmentInsert;
   // The hand-maintained Database type lacks generated relationship metadata, so this table infers insert as never.
-  const insertResult = await supabase.from("appointments").insert(insertValues as never);
+  const insertResult = (await supabase
+    .from("appointments")
+    .insert(insertValues as never)
+    .select("id")
+    .single()) as unknown as {
+    data: { id: string } | null;
+    error: { code: string } | null;
+  };
 
-  if (insertResult.error) {
+  if (insertResult.error || !insertResult.data) {
     logger.error("Appointment insert failed", {
       component: "create_appointment",
-      status: "insert_error",
-      code: insertResult.error.code
+      status: insertResult.error ? "insert_error" : "missing_result",
+      code: insertResult.error?.code
     });
     return {
       state: "error",
@@ -325,5 +332,10 @@ export async function createAppointmentForActiveTenant(
     };
   }
 
-  return { state: "success", date: input.date, patientId: input.patientId };
+  return {
+    state: "success",
+    appointmentId: insertResult.data.id,
+    date: input.date,
+    patientId: input.patientId
+  };
 }

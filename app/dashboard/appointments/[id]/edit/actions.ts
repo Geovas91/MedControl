@@ -36,7 +36,8 @@ export async function updateAppointmentAction(
   revalidatePath("/dashboard/appointments");
   revalidatePath(`/dashboard/appointments?date=${encodeURIComponent(result.oldDate)}`);
   revalidatePath(`/dashboard/appointments?date=${encodeURIComponent(result.date)}`);
+  revalidatePath(`/dashboard/appointments/${appointmentId}`);
   revalidatePath(`/dashboard/patients/${result.oldPatientId}`);
   revalidatePath(`/dashboard/patients/${result.patientId}`);
-  redirect(`/dashboard/appointments?date=${encodeURIComponent(result.date)}&updated=1`);
+  redirect(`/dashboard/appointments/${appointmentId}?updated=1`);
 }

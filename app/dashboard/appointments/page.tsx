@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Eye,
   MapPin,
   Pencil,
   Search,
@@ -260,6 +261,13 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
                   <Badge variant={statusVariant(appointment.status)} className="w-fit">
                     {getAppointmentStatusLabel(appointment.status)}
                   </Badge>
+                  <Link
+                    href={`/dashboard/appointments/${appointment.id}`}
+                    className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Ver detalle
+                  </Link>
                   {canEditAppointments(data.tenant.membership.role) ? (
                     <Link href={`/dashboard/appointments/${appointment.id}/edit`} className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-clinic ring-1 ring-teal-200 hover:bg-teal-50">
                       <Pencil className="h-4 w-4" />
