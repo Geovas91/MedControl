@@ -1,11 +1,13 @@
 import { calculateAppointmentDuration } from "@/lib/appointments/format";
 import type { AppointmentStatus } from "@/lib/appointments/query";
+import { getAppointmentStatusSuccessMessage } from "@/lib/appointments/status";
 
 type RawDetailQueryValue = string | string[] | undefined;
 
 export type AppointmentDetailSearchParams = {
   created?: RawDetailQueryValue;
   updated?: RawDetailQueryValue;
+  status_updated?: RawDetailQueryValue;
 };
 
 export type AppointmentDetailDateTime = {
@@ -92,6 +94,8 @@ export function formatAppointmentCreatedAt(value: string, timeZone: string) {
 }
 
 export function getAppointmentDetailMessage(searchParams: AppointmentDetailSearchParams) {
+  const statusMessage = getAppointmentStatusSuccessMessage(searchParams.status_updated);
+  if (statusMessage) return statusMessage;
   if (searchParams.updated === "1") return "La cita se actualizó correctamente.";
   if (searchParams.created === "1") return "La cita se creó correctamente.";
   return null;

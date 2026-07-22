@@ -7,8 +7,6 @@ import {
   type ValidatedAppointmentInput
 } from "@/lib/appointments/create";
 import {
-  appointmentStatuses,
-  type AppointmentStatus,
   type AppointmentSearchParams
 } from "@/lib/appointments/query";
 import { calculateAppointmentDuration } from "@/lib/appointments/format";
@@ -30,9 +28,7 @@ export type EditableAppointment = Pick<
   | "status"
 >;
 
-export type ValidatedAppointmentEditInput = Omit<ValidatedAppointmentInput, "status"> & {
-  status: AppointmentStatus;
-};
+export type ValidatedAppointmentEditInput = Omit<ValidatedAppointmentInput, "status">;
 
 export const canEditAppointments = canCreateAppointments;
 
@@ -99,22 +95,24 @@ export function validateAppointmentEditFormValues(
     status: "scheduled",
     meetingUrl: ""
   });
-  const fieldErrors = baseValidation.valid ? {} : { ...baseValidation.fieldErrors };
-
-  if (!appointmentStatuses.includes(values.status as AppointmentStatus)) {
-    fieldErrors.status = "Selecciona un estado válido.";
+  if (!baseValidation.valid) {
+    return { valid: false, data: null, fieldErrors: baseValidation.fieldErrors };
   }
 
-  if (!baseValidation.valid || Object.keys(fieldErrors).length > 0) {
-    return { valid: false, data: null, fieldErrors };
-  }
+  const data = baseValidation.data;
 
   return {
     valid: true,
     fieldErrors: null,
     data: {
-      ...baseValidation.data,
-      status: values.status as AppointmentStatus,
+      patientId: data.patientId,
+      doctorId: data.doctorId,
+      title: data.title,
+      appointmentType: data.appointmentType,
+      date: data.date,
+      startTime: data.startTime,
+      duration: data.duration,
+      location: data.location,
       meetingUrl: null
     }
   };
@@ -132,8 +130,7 @@ export function buildAppointmentUpdate(
     appointment_type: input.appointmentType,
     location: input.location,
     starts_at: startsAt,
-    ends_at: endsAt,
-    status: input.status
+    ends_at: endsAt
   };
 }
 

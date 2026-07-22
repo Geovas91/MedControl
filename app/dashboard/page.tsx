@@ -84,9 +84,9 @@ export default async function DashboardPage() {
           icon={<UsersRound className="h-5 w-5" />}
         />
         <StatCard
-          label="Citas"
-          value={`${data.appointmentsToday.length}`}
-          detail={`Registradas hoy (${data.localDate})`}
+          label="Citas activas"
+          value={`${data.appointmentsToday.filter((appointment) => ["scheduled", "confirmed", "waiting"].includes(appointment.status)).length}`}
+          detail={`Pendientes de atención hoy (${data.localDate})`}
           icon={<CalendarDays className="h-5 w-5" />}
         />
         <StatCard
