@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ArrowLeft, FileSignature } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { ConsentSigningLinkControls } from "@/components/clinical-record/consent-signing-link-controls";
+import { generateConsentSigningLinkAction, revokeConsentSigningLinkAction } from "@/app/dashboard/patients/[id]/consents/[consentId]/actions";
 import { formatPatientTimestamp, getConsentStatusLabel } from "@/lib/patients/detail";
 import { getConsentForActiveTenant } from "@/lib/server/clinical-consents";
 
@@ -28,6 +30,7 @@ export default async function ConsentDetailPage({ params, searchParams }: { para
           <div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-clinic" /><h2 className="font-bold text-ink">Firmas registradas</h2></div>
           <div className="mt-3 grid gap-3">{consent.signatures.length ? consent.signatures.map((signature) => <div key={signature.id} className="rounded-md border border-slate-200 p-4"><p className="font-semibold text-ink">{signature.signer_full_name}</p><p className="mt-1 text-sm text-slate-500">{formatPatientTimestamp(signature.signed_at, consent.timeZone)}</p></div>) : <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-500">No hay firmas registradas. La captura de firmas no esta habilitada en este flujo.</p>}</div>
         </section>
+        {consent.status === "pending" ? <ConsentSigningLinkControls action={generateConsentSigningLinkAction.bind(null, id, consentId)} revokeAction={revokeConsentSigningLinkAction.bind(null, id, consentId)} hasActiveLink={Boolean(consent.signing_token_expires_at && !consent.signing_token_revoked_at && !consent.signing_token_used_at && new Date(consent.signing_token_expires_at) > new Date())} /> : null}
       </section>
     </>
   );

@@ -341,6 +341,7 @@ export type Database = {
           template_schema: Json;
           is_system_template: boolean;
           is_active: boolean;
+          template_kind: "note" | "consent";
           created_by: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
@@ -354,6 +355,7 @@ export type Database = {
           template_schema: Json;
           is_system_template?: boolean;
           is_active?: boolean;
+          template_kind?: "note" | "consent";
           created_by?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
@@ -406,7 +408,12 @@ export type Database = {
           consent_type: string;
           consent_version: string;
           consent_text: string;
-          signing_token: string;
+          signing_token: string | null;
+          template_id: string | null;
+          signing_token_hash: string | null;
+          signing_token_expires_at: Timestamp | null;
+          signing_token_used_at: Timestamp | null;
+          signing_token_revoked_at: Timestamp | null;
           status: Database["public"]["Enums"]["consent_status"];
           expires_at: Timestamp | null;
           signed_at: Timestamp | null;
@@ -422,7 +429,12 @@ export type Database = {
           consent_type: string;
           consent_version: string;
           consent_text: string;
-          signing_token: string;
+          signing_token?: string | null;
+          template_id?: string | null;
+          signing_token_hash?: string | null;
+          signing_token_expires_at?: Timestamp | null;
+          signing_token_used_at?: Timestamp | null;
+          signing_token_revoked_at?: Timestamp | null;
           status?: Database["public"]["Enums"]["consent_status"];
           expires_at?: Timestamp | null;
           signed_at?: Timestamp | null;
@@ -664,6 +676,14 @@ export type Database = {
       };
       create_personal_clinic_for_current_user: {
         Args: { clinic_name: string; full_name?: string | null; email?: string | null };
+        Returns: string;
+      };
+      get_public_consent_for_signing: {
+        Args: { token_hash: string };
+        Returns: { clinic_name: string; consent_type: string; consent_version: string; consent_text: string; expires_at: Timestamp }[];
+      };
+      sign_public_consent: {
+        Args: { token_hash: string; signer_name: string; signature_png: string; accepted_privacy: boolean; accepted_sensitive_data: boolean };
         Returns: string;
       };
       count_clinic_doctors_for_current_user: {

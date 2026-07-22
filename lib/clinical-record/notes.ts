@@ -66,7 +66,9 @@ export function mergeClinicalNoteContent(value: Json, content: string): Json {
 }
 
 export function getTemplateContentSeed(value: Json) {
-  if (!isRecord(value) || !Array.isArray(value.sections)) return "";
+  if (!isRecord(value)) return "";
+  if (typeof value.content === "string") return value.content;
+  if (!Array.isArray(value.sections)) return "";
 
   return value.sections
     .flatMap((section) => {
