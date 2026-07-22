@@ -8,6 +8,7 @@ import {
   CreditCard,
   FileSignature,
   Mail,
+  Pencil,
   Phone
 } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
@@ -16,6 +17,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { canCreateAppointments } from "@/lib/appointments/create";
 import { canCreateClinicalPayments } from "@/lib/payments/create";
 import { hasPatientCreatedMessage } from "@/lib/patients/create";
+import { canEditPatients, hasPatientUpdatedMessage } from "@/lib/patients/edit";
 import {
   calculatePatientAge,
   formatPatientCurrency,
@@ -137,7 +139,7 @@ export default async function PatientDetailPage({
   searchParams
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string | string[] }>;
+  searchParams: Promise<{ created?: string | string[]; updated?: string | string[] }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -173,6 +175,8 @@ export default async function PatientDetailPage({
   const { patient } = data;
   const timeZone = data.tenant.clinic.timezone;
   const age = calculatePatientAge(patient.date_of_birth, data.localDate);
+  const wasUpdated = hasPatientUpdatedMessage(query.updated);
+  const wasCreated = !wasUpdated && hasPatientCreatedMessage(query.created);
 
   return (
     <>
@@ -184,9 +188,9 @@ export default async function PatientDetailPage({
         Volver a pacientes
       </Link>
 
-      {hasPatientCreatedMessage(query.created) ? (
+      {wasUpdated || wasCreated ? (
         <p role="status" className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-          El paciente se creó correctamente.
+          {wasUpdated ? "El paciente se actualizó correctamente." : "El paciente se creó correctamente."}
         </p>
       ) : null}
 
@@ -199,12 +203,20 @@ export default async function PatientDetailPage({
               {age === null ? "Edad sin registro" : `${age} años`} · {getPatientSexLabel(patient.sex)}
             </p>
           </div>
-          {canCreateAppointments(data.tenant.membership.role) ? (
-            <ButtonLink href={`/dashboard/appointments/new?patient=${patient.id}`} className="shrink-0">
-              <CalendarPlus className="h-4 w-4" />
-              Agendar cita
-            </ButtonLink>
-          ) : null}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {canEditPatients(data.tenant.membership.role) ? (
+              <ButtonLink href={`/dashboard/patients/${patient.id}/edit`} variant="secondary" className="shrink-0">
+                <Pencil className="h-4 w-4" />
+                Editar paciente
+              </ButtonLink>
+            ) : null}
+            {canCreateAppointments(data.tenant.membership.role) ? (
+              <ButtonLink href={`/dashboard/appointments/new?patient=${patient.id}`} className="shrink-0">
+                <CalendarPlus className="h-4 w-4" />
+                Agendar cita
+              </ButtonLink>
+            ) : null}
+          </div>
         </div>
 
         <dl className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

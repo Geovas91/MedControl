@@ -6,18 +6,19 @@ import {
   type PatientFieldErrors,
   type PatientFormValues
 } from "@/lib/patients/create";
-import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import {
+  getPatientClinicToday,
+  getPatientFormOptions,
+  type PatientDoctorOption
+} from "@/lib/server/patient-form-options";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
 type PatientInsert = Database["public"]["Tables"]["patients"]["Insert"];
 
-export type PatientDoctorOption = {
-  id: string;
-  name: string;
-};
+export type { PatientDoctorOption } from "@/lib/server/patient-form-options";
 
 export type PatientCreationOptions = {
   doctors: PatientDoctorOption[];
@@ -43,19 +44,6 @@ export type CreatePatientResult =
       values: PatientFormValues;
     };
 
-type DoctorProfileRow = {
-  profile_id: string | null;
-  display_name: string;
-};
-
-async function getClinicToday(timeZone: string) {
-  try {
-    return getClinicDayRange(timeZone).localDate;
-  } catch {
-    return null;
-  }
-}
-
 export async function getPatientCreationOptions(): Promise<PatientCreationOptionsResult> {
   const context = await getActiveTenantContext();
 
@@ -67,45 +55,26 @@ export async function getPatientCreationOptions(): Promise<PatientCreationOption
     return { state: "forbidden", data: null };
   }
 
-  const clinicToday = await getClinicToday(context.tenant.clinic.timezone);
-
-  if (!clinicToday) {
-    logger.error("Patient creation clinic timezone is invalid", {
-      component: "create_patient",
-      status: "timezone_error"
-    });
-    return { state: "error", data: null };
-  }
-
   const supabase = await createClient();
-  const doctorsResult = await supabase
-    .from("doctor_public_profiles")
-    .select("profile_id, display_name")
-    .eq("clinic_id", context.tenant.clinic.id)
-    .not("profile_id", "is", null)
-    .order("display_name", { ascending: true })
-    .limit(100);
+  const optionsResult = await getPatientFormOptions(
+    supabase,
+    context.tenant.clinic.id,
+    context.tenant.clinic.timezone
+  );
 
-  if (doctorsResult.error) {
-    logger.error("Patient creation doctor options query failed", {
+  if (optionsResult.state !== "ready") {
+    logger.error("Patient creation options query failed", {
       component: "create_patient",
-      status: "doctor_options_error",
-      code: doctorsResult.error.code
+      status: optionsResult.state,
+      code: optionsResult.code ?? undefined
     });
     return { state: "error", data: null };
   }
 
-  const doctors = ((doctorsResult.data ?? []) as DoctorProfileRow[])
-    .filter((doctor): doctor is DoctorProfileRow & { profile_id: string } => Boolean(doctor.profile_id))
-    .reduce<PatientDoctorOption[]>((options, doctor) => {
-      if (!options.some((option) => option.id === doctor.profile_id)) {
-        options.push({ id: doctor.profile_id, name: doctor.display_name });
-      }
-
-      return options;
-    }, []);
-
-  return { state: "ready", data: { doctors, clinicToday } };
+  return {
+    state: "ready",
+    data: { doctors: optionsResult.doctors, clinicToday: optionsResult.clinicToday }
+  };
 }
 
 export async function createPatientForActiveTenant(values: PatientFormValues): Promise<CreatePatientResult> {
@@ -127,18 +96,14 @@ export async function createPatientForActiveTenant(values: PatientFormValues): P
     return { state: "forbidden" };
   }
 
-  const clinicToday = await getClinicToday(context.tenant.clinic.timezone);
+  const clinicToday = getPatientClinicToday(context.tenant.clinic.timezone);
 
   if (!clinicToday) {
-    logger.error("Patient creation clinic timezone is invalid", {
+    logger.error("Patient creation validation context failed", {
       component: "create_patient",
       status: "timezone_error"
     });
-    return {
-      state: "error",
-      error: "No fue posible validar la fecha. Intenta nuevamente.",
-      values
-    };
+    return { state: "error", error: "No fue posible validar los datos. Intenta nuevamente.", values };
   }
 
   const validation = validatePatientFormValues(values, clinicToday);
