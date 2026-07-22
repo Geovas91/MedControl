@@ -18,6 +18,7 @@ export type AppointmentSearchParams = {
   doctor?: RawQueryValue;
   q?: RawQueryValue;
   created?: RawQueryValue;
+  updated?: RawQueryValue;
 };
 
 export type AppointmentQuery = {

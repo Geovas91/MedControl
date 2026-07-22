@@ -15,6 +15,7 @@ import { notFound, redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { canCreateAppointments } from "@/lib/appointments/create";
+import { canEditAppointments } from "@/lib/appointments/edit";
 import { canCreateClinicalPayments } from "@/lib/payments/create";
 import { hasPatientCreatedMessage } from "@/lib/patients/create";
 import { canEditPatients, hasPatientUpdatedMessage } from "@/lib/patients/edit";
@@ -99,11 +100,13 @@ function PatientDetailUnavailable({ title, description }: { title: string; descr
 function AppointmentList({
   appointments,
   timeZone,
-  emptyLabel
+  emptyLabel,
+  canEdit
 }: {
   appointments: PatientDetailAppointment[];
   timeZone: string;
   emptyLabel: string;
+  canEdit: boolean;
 }) {
   if (appointments.length === 0) {
     return <EmptySection>{emptyLabel}</EmptySection>;
@@ -124,9 +127,17 @@ function AppointmentList({
                 Médico: {appointment.doctorName ?? "Sin registro"}
               </p>
             </div>
-            <Badge variant={relatedStatusVariant(appointment.status)}>
-              {getAppointmentStatusLabel(appointment.status)}
-            </Badge>
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant={relatedStatusVariant(appointment.status)}>
+                {getAppointmentStatusLabel(appointment.status)}
+              </Badge>
+              {canEdit ? (
+                <Link href={`/dashboard/appointments/${appointment.id}/edit`} className="inline-flex items-center gap-1 text-sm font-semibold text-clinic hover:underline">
+                  <Pencil className="h-4 w-4" />
+                  Editar
+                </Link>
+              ) : null}
+            </div>
           </div>
         </article>
       ))}
@@ -264,6 +275,7 @@ export default async function PatientDetailPage({
               appointments={data.upcomingAppointments}
               timeZone={timeZone}
               emptyLabel="No hay próximas citas registradas."
+              canEdit={canEditAppointments(data.tenant.membership.role)}
             />
           </div>
           <div>
@@ -272,6 +284,7 @@ export default async function PatientDetailPage({
               appointments={data.recentAppointments}
               timeZone={timeZone}
               emptyLabel="No hay citas anteriores registradas."
+              canEdit={false}
             />
           </div>
         </div>

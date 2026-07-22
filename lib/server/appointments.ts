@@ -9,6 +9,7 @@ import {
   type AppointmentQuery,
   type AppointmentSearchParams
 } from "@/lib/appointments/query";
+import { hasAppointmentUpdatedMessage } from "@/lib/appointments/edit";
 import { getClinicDateRange, getClinicDayRange } from "@/lib/dashboard/timezone";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
@@ -61,6 +62,7 @@ export type AppointmentAgendaData = {
   doctors: AppointmentDoctorOption[];
   totals: AppointmentDayTotals;
   created: boolean;
+  updated: boolean;
 };
 
 export type AppointmentAgendaResult =
@@ -206,7 +208,8 @@ export async function getAppointmentAgendaForActiveTenant(
       doctors,
       totals: summarizeAppointmentStatuses(allDayRows.map((appointment) => appointment.status)),
       appointments,
-      created: hasAppointmentCreatedMessage(searchParams)
+      created: hasAppointmentCreatedMessage(searchParams),
+      updated: hasAppointmentUpdatedMessage(searchParams)
     }
   };
 }
