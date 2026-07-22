@@ -149,6 +149,7 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
       .eq("clinic_id", clinicId)
       .eq("patient_id", id)
       .gte("starts_at", now)
+      .in("status", ["scheduled", "confirmed", "waiting"])
       .order("starts_at", { ascending: true })
       .limit(5),
     supabase

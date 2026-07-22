@@ -302,16 +302,19 @@ export async function updateAppointmentForActiveTenant(
     };
   }
 
-  if (original.status === "completed" && input.status === "completed" && Date.parse(startsAt) > Date.now()) {
+  const scheduleChanged =
+    Date.parse(startsAt) !== Date.parse(original.starts_at) || Date.parse(endsAt) !== Date.parse(original.ends_at);
+
+  if (original.status === "completed" && scheduleChanged) {
     return {
       state: "validation_error",
-      error: "Una cita completada no puede moverse al futuro sin cambiar explícitamente su estado.",
-      fieldErrors: { status: "Cambia el estado antes de mover esta cita al futuro." },
+      error: "Una cita completada conserva su fecha y horario.",
+      fieldErrors: { date: "El horario de una cita completada no puede modificarse." },
       values
     };
   }
 
-  if (input.status !== "cancelled") {
+  if (original.status !== "cancelled") {
     const conflictResult = await supabase
       .from("appointments")
       .select("id")

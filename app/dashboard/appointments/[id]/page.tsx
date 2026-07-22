@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { AppointmentStatusActions } from "@/components/appointments/appointment-status-actions";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/appointments/detail";
 import { canEditAppointments } from "@/lib/appointments/edit";
 import { getAppointmentStatusLabel } from "@/lib/appointments/query";
+import { getAvailableAppointmentStatusActions } from "@/lib/appointments/status";
 import { getAppointmentDetailForActiveTenant } from "@/lib/server/appointment-detail";
 
 export const dynamic = "force-dynamic";
@@ -107,6 +109,13 @@ export default async function AppointmentDetailPage({
   const agendaHref = getAppointmentDetailAgendaHref(dateTime.localDate);
   const successMessage = getAppointmentDetailMessage(query);
   const meetingUrl = getSafeAppointmentMeetingUrl(appointment.meeting_url);
+  const statusActions = getAvailableAppointmentStatusActions({
+    currentStatus: appointment.status,
+    role: tenant.membership.role,
+    startsAt: appointment.starts_at,
+    timeZone,
+    hasAssignedDoctor: Boolean(appointment.doctor_id)
+  });
 
   return (
     <>
@@ -206,6 +215,12 @@ export default async function AppointmentDetailPage({
           </DetailItem>
         </dl>
       </section>
+
+      <AppointmentStatusActions
+        appointmentId={appointment.id}
+        currentStatus={appointment.status}
+        actions={statusActions}
+      />
     </>
   );
 }

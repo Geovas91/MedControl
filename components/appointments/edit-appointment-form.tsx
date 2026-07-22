@@ -14,7 +14,6 @@ import {
   type AppointmentFormValues
 } from "@/lib/appointments/create";
 import { getAppointmentEditReturnHref } from "@/lib/appointments/edit";
-import { appointmentStatuses, getAppointmentStatusLabel } from "@/lib/appointments/query";
 import type {
   AppointmentEditDoctorOption,
   AppointmentEditPatientOption
@@ -123,13 +122,6 @@ export function EditAppointmentForm({
               {appointmentDurations.map((duration) => <option key={duration} value={duration}>{duration} minutos</option>)}
             </Select>
             <FieldError field="duration" errors={state.fieldErrors} />
-          </Field>
-
-          <Field label="Estado *" htmlFor="status">
-            <Select id="status" name="status" defaultValue={values.status} required aria-invalid={Boolean(state.fieldErrors?.status)} aria-describedby={state.fieldErrors?.status ? fieldErrorId("status") : undefined}>
-              {appointmentStatuses.map((status) => <option key={status} value={status}>{getAppointmentStatusLabel(status)}</option>)}
-            </Select>
-            <FieldError field="status" errors={state.fieldErrors} />
           </Field>
 
           <Field label="Ubicación" htmlFor="location">
