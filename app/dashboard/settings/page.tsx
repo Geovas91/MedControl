@@ -1,10 +1,16 @@
-import { Bell, Building2, Plug, ShieldCheck, UserRoundCog } from "lucide-react";
+import { Bell, Building2, ClipboardList, Plug, ShieldCheck, UserRoundCog } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { getOnboardingStatus } from "@/lib/onboarding";
 import { getClinicPlanContext } from "@/lib/supabase/subscriptions";
 
 const settings = [
+  {
+    title: "Plantillas clinicas",
+    description: "Plantillas de notas y consentimientos disponibles para la clinica.",
+    icon: ClipboardList,
+    href: "/dashboard/settings/clinical-templates"
+  },
   {
     title: "Perfil de clínica",
     description: "Nombre comercial, dirección, teléfono y datos básicos de recepción.",
@@ -91,7 +97,7 @@ export default async function SettingsPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
               {item.href ? (
                 <ButtonLink href={item.href} variant="secondary" className="mt-5">
-                  Abrir integraciones
+                  Abrir configuracion
                 </ButtonLink>
               ) : null}
             </article>

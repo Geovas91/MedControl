@@ -1,0 +1,28 @@
+"use client";
+
+import { CheckCircle2, Eraser, PenLine } from "lucide-react";
+import { useActionState, useEffect, useRef, useState } from "react";
+import { signPublicConsentAction } from "@/app/consent/sign/[token]/actions";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/input";
+import type { PublicConsent } from "@/lib/server/public-consent-signing";
+
+function SignatureCanvas({ onChange }: { onChange: (value: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hasInkRef = useRef(false);
+  useEffect(() => { const canvas = canvasRef.current; if (!canvas) return; const context = canvas.getContext("2d"); if (!context) return; context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.strokeStyle = "#0f172a"; context.lineWidth = 3; context.lineCap = "round"; }, []);
+  const point = (event: React.PointerEvent<HTMLCanvasElement>) => { const rect = event.currentTarget.getBoundingClientRect(); return { x: (event.clientX - rect.left) * (event.currentTarget.width / rect.width), y: (event.clientY - rect.top) * (event.currentTarget.height / rect.height) }; };
+  const start = (event: React.PointerEvent<HTMLCanvasElement>) => { event.currentTarget.setPointerCapture(event.pointerId); const context = event.currentTarget.getContext("2d"); const p = point(event); context?.beginPath(); context?.moveTo(p.x, p.y); };
+  const draw = (event: React.PointerEvent<HTMLCanvasElement>) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const context = event.currentTarget.getContext("2d"); const p = point(event); context?.lineTo(p.x, p.y); context?.stroke(); hasInkRef.current = true; };
+  const end = (event: React.PointerEvent<HTMLCanvasElement>) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); if (hasInkRef.current) onChange(event.currentTarget.toDataURL("image/png")); };
+  const clear = () => { const canvas = canvasRef.current; const context = canvas?.getContext("2d"); if (!canvas || !context) return; context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); hasInkRef.current = false; onChange(""); };
+  return <div><canvas ref={canvasRef} width={720} height={240} aria-label="Area de firma" onPointerDown={start} onPointerMove={draw} onPointerUp={end} onPointerCancel={end} className="h-40 w-full touch-none rounded-md border border-slate-300 bg-white" /><div className="mt-2 flex items-center justify-between"><p className="text-xs text-slate-500">Dibuja tu firma con mouse, touch o stylus.</p><Button type="button" variant="ghost" onClick={clear}><Eraser className="h-4 w-4" />Limpiar</Button></div></div>;
+}
+
+export function PublicConsentSigningPage({ token, consent }: { token: string; consent: PublicConsent | null }) {
+  const [signature, setSignature] = useState("");
+  const action = signPublicConsentAction.bind(null, token);
+  const [state, formAction] = useActionState(action, {} as { success?: boolean; error?: string });
+  if (!consent || state.success) return <main className="min-h-screen bg-slate-50 px-4 py-10"><section className="mx-auto max-w-xl rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">{state.success ? <><CheckCircle2 className="mx-auto h-10 w-10 text-emerald-600" /><h1 className="mt-4 text-2xl font-bold text-ink">Consentimiento firmado</h1><p className="mt-3 text-sm text-slate-600">La firma fue registrada correctamente.</p></> : <><h1 className="text-2xl font-bold text-ink">Enlace no disponible</h1><p className="mt-3 text-sm text-slate-600">Este consentimiento ya fue firmado o el enlace ya no es valido.</p></>}</section></main>;
+  return <main className="min-h-screen bg-slate-50 px-4 py-6 sm:py-10"><form action={formAction} className="mx-auto grid max-w-2xl gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><header className="border-b border-slate-200 pb-4"><p className="text-sm font-semibold text-clinic">{consent.clinicName}</p><h1 className="mt-1 text-2xl font-bold text-ink">{consent.consentType}</h1><p className="mt-1 text-sm text-slate-500">Version {consent.consentVersion}</p></header><p className="whitespace-pre-wrap rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-700">{consent.consentText}</p><p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">Este enlace vence el {new Intl.DateTimeFormat("es-MX", { dateStyle: "long", timeStyle: "short" }).format(new Date(consent.expiresAt))}.</p><Field label="Nombre completo del firmante" htmlFor="signer_name"><Input id="signer_name" name="signer_name" required maxLength={160} /></Field><label className="flex gap-3 text-sm text-slate-700"><input name="privacy" type="checkbox" required className="mt-1 h-4 w-4" />Confirmo que soy la persona indicada o su representante autorizado.</label><label className="flex gap-3 text-sm text-slate-700"><input name="sensitive_data" type="checkbox" required className="mt-1 h-4 w-4" />Acepto el tratamiento de mis datos personales y relacionados con salud.</label><section><div className="mb-2 flex items-center gap-2"><PenLine className="h-5 w-5 text-clinic" /><h2 className="font-bold text-ink">Firma</h2></div><SignatureCanvas onChange={setSignature} /><input type="hidden" name="signature_png" value={signature} /></section><p className="text-xs leading-5 text-slate-500">Esta firma representa una aceptacion electronica dentro de CliniControl y no sustituye una firma electronica certificada.</p>{state.error ? <p role="alert" className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{state.error}</p> : null}<Button type="submit" disabled={!signature}>Confirmar firma</Button></form></main>;
+}
