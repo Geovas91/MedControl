@@ -25,9 +25,11 @@ El enlace es personal, no debe compartirse ni incluirse en logs, capturas o tick
 4. Un usuario sin membresías con el correo invitado y una suscripción `active` o trial vigente debe crear perfil/membresía activa, marcar la invitación como `accepted` y eliminar el token. Un segundo intento debe fallar sin duplicar la membresía.
 5. Un trial vencido, sin fecha, una suscripción `past_due`, `inactive`, `cancelled` o faltante debe rechazar la aceptación. Un correo diferente, límite de médicos alcanzado y rol `owner` también deben rechazarse.
 6. Un usuario invitado no puede escribir antes de aceptar; después sólo puede hacerlo según su rol. `clinic_has_write_entitlement` debe seguir rechazando a usuarios sin membresía.
-7. Registro normal exige clínica. Registro con un `next` local exacto `/invite/<token>` no pide clínica ni guarda `clinic_name`; el callback conserva el enlace. `//evil`, `/\\evil` y redirects externos se rechazan.
-8. Intentar `select`, `insert`, `update` o `delete` REST directo sobre `clinic_member_invitations` como `anon` y como `authenticated` debe ser denegado. La función interna de suscripción tampoco debe ser ejecutable directamente.
-9. Con `EMAIL_REQUIRED=false`, `/api/ready` puede responder 200 y `email: disabled`. Con `EMAIL_REQUIRED=true`, debe responder 503 y `email: required_unavailable`, incluso con variables ficticias.
+7. Registro invitado con un `next` local exacto `/invite/<token>` no pide clínica ni guarda `clinic_name`. Probar campos vacíos, contraseña inválida, correo ya registrado y error de Supabase: cada respuesta debe conservar `next` y seguir ocultando la clínica. Registro normal sigue exigiendo clínica.
+8. Login invitado con campo vacío o contraseña incorrecta conserva `next`; sus enlaces de registro y recuperación también lo conservan. Recuperación vuelve por `/reset-password?next=...` y después permite volver a login o a la invitación sin reconstruir el enlace.
+9. `isInvitationPath` sólo acepta `/invite/[A-Za-z0-9_-]{1,128}`. Rechazar `https://evil.example`, `//evil.example`, `/\\evil`, `/invite/`, `/invite/a/b`, queries en la ruta y tokens de más de 128 caracteres; todos usan el fallback seguro.
+10. Intentar `select`, `insert`, `update` o `delete` REST directo sobre `clinic_member_invitations` como `anon` y como `authenticated` debe ser denegado. La función interna de suscripción tampoco debe ser ejecutable directamente.
+11. Con `EMAIL_REQUIRED=false`, `/api/ready` puede responder 200 y `email: disabled`. Con `EMAIL_REQUIRED=true`, debe responder 503 y `email: required_unavailable`, incluso con variables ficticias.
 
 ## Multi-clínica
 
