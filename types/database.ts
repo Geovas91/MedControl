@@ -379,6 +379,7 @@ export type Database = {
           icd10_code: string | null;
           note_data: Json;
           finalized_at: Timestamp | null;
+          finalized_by: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -396,6 +397,7 @@ export type Database = {
           icd10_code?: string | null;
           note_data: Json;
           finalized_at?: Timestamp | null;
+          finalized_by?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
