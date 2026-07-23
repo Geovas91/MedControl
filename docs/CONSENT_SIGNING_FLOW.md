@@ -37,7 +37,9 @@ acceptance in CliniControl and is not represented as a certified electronic sign
 expiration and revocation, validates a real PNG (magic bytes, IHDR dimensions no
 larger than 1600 by 800, and a 250 KB binary limit), inserts the
 signature, marks the consent signed, records `signed_at`, and marks the token used
-in one transaction. A second concurrent request cannot create a second signature.
+in one transaction. The row lookup and lock happen before base64 decoding, so an
+invalid, used, revoked, or expired link never triggers expensive image processing.
+A second concurrent request cannot create a second signature.
 
 There is no new test runner in this repository. Manual testing after migration is
 still required for a valid link, expiration, revocation, concurrent submission,

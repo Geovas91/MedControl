@@ -33,7 +33,7 @@ comment on column public.medical_note_templates.template_kind is
 comment on column public.consents.signing_token_hash is
   'SHA-256 hash of the one-time public signing token. Raw tokens are never stored for new links.';
 
-create or replace function public.get_public_consent_for_signing(token_hash text)
+create or replace function public.get_public_consent_for_signing(p_token_hash text)
 returns table (
   clinic_name text,
   consent_type text,
@@ -47,24 +47,24 @@ set search_path = public, pg_temp
 as $$
 begin
   return query
-    select clinics.name, consents.consent_type, consents.consent_version,
-      consents.consent_text, consents.signing_token_expires_at
-    from public.consents
-    join public.clinics on clinics.id = consents.clinic_id
-    where consents.signing_token_hash = token_hash
-      and consents.status = 'pending'
-      and consents.signing_token_used_at is null
-      and consents.signing_token_revoked_at is null
-      and consents.signing_token_expires_at > now();
+    select cl.name, c.consent_type, c.consent_version,
+      c.consent_text, c.signing_token_expires_at
+    from public.consents as c
+    join public.clinics as cl on cl.id = c.clinic_id
+    where c.signing_token_hash = p_token_hash
+      and c.status = 'pending'
+      and c.signing_token_used_at is null
+      and c.signing_token_revoked_at is null
+      and c.signing_token_expires_at > now();
 end;
 $$;
 
 create or replace function public.sign_public_consent(
-  token_hash text,
-  signer_name text,
-  signature_png text,
-  accepted_privacy boolean,
-  accepted_sensitive_data boolean
+  p_token_hash text,
+  p_signer_name text,
+  p_signature_png text,
+  p_accepted_privacy boolean,
+  p_accepted_sensitive_data boolean
 )
 returns text
 language plpgsql
@@ -78,15 +78,41 @@ declare
   signature_width bigint;
   signature_height bigint;
 begin
-  if length(signer_name) < 2 or length(signer_name) > 160
-    or not accepted_privacy or not accepted_sensitive_data
-    or octet_length(signature_png) > 341358
-    or signature_png !~ '^data:image/png;base64,[A-Za-z0-9+/]+={0,2}$' then
+  -- Reject inexpensive invalid input before locking a consent, but do not decode
+  -- or inspect the image until a currently valid token has been locked.
+  if p_signer_name is null or length(p_signer_name) < 2 or length(p_signer_name) > 160
+    or p_accepted_privacy is not true or p_accepted_sensitive_data is not true
+    or p_signature_png is null or octet_length(p_signature_png) > 341358
+    or left(p_signature_png, 22) <> 'data:image/png;base64,' then
     return 'invalid';
   end if;
 
-  encoded_signature := substring(signature_png from 23);
-  if encoded_signature = '' or length(encoded_signature) % 4 <> 0 then
+  select c.* into target
+    from public.consents as c
+    where c.signing_token_hash = p_token_hash
+    for update;
+
+  if not found then
+    return 'invalid';
+  end if;
+
+  if target.status = 'signed' or target.signing_token_used_at is not null then
+    return 'already_signed';
+  end if;
+
+  if target.status <> 'pending' or target.signing_token_revoked_at is not null
+    or target.signing_token_expires_at is null or target.signing_token_expires_at <= now() then
+    if target.status = 'pending' and target.signing_token_expires_at <= now() then
+      update public.consents as c
+        set status = 'expired', signing_token_hash = null, signing_token_expires_at = null
+        where c.id = target.id;
+    end if;
+    return 'invalid';
+  end if;
+
+  encoded_signature := substring(p_signature_png from 23);
+  if encoded_signature = '' or length(encoded_signature) % 4 <> 0
+    or encoded_signature !~ '^[A-Za-z0-9+/]+={0,2}$' then
     return 'invalid';
   end if;
 
@@ -130,38 +156,17 @@ begin
     return 'invalid';
   end if;
 
-  select * into target
-    from public.consents
-    where signing_token_hash = token_hash
-    for update;
-
-  if not found then
-    return 'invalid';
-  end if;
-
-  if target.status = 'signed' or target.signing_token_used_at is not null then
-    return 'already_signed';
-  end if;
-
-  if target.status <> 'pending' or target.signing_token_revoked_at is not null
-    or target.signing_token_expires_at is null or target.signing_token_expires_at <= now() then
-    if target.status = 'pending' and target.signing_token_expires_at <= now() then
-      update public.consents set status = 'expired' where id = target.id;
-    end if;
-    return 'invalid';
-  end if;
-
   insert into public.consent_signatures (
     consent_id, patient_id, signer_full_name, signature_data,
     accepted_privacy_notice, accepted_sensitive_data_processing
   ) values (
-    target.id, target.patient_id, signer_name, signature_png,
+    target.id, target.patient_id, p_signer_name, p_signature_png,
     true, true
   );
 
-  update public.consents
+  update public.consents as c
     set status = 'signed', signed_at = now(), signing_token_used_at = now()
-    where id = target.id;
+    where c.id = target.id;
 
   return 'signed';
 end;

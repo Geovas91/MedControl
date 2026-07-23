@@ -679,11 +679,11 @@ export type Database = {
         Returns: string;
       };
       get_public_consent_for_signing: {
-        Args: { token_hash: string };
+        Args: { p_token_hash: string };
         Returns: { clinic_name: string; consent_type: string; consent_version: string; consent_text: string; expires_at: Timestamp }[];
       };
       sign_public_consent: {
-        Args: { token_hash: string; signer_name: string; signature_png: string; accepted_privacy: boolean; accepted_sensitive_data: boolean };
+        Args: { p_token_hash: string; p_signer_name: string; p_signature_png: string; p_accepted_privacy: boolean; p_accepted_sensitive_data: boolean };
         Returns: string;
       };
       count_clinic_doctors_for_current_user: {
