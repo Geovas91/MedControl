@@ -7,16 +7,30 @@ import type { ClinicSubscription, PlanId } from "@/types/subscriptions";
 export type ClinicEntitlements = {
   planId: PlanId;
   subscription: ClinicSubscription;
-  status: ClinicSubscription["status"];
+  persistedStatus: ClinicSubscription["status"];
+  effectiveStatus: EffectiveSubscriptionAccess;
   canUseClinicalWorkspace: boolean;
   canManageMembers: boolean;
   readOnlyReason: string | null;
 };
 
+export type EffectiveSubscriptionAccess = "active" | "trialing" | "trial_expired" | "past_due" | "inactive" | "cancelled";
+
 export type ClinicEntitlementsResult =
   | { state: "ready"; entitlements: ClinicEntitlements }
   | { state: "missing"; message: string }
   | { state: "error"; message: string };
+
+export function resolveEffectiveSubscriptionAccess(
+  subscription: ClinicSubscription,
+  now: Date = new Date()
+): EffectiveSubscriptionAccess {
+  if (subscription.status !== "trialing") return subscription.status;
+  if (!subscription.current_period_end || new Date(subscription.current_period_end).getTime() <= now.getTime()) {
+    return "trial_expired";
+  }
+  return "trialing";
+}
 
 export async function getClinicEntitlements(clinicId: string): Promise<ClinicEntitlementsResult> {
   const { data: subscription, error } = await getClinicSubscription(clinicId);
@@ -34,19 +48,23 @@ export async function getClinicEntitlements(clinicId: string): Promise<ClinicEnt
     return { state: "missing", message: "Esta clínica todavía no tiene una suscripción configurada. Revisa facturación." };
   }
 
-  const hasActiveAccess = subscription.status === "active" || subscription.status === "trialing";
-  const isPastDue = subscription.status === "past_due";
+  const effectiveStatus = resolveEffectiveSubscriptionAccess(subscription);
+  const hasActiveAccess = effectiveStatus === "active" || effectiveStatus === "trialing";
+  const isPastDue = effectiveStatus === "past_due";
   return {
     state: "ready",
     entitlements: {
       planId: subscription.plan_id,
       subscription,
-      status: subscription.status,
+      persistedStatus: subscription.status,
+      effectiveStatus,
       canUseClinicalWorkspace: hasActiveAccess || isPastDue,
       canManageMembers: hasActiveAccess,
       readOnlyReason: hasActiveAccess
         ? null
-        : isPastDue
+        : effectiveStatus === "trial_expired"
+          ? "La prueba de CliniControl venció. Puedes consultar la información existente y revisar facturación, pero no crear registros nuevos."
+          : isPastDue
           ? "La suscripción tiene un pago pendiente. El acceso clínico temporal continúa, pero las operaciones nuevas están bloqueadas."
           : "La suscripción no está activa. Puedes consultar la información existente y revisar facturación, pero no crear registros nuevos."
     }
@@ -54,7 +72,7 @@ export async function getClinicEntitlements(clinicId: string): Promise<ClinicEnt
 }
 
 export function canCreateWithEntitlements(result: ClinicEntitlementsResult) {
-  return result.state === "ready" && (result.entitlements.status === "active" || result.entitlements.status === "trialing");
+  return result.state === "ready" && (result.entitlements.effectiveStatus === "active" || result.entitlements.effectiveStatus === "trialing");
 }
 
 export function getEntitlementNotice(result: ClinicEntitlementsResult) {

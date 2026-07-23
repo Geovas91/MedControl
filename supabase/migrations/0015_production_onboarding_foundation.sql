@@ -46,7 +46,6 @@ declare
   v_owner_full_name text := nullif(trim(p_owner_full_name), '');
   v_timezone text := nullif(trim(p_timezone), '');
   v_auth_email text;
-  v_trial_duration constant interval := interval '14 days';
 begin
   if v_user_id is null then
     raise exception 'Authentication required.';
@@ -126,7 +125,7 @@ begin
   insert into public.clinic_subscriptions as cs (
     clinic_id, plan_id, status, billing_provider, provider_subscription_id, provider_plan_id, current_period_start, current_period_end
   ) values (
-    v_clinic_id, p_plan_id, 'trialing', 'manual', null, null, now(), now() + v_trial_duration
+    v_clinic_id, p_plan_id, 'trialing', 'manual', null, null, now(), now() + interval '30 days'
   );
 
   insert into public.clinic_onboarding_acceptances as coa (
@@ -141,7 +140,7 @@ revoke all on function public.complete_clinic_onboarding_for_current_user(text, 
 grant execute on function public.complete_clinic_onboarding_for_current_user(text, text, text, text, text, text, text, text, text, text, boolean, boolean, boolean) to authenticated;
 
 comment on function public.complete_clinic_onboarding_for_current_user(text, text, text, text, text, text, text, text, text, text, boolean, boolean, boolean) is
-  'Serializes onboarding for auth.uid(), uses auth.users email only for profiles, stores clinic contact separately, records versioned acknowledgements, and creates a 14-day manual trial without clinical payments.';
+  'Serializes onboarding for auth.uid(), uses auth.users email only for profiles, stores clinic contact separately, records versioned acknowledgements, and creates a 30-day manual trial without clinical payments.';
 
 create or replace function public.add_clinic_member_by_email_for_current_user(
   target_clinic_id uuid,
@@ -159,8 +158,10 @@ declare
   target_user_id uuid;
   existing_membership_id uuid;
   existing_membership_role text;
+  existing_membership_status text;
   current_plan_id text;
   current_subscription_status text;
+  current_period_end timestamptz;
   active_doctor_count integer;
   new_membership_id uuid;
 begin
@@ -169,15 +170,19 @@ begin
   if normalized_role not in ('doctor', 'admin', 'assistant') then raise exception 'Unsupported clinic role.'; end if;
   if normalized_email is null or char_length(normalized_email) > 254 then raise exception 'Email is required.'; end if;
 
-  select cs.status, cs.plan_id into current_subscription_status, current_plan_id
+  select cs.status, cs.plan_id, cs.current_period_end into current_subscription_status, current_plan_id, current_period_end
   from public.clinic_subscriptions as cs where cs.clinic_id = target_clinic_id limit 1;
-  if current_subscription_status is distinct from 'active' and current_subscription_status is distinct from 'trialing' then
+  if current_subscription_status is distinct from 'active'
+    and not (current_subscription_status = 'trialing' and current_period_end is not null and current_period_end > now()) then
     raise exception 'The current subscription does not allow member administration.';
   end if;
 
   select p.id into target_user_id from public.profiles as p where lower(p.email) = normalized_email limit 1;
   if target_user_id is null then raise exception 'No existe un usuario de CliniControl con ese correo. Pídele que cree su cuenta antes de agregarlo.'; end if;
-  select cm.id, cm.role::text into existing_membership_id, existing_membership_role from public.clinic_members as cm where cm.clinic_id = target_clinic_id and cm.user_id = target_user_id limit 1;
+  select cm.id, cm.role::text, cm.status::text into existing_membership_id, existing_membership_role, existing_membership_status from public.clinic_members as cm where cm.clinic_id = target_clinic_id and cm.user_id = target_user_id limit 1;
+  if existing_membership_role = 'owner' then
+    raise exception 'Owner memberships cannot be changed through member administration.';
+  end if;
 
   if normalized_role = 'doctor' and coalesce(existing_membership_role, '') <> 'doctor' then
     active_doctor_count := public.count_clinic_doctors_for_current_user(target_clinic_id);
@@ -195,3 +200,103 @@ $$;
 
 revoke all on function public.add_clinic_member_by_email_for_current_user(uuid, text, text) from public, anon;
 grant execute on function public.add_clinic_member_by_email_for_current_user(uuid, text, text) to authenticated;
+
+create or replace function public.clinic_has_write_entitlement(p_clinic_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public, pg_temp
+stable
+as $$
+  select auth.uid() is not null and exists (
+    select 1
+    from public.clinic_members as cm
+    join public.clinic_subscriptions as cs on cs.clinic_id = cm.clinic_id
+    where cm.clinic_id = p_clinic_id
+      and cm.user_id = auth.uid()
+      and cm.status = 'active'
+      and (
+        cs.status = 'active'
+        or (cs.status = 'trialing' and cs.current_period_end is not null and cs.current_period_end > now())
+      )
+  );
+$$;
+
+revoke all on function public.clinic_has_write_entitlement(uuid) from public, anon;
+grant execute on function public.clinic_has_write_entitlement(uuid) to authenticated;
+
+-- Keep reads intact. These replacements add write entitlement to the pre-existing role and tenant checks.
+drop policy if exists "Doctors and admins can insert patients" on public.patients;
+drop policy if exists "Doctors and admins can update patients" on public.patients;
+create policy "Doctors and admins can insert patients" on public.patients for insert with check (
+  public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+);
+create policy "Doctors and admins can update patients" on public.patients for update
+  using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
+  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id));
+
+drop policy if exists "Doctors and admins can insert appointments" on public.appointments;
+drop policy if exists "Doctors and admins can update appointments" on public.appointments;
+create policy "Doctors and admins can insert appointments" on public.appointments for insert with check (
+  public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+);
+create policy "Doctors and admins can update appointments" on public.appointments for update
+  using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
+  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id));
+
+drop policy if exists "Owners and admins can insert payments" on public.payments;
+drop policy if exists "Owners and admins can update payments" on public.payments;
+create policy "Owners and admins can insert payments" on public.payments for insert with check (
+  public.has_clinic_role(clinic_id, array['owner', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+);
+create policy "Owners and admins can update payments" on public.payments for update
+  using (public.has_clinic_role(clinic_id, array['owner', 'admin']))
+  with check (public.has_clinic_role(clinic_id, array['owner', 'admin']) and public.clinic_has_write_entitlement(clinic_id));
+
+drop policy if exists "Doctors and admins can insert medical notes" on public.medical_notes;
+drop policy if exists "Doctors and admins can update medical notes" on public.medical_notes;
+create policy "Doctors and admins can insert medical notes" on public.medical_notes for insert with check (
+  public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+);
+create policy "Doctors and admins can update medical notes" on public.medical_notes for update
+  using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
+  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id));
+
+drop policy if exists "Doctors and admins can insert consents" on public.consents;
+drop policy if exists "Doctors and admins can update consents" on public.consents;
+create policy "Doctors and admins can insert consents" on public.consents for insert with check (
+  public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+);
+create policy "Doctors and admins can update consents" on public.consents for update
+  using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
+  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id));
+
+drop policy if exists "Owners and admins can insert clinic templates" on public.medical_note_templates;
+drop policy if exists "Owners and admins can update clinic templates" on public.medical_note_templates;
+create policy "Owners and admins can insert clinic templates" on public.medical_note_templates for insert with check (
+  is_system_template = false and clinic_id is not null and system_key is null and created_by = auth.uid()
+  and public.has_clinic_role(clinic_id, array['owner', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+);
+create policy "Owners and admins can update clinic templates" on public.medical_note_templates for update
+  using (is_system_template = false and public.has_clinic_role(clinic_id, array['owner', 'admin']))
+  with check (
+    is_system_template = false and clinic_id is not null and system_key is null
+    and public.has_clinic_role(clinic_id, array['owner', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+  );
+
+-- Member writes are exclusively through the protected RPC above. The onboarding RPC bypasses RLS as its owner.
+drop policy if exists "Clinic owners and admins can manage memberships" on public.clinic_members;
+
+drop policy if exists "Doctors and admins can insert appointment invites" on public.appointment_invites;
+drop policy if exists "Doctors and admins can update appointment invites" on public.appointment_invites;
+create policy "Doctors and admins can insert appointment invites" on public.appointment_invites for insert with check (
+  public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id)
+);
+create policy "Doctors and admins can update appointment invites" on public.appointment_invites for update
+  using (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']))
+  with check (public.has_clinic_role(clinic_id, array['owner', 'doctor', 'admin']) and public.clinic_has_write_entitlement(clinic_id));
+
+comment on function public.clinic_has_write_entitlement(uuid) is
+  'Returns only whether auth.uid() has an active membership and an active subscription or unexpired trial for the clinic. It intentionally exposes no billing details.';
+comment on table public.clinic_onboarding_acceptances is
+  'Versioned onboarding acknowledgements written only by the onboarding SECURITY DEFINER RPC. RLS has no client policies.';

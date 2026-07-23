@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseConfig, hasSupabaseConfig } from "@/lib/supabase/config";
+import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
 
@@ -20,7 +20,8 @@ export async function GET() {
 
   try {
     const supabase = await createClient();
-    const { error } = await supabase.from("clinics").select("id", { head: true, count: "exact" }).limit(1);
+    // A successful empty result is still a connectivity success under RLS; only a transport/PostgREST error is not ready.
+    const { error } = await supabase.from("clinics").select("id", { head: true }).limit(1);
     if (error) throw error;
     return response({ status: "ready", checks: { configuration: true, database: true } }, 200);
   } catch {
