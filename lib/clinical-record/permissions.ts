@@ -11,6 +11,7 @@ export function canViewClinicalRecord(role: ClinicMemberRole) {
 export const canCreateClinicalNote = canViewClinicalRecord;
 export const canCreateConsent = canViewClinicalRecord;
 export const canUseClinicalTemplate = canViewClinicalRecord;
+export const canFinalizeClinicalNote = canViewClinicalRecord;
 
 export function canEditClinicalNote({
   role,

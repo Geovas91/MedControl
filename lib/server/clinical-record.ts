@@ -91,7 +91,7 @@ export async function getClinicalRecordForActiveTenant(
   const [notesResult, consentsResult, templatesResult, doctorsResult, signaturesResult] = await Promise.all([
     supabase.from("medical_notes").select("id, doctor_id, appointment_id, template_id, status, specialty, clinical_impression, created_at").eq("clinic_id", clinicId).eq("patient_id", patientId).order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, from + pageSize - 1),
     supabase.from("consents").select("id, consent_type, status, signed_at, expires_at, created_at").eq("clinic_id", clinicId).eq("patient_id", patientId).order("created_at", { ascending: false }),
-    supabase.from("medical_note_templates").select("id, name, specialty, description, template_schema").eq("clinic_id", clinicId).eq("is_active", true).order("name", { ascending: true }),
+    supabase.from("medical_note_templates").select("id, name, specialty, description, template_schema").or(`is_system_template.eq.true,clinic_id.eq.${clinicId}`).eq("is_active", true).order("name", { ascending: true }),
     supabase.from("doctor_public_profiles").select("profile_id, display_name").eq("clinic_id", clinicId).limit(100),
     supabase.from("consent_signatures").select("consent_id").eq("patient_id", patientId)
   ]);

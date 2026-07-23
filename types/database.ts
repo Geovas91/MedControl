@@ -379,6 +379,7 @@ export type Database = {
           icd10_code: string | null;
           note_data: Json;
           finalized_at: Timestamp | null;
+          finalized_by: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -396,6 +397,7 @@ export type Database = {
           icd10_code?: string | null;
           note_data: Json;
           finalized_at?: Timestamp | null;
+          finalized_by?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -704,6 +706,10 @@ export type Database = {
           status: Database["public"]["Enums"]["clinic_member_status"];
           created_at: Timestamp;
         }>;
+      };
+      get_clinic_member_display_name_for_current_user: {
+        Args: { p_clinic_id: string; p_user_id: string };
+        Returns: string | null;
       };
       add_clinic_member_by_email_for_current_user: {
         Args: {

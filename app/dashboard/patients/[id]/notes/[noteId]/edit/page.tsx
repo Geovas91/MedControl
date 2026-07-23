@@ -14,7 +14,8 @@ export default async function EditClinicalNotePage({ params }: { params: Promise
   const [noteResult, optionsResult] = await Promise.all([getClinicalNoteForActiveTenant(id, noteId), getClinicalNoteFormOptions(id)]);
   if (noteResult.state === "invalid_id" || noteResult.state === "not_found" || optionsResult.state === "invalid_id" || optionsResult.state === "not_found") notFound();
   if (noteResult.state === "unauthenticated" || optionsResult.state === "unauthenticated") redirect("/login");
-  if (noteResult.state !== "ready" || optionsResult.state !== "ready" || !noteResult.data.canEdit) {
+  if (noteResult.state === "ready" && !noteResult.data.canEdit) notFound();
+  if (noteResult.state !== "ready" || optionsResult.state !== "ready") {
     return <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Esta nota no puede editarse.</section>;
   }
 

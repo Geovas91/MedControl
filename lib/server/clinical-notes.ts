@@ -2,7 +2,7 @@ import "server-only";
 
 import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { mergeClinicalNoteContent, validateClinicalNoteValues, type ClinicalNoteFormValues } from "@/lib/clinical-record/notes";
-import { canCreateClinicalNote, canEditClinicalNote, canUseClinicalTemplate, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
+import { canCreateClinicalNote, canEditClinicalNote, canFinalizeClinicalNote, canUseClinicalTemplate, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
@@ -13,11 +13,17 @@ type Tables = Database["public"]["Tables"];
 type NoteRow = Tables["medical_notes"]["Row"];
 type TemplateRow = Tables["medical_note_templates"]["Row"];
 type NoteInsert = Tables["medical_notes"]["Insert"];
+type FinalizerNameRpcClient = {
+  rpc(
+    fn: "get_clinic_member_display_name_for_current_user",
+    args: { p_clinic_id: string; p_user_id: string }
+  ): Promise<{ data: string | null; error: { code: string } | null }>;
+};
 
 export type NoteTemplateOption = Pick<TemplateRow, "id" | "name" | "specialty" | "template_schema" | "is_system_template">;
 export type NoteAppointmentOption = { id: string; title: string; starts_at: string };
 export type ClinicalNoteFormOptions = { patient: { id: string; full_name: string }; templates: NoteTemplateOption[]; appointments: NoteAppointmentOption[]; timeZone: string };
-export type ClinicalNoteDetail = Pick<NoteRow, "id" | "doctor_id" | "appointment_id" | "template_id" | "status" | "specialty" | "clinical_impression" | "diagnosis" | "icd10_code" | "note_data" | "created_at" | "updated_at"> & { doctorName: string | null; templateName: string | null; appointmentTitle: string | null };
+export type ClinicalNoteDetail = Pick<NoteRow, "id" | "doctor_id" | "appointment_id" | "template_id" | "status" | "specialty" | "clinical_impression" | "diagnosis" | "icd10_code" | "note_data" | "finalized_at" | "finalized_by" | "created_at" | "updated_at"> & { doctorName: string | null; finalizedByName: string | null; templateName: string | null; appointmentTitle: string | null };
 type BaseResult<T> = { state: "ready"; data: T } | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "not_found" | "error"; data: null };
 
 async function resolvePatient(patientId: string, requireCreate = false): Promise<BaseResult<{ context: Awaited<ReturnType<typeof getActiveTenantContext>> & { state: "ready" }; supabase: Awaited<ReturnType<typeof createClient>>; patient: { id: string; full_name: string } }>> {
@@ -50,25 +56,30 @@ export async function getClinicalNoteFormOptions(patientId: string): Promise<Bas
   return { state: "ready", data: { patient, templates: (templatesResult.data ?? []) as NoteTemplateOption[], appointments: (appointmentsResult.data ?? []) as NoteAppointmentOption[], timeZone: context.tenant.clinic.timezone } };
 }
 
-export async function getClinicalNoteForActiveTenant(patientId: string, noteId: string): Promise<BaseResult<{ note: ClinicalNoteDetail; canEdit: boolean; timeZone: string }>> {
+export async function getClinicalNoteForActiveTenant(patientId: string, noteId: string): Promise<BaseResult<{ note: ClinicalNoteDetail; canEdit: boolean; canFinalize: boolean; timeZone: string }>> {
   if (!isCanonicalAppointmentUuid(noteId)) return { state: "invalid_id", data: null };
   const resolved = await resolvePatient(patientId);
   if (resolved.state !== "ready") return resolved;
   const { context, supabase, patient } = resolved.data;
-  const noteResult = await supabase.from("medical_notes").select("id, doctor_id, appointment_id, template_id, status, specialty, clinical_impression, diagnosis, icd10_code, note_data, created_at, updated_at").eq("id", noteId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).maybeSingle();
+  const noteResult = await supabase.from("medical_notes").select("id, doctor_id, appointment_id, template_id, status, specialty, clinical_impression, diagnosis, icd10_code, note_data, finalized_at, finalized_by, created_at, updated_at").eq("id", noteId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).maybeSingle();
   if (noteResult.error) { logger.error("Clinical note query failed", { component: "clinical_notes", operation: "detail", status: "query_error", code: noteResult.error.code }); return { state: "error", data: null }; }
   if (!noteResult.data) return { state: "not_found", data: null };
-  const note = noteResult.data as Omit<ClinicalNoteDetail, "doctorName" | "templateName" | "appointmentTitle">;
-  const [doctorResult, templateResult, appointmentResult] = await Promise.all([
+  const note = noteResult.data as Omit<ClinicalNoteDetail, "doctorName" | "finalizedByName" | "templateName" | "appointmentTitle">;
+  const finalizerNameRpcClient = supabase as unknown as FinalizerNameRpcClient;
+  const [doctorResult, finalizedByNameResult, templateResult, appointmentResult] = await Promise.all([
     note.doctor_id ? supabase.from("doctor_public_profiles").select("display_name").eq("clinic_id", context.tenant.clinic.id).eq("profile_id", note.doctor_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    note.template_id ? supabase.from("medical_note_templates").select("name").eq("clinic_id", context.tenant.clinic.id).eq("id", note.template_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    note.finalized_by ? finalizerNameRpcClient.rpc("get_clinic_member_display_name_for_current_user", { p_clinic_id: context.tenant.clinic.id, p_user_id: note.finalized_by }) : Promise.resolve({ data: null, error: null }),
+    note.template_id ? supabase.from("medical_note_templates").select("name").eq("id", note.template_id).or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).maybeSingle() : Promise.resolve({ data: null, error: null }),
     note.appointment_id ? supabase.from("appointments").select("title").eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).eq("id", note.appointment_id).maybeSingle() : Promise.resolve({ data: null, error: null })
   ]);
-  if (doctorResult.error || templateResult.error || appointmentResult.error) { logger.error("Clinical note relations failed", { component: "clinical_notes", operation: "relations", status: "query_error", doctorCode: doctorResult.error?.code, templateCode: templateResult.error?.code, appointmentCode: appointmentResult.error?.code }); return { state: "error", data: null }; }
+  const finalizedByFallbackResult = !finalizedByNameResult.data && note.finalized_by ? await supabase.from("doctor_public_profiles").select("display_name").eq("clinic_id", context.tenant.clinic.id).eq("profile_id", note.finalized_by).maybeSingle() : { data: null, error: null };
+  if (doctorResult.error || templateResult.error || appointmentResult.error || finalizedByFallbackResult.error) { logger.error("Clinical note relations failed", { component: "clinical_notes", operation: "relations", status: "query_error", doctorCode: doctorResult.error?.code, finalizedByCode: finalizedByNameResult.error?.code, finalizedByFallbackCode: finalizedByFallbackResult.error?.code, templateCode: templateResult.error?.code, appointmentCode: appointmentResult.error?.code }); return { state: "error", data: null }; }
   const doctor = doctorResult.data as { display_name: string } | null;
+  if (finalizedByNameResult.error) logger.error("Clinical note finalizer name lookup failed", { component: "clinical_notes", operation: "finalizer_name", status: "query_error", code: finalizedByNameResult.error.code });
+  const finalizedByFallback = finalizedByFallbackResult.data as { display_name: string } | null;
   const template = templateResult.data as { name: string } | null;
   const appointment = appointmentResult.data as { title: string } | null;
-  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), timeZone: context.tenant.clinic.timezone } };
+  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, finalizedByName: finalizedByNameResult.data ?? finalizedByFallback?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), canFinalize: note.status === "draft" && canFinalizeClinicalNote(context.tenant.membership.role), timeZone: context.tenant.clinic.timezone } };
 }
 
 export async function createClinicalNoteForActiveTenant(patientId: string, values: ClinicalNoteFormValues) {
@@ -110,8 +121,47 @@ export async function updateClinicalNoteForActiveTenant(patientId: string, noteI
   const note = noteResult.data as Pick<NoteRow, "id" | "doctor_id" | "status" | "note_data">;
   if (!canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status })) return { state: "forbidden" as const };
   const input = validation.data;
-  const updateResult = await supabase.from("medical_notes").update({ specialty: input.specialty, clinical_impression: input.clinicalImpression, note_data: mergeClinicalNoteContent(note.note_data, input.content) } as never).eq("id", noteId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).eq("updated_at", values.expectedUpdatedAt).select("id").maybeSingle();
+  const updateResult = await supabase.from("medical_notes").update({ specialty: input.specialty, clinical_impression: input.clinicalImpression, note_data: mergeClinicalNoteContent(note.note_data, input.content) } as never).eq("id", noteId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).eq("status", "draft").eq("updated_at", values.expectedUpdatedAt).select("id").maybeSingle();
   if (updateResult.error) { logger.error("Clinical note update failed", { component: "clinical_notes", operation: "update", status: "query_error", code: updateResult.error.code }); return { state: "error" as const, error: "No fue posible actualizar la nota clínica.", values }; }
   if (!updateResult.data) return { state: "stale_update" as const, error: "La nota cambió en otra sesión. Actualiza la página e intenta nuevamente.", values };
   return { state: "success" as const, noteId, patientId: patient.id };
+}
+
+export async function finalizeClinicalNoteForActiveTenant(patientId: string, noteId: string, input: { expectedUpdatedAt: string; expectedStatus: string }) {
+  if (!isCanonicalAppointmentUuid(noteId)) return { state: "invalid_id" as const };
+  if (!input.expectedUpdatedAt || input.expectedStatus !== "draft") return { state: "validation_error" as const, error: "Actualiza la página e intenta nuevamente." };
+  const resolved = await resolvePatient(patientId);
+  if (resolved.state !== "ready") return resolved;
+  const { context, supabase, patient } = resolved.data;
+  if (!canFinalizeClinicalNote(context.tenant.membership.role)) return { state: "forbidden" as const };
+
+  const result = await supabase
+    .from("medical_notes")
+    .update({ status: "finalized" } as never)
+    .eq("id", noteId)
+    .eq("clinic_id", context.tenant.clinic.id)
+    .eq("patient_id", patient.id)
+    .eq("status", "draft")
+    .eq("updated_at", input.expectedUpdatedAt)
+    .select("id")
+    .maybeSingle();
+  if (result.error) {
+    logger.error("Clinical note finalization failed", { component: "clinical_notes", operation: "finalize", status: "query_error", code: result.error.code });
+    return { state: "error" as const, error: "No fue posible finalizar la nota clínica." };
+  }
+  if (result.data) return { state: "success" as const, noteId, patientId: patient.id };
+
+  const current = await supabase
+    .from("medical_notes")
+    .select("status")
+    .eq("id", noteId)
+    .eq("clinic_id", context.tenant.clinic.id)
+    .eq("patient_id", patient.id)
+    .maybeSingle();
+  if (current.error) {
+    logger.error("Clinical note finalization lookup failed", { component: "clinical_notes", operation: "finalize_lookup", status: "query_error", code: current.error.code });
+    return { state: "error" as const, error: "No fue posible finalizar la nota clínica." };
+  }
+  if (!current.data) return { state: "not_found" as const };
+  return { state: "stale_update" as const, error: "La nota cambió o ya fue finalizada en otra sesión. Actualiza la página." };
 }
