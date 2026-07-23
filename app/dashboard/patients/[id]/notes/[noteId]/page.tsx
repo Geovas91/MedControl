@@ -18,7 +18,7 @@ export default async function ClinicalNotePage({ params, searchParams }: { param
   if (result.state === "unauthenticated") redirect("/login");
   if (result.state !== "ready") return <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">No tienes acceso a esta nota clinica.</section>;
 
-  const { note, canEdit, timeZone } = result.data;
+  const { note, canEdit, canFinalize, timeZone } = result.data;
   const message = query.note_finalized === "1" ? "La nota clínica se finalizó correctamente." : query.note_updated === "1" ? "La nota clinica se actualizo correctamente." : query.note_created === "1" ? "La nota clinica se creo correctamente." : null;
   const finalizeAction = finalizeClinicalNoteAction.bind(null, id, noteId);
   return (
@@ -33,7 +33,7 @@ export default async function ClinicalNotePage({ params, searchParams }: { param
             <p className="mt-2 text-sm text-slate-500">Creada: {formatPatientTimestamp(note.created_at, timeZone)} - {note.doctorName ?? "Sin registro"}</p>
             <p className="mt-1 text-sm text-slate-500">Actualizada: {formatPatientTimestamp(note.updated_at, timeZone)}</p>
           </div>
-          {canEdit ? <div className="flex flex-wrap gap-2"><ButtonLink href={`/dashboard/patients/${id}/notes/${note.id}/edit`} variant="secondary"><Pencil className="h-4 w-4" />Editar nota</ButtonLink><FinalizeClinicalNote action={finalizeAction} expectedUpdatedAt={note.updated_at} /></div> : null}
+          {canEdit || canFinalize ? <div className="flex flex-wrap gap-2">{canEdit ? <ButtonLink href={`/dashboard/patients/${id}/notes/${note.id}/edit`} variant="secondary"><Pencil className="h-4 w-4" />Editar nota</ButtonLink> : null}{canFinalize ? <FinalizeClinicalNote action={finalizeAction} expectedUpdatedAt={note.updated_at} /> : null}</div> : null}
         </div>
         {note.status === "finalized" ? <section className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><p className="font-semibold">Esta nota forma parte del expediente clínico y ya no puede modificarse.</p><p className="mt-2">Finalizada: {note.finalized_at ? formatPatientTimestamp(note.finalized_at, timeZone) : "Sin registro"}</p><p className="mt-1">Finalizada por: {note.finalizedByName ?? "Sin registro"}</p></section> : null}
         <dl className="mt-8 grid gap-4 sm:grid-cols-2">

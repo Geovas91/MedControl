@@ -56,7 +56,7 @@ export async function getClinicalNoteFormOptions(patientId: string): Promise<Bas
   return { state: "ready", data: { patient, templates: (templatesResult.data ?? []) as NoteTemplateOption[], appointments: (appointmentsResult.data ?? []) as NoteAppointmentOption[], timeZone: context.tenant.clinic.timezone } };
 }
 
-export async function getClinicalNoteForActiveTenant(patientId: string, noteId: string): Promise<BaseResult<{ note: ClinicalNoteDetail; canEdit: boolean; timeZone: string }>> {
+export async function getClinicalNoteForActiveTenant(patientId: string, noteId: string): Promise<BaseResult<{ note: ClinicalNoteDetail; canEdit: boolean; canFinalize: boolean; timeZone: string }>> {
   if (!isCanonicalAppointmentUuid(noteId)) return { state: "invalid_id", data: null };
   const resolved = await resolvePatient(patientId);
   if (resolved.state !== "ready") return resolved;
@@ -79,7 +79,7 @@ export async function getClinicalNoteForActiveTenant(patientId: string, noteId: 
   const finalizedByFallback = finalizedByFallbackResult.data as { display_name: string } | null;
   const template = templateResult.data as { name: string } | null;
   const appointment = appointmentResult.data as { title: string } | null;
-  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, finalizedByName: finalizedByNameResult.data ?? finalizedByFallback?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), timeZone: context.tenant.clinic.timezone } };
+  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, finalizedByName: finalizedByNameResult.data ?? finalizedByFallback?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), canFinalize: note.status === "draft" && canFinalizeClinicalNote(context.tenant.membership.role), timeZone: context.tenant.clinic.timezone } };
 }
 
 export async function createClinicalNoteForActiveTenant(patientId: string, values: ClinicalNoteFormValues) {

@@ -21,6 +21,12 @@ can edit only a draft whose `doctor_id` is the current user. The existing databa
 RLS update policy is broader for doctors in the same clinic, so this PR does not
 silently redefine it; server actions retain the author check for edits.
 
+Editing and finalization are separate capabilities. Owner/admin can edit and
+finalize any active-clinic draft. A doctor can edit only their own draft but can
+finalize any draft in the authorized active clinic; the finalization action already
+enforces the tenant, patient, draft status, and concurrency checks. Finalized and
+archived notes allow neither operation.
+
 The only new lifecycle transition is `draft` to `finalized`. There are no
 enmiendas, addenda, co-signatures, electronic signatures, restoration to draft,
 or deletion flows in this change. `doctor_id` remains the clinical professional;
@@ -86,6 +92,10 @@ evidence for this transition; no clinical content is emitted to application logs
    unchanged.
 7. At 390 px, open the dialog, use Escape and Cancel, verify focus returns to the
    Finalizar nota button, and verify the stacked actions have no horizontal scroll.
+8. Have doctor A create a draft. As doctor B, verify the detail hides Editar but
+   shows Finalizar; finalize it, verify `doctor_id` remains doctor A and
+   `finalized_by`/the visible name are doctor B, then verify doctor B receives not
+   found at `/edit` and the finalized detail shows neither action.
 
 ## Post-migration SQL checks
 
