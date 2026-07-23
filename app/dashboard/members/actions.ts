@@ -2,13 +2,20 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getOnboardingStatus } from "@/lib/onboarding";
+import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
-import { addClinicMemberByEmailToClinic, type ClinicMemberRole } from "@/lib/supabase/clinic-members";
+import {
+  createClinicInvitation,
+  revokeClinicInvitation,
+  rotateClinicInvitation,
+  type ClinicMemberRole
+} from "@/lib/supabase/clinic-members";
+import { getAppBaseUrl } from "@/lib/supabase/config";
 
-type AddMemberFormState = {
+export type InvitationActionState = {
   error?: string;
   message?: string;
+  invitationUrl?: string;
 };
 
 function asString(value: FormDataEntryValue | null) {
@@ -20,45 +27,73 @@ function isSupportedRole(role: string): role is Exclude<ClinicMemberRole, "owner
 }
 
 export async function addClinicMemberAction(
-  _previousState: AddMemberFormState,
+  _previousState: InvitationActionState,
   formData: FormData
-): Promise<AddMemberFormState> {
-  const fullName = asString(formData.get("full_name"));
+): Promise<InvitationActionState> {
   const email = asString(formData.get("email")).toLowerCase();
   const role = asString(formData.get("role"));
-  const onboardingStatus = await getOnboardingStatus();
+  const activeTenant = await getActiveTenantContext();
 
-  if (onboardingStatus.state === "unauthenticated") {
+  if (activeTenant.state === "unauthenticated") {
     redirect("/login");
   }
 
-  if (onboardingStatus.state !== "complete") {
-    redirect("/onboarding");
+  if (activeTenant.state !== "ready") {
+    return { error: "No tienes una membresía activa para administrar invitaciones." };
   }
 
-  if (!canCreateWithEntitlements(await getClinicEntitlements(onboardingStatus.membership.clinic_id))) {
+  if (!canCreateWithEntitlements(await getClinicEntitlements(activeTenant.tenant.clinic.id))) {
     return { error: "La suscripción actual no permite administrar miembros." };
   }
 
-  if (!fullName || !email || !role) {
-    return { error: "Completa nombre, correo y rol para agregar un miembro." };
+  if (!email || !role) {
+    return { error: "Completa correo y rol para crear una invitación." };
   }
 
   if (!isSupportedRole(role)) {
     return { error: "Selecciona un rol válido para el miembro." };
   }
 
-  const { error } = await addClinicMemberByEmailToClinic({
-    clinicId: onboardingStatus.membership.clinic_id,
-    email,
-    role
-  });
+  const { data, error } = await createClinicInvitation(activeTenant.tenant.clinic.id, email, role);
 
   if (error) {
     return { error: error.message };
   }
 
+  const invitation = data?.[0];
+  if (!invitation) return { error: "No fue posible crear la invitación." };
   revalidatePath("/dashboard/members");
 
-  return { message: "Miembro agregado a la clínica." };
+  return { message: "Invitación creada. El correo no se envió porque no hay un proveedor configurado.", invitationUrl: new URL(`/invite/${invitation.raw_token}`, getAppBaseUrl()).toString() };
+}
+
+export async function rotateClinicInvitationAction(
+  _previousState: InvitationActionState,
+  formData: FormData
+): Promise<InvitationActionState> {
+  const invitationId = asString(formData.get("invitation_id"));
+  if (!invitationId) return { error: "No fue posible identificar la invitación." };
+
+  const { data, error } = await rotateClinicInvitation(invitationId);
+  if (error || !data?.[0]) return { error: error?.message ?? "No fue posible rotar el enlace." };
+
+  revalidatePath("/dashboard/members");
+  return {
+    message: "Se generó un enlace nuevo. El enlace anterior dejó de ser válido.",
+    invitationUrl: new URL(`/invite/${data[0].raw_token}`, getAppBaseUrl()).toString()
+  };
+}
+
+export async function revokeClinicInvitationAction(
+  _previousState: InvitationActionState,
+  formData: FormData
+): Promise<InvitationActionState> {
+  const invitationId = asString(formData.get("invitation_id"));
+  if (!invitationId) return { error: "No fue posible identificar la invitación." };
+
+  const { error } = await revokeClinicInvitation(invitationId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/members");
+  return { message: "La invitación fue revocada y su enlace ya no es válido." };
 }

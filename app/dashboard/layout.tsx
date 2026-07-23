@@ -2,6 +2,8 @@ import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { signOutAction } from "@/app/(auth)/actions";
 import { getOnboardingStatus } from "@/lib/onboarding";
 import { getClinicEntitlements, getEntitlementNotice } from "@/lib/server/entitlements";
+import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { ClinicSwitcher } from "@/components/dashboard/clinic-switcher";
 import { redirect } from "next/navigation";
 
 async function getDashboardAccount() {
@@ -17,11 +19,14 @@ async function getDashboardAccount() {
 
   const fullName = onboardingStatus.profile.full_name;
 
-  const entitlements = await getClinicEntitlements(onboardingStatus.membership.clinic_id);
+  const tenantContext = await getActiveTenantContext();
+  const clinicId = tenantContext.state === "ready" ? tenantContext.tenant.clinic.id : onboardingStatus.membership.clinic_id;
+  const entitlements = await getClinicEntitlements(clinicId);
   return {
     name: fullName ?? onboardingStatus.user.email ?? "Usuario autenticado",
     subtitle: onboardingStatus.user.email ?? "Sesión activa en Supabase",
-    subscriptionNotice: getEntitlementNotice(entitlements)
+    subscriptionNotice: getEntitlementNotice(entitlements),
+    tenant: tenantContext.state === "ready" ? tenantContext.tenant : null
   };
 }
 
@@ -33,14 +38,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
       account={{ name: account.name, subtitle: account.subtitle }}
       subscriptionNotice={account.subscriptionNotice}
       footer={
-        <form action={signOutAction}>
-          <button
-            type="submit"
-            className="w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
-          >
-            Cerrar sesión
-          </button>
-        </form>
+        <>
+          {account.tenant ? <ClinicSwitcher activeClinicId={account.tenant.clinic.id} clinics={account.tenant.availableClinics} /> : null}
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              className="w-full rounded-md bg-white px-3 py-2 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
+            >
+              Cerrar sesión
+            </button>
+          </form>
+        </>
       }
     >
       {children}

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
+import { cookies } from "next/headers";
 import type { User } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
@@ -15,6 +16,7 @@ export type ActiveTenant = {
   clinic: Pick<ClinicRow, "id" | "name" | "timezone" | "tenant_type">;
   membership: Pick<MembershipRow, "id" | "clinic_id" | "role" | "status" | "created_at">;
   hasMultipleActiveMemberships: boolean;
+  availableClinics: Array<Pick<ClinicRow, "id" | "name">>;
 };
 
 export type ActiveTenantContextResult =
@@ -50,8 +52,7 @@ export const getActiveTenantContext = cache(async (): Promise<ActiveTenantContex
     .eq("user_id", user.id)
     .eq("status", "active")
     .order("created_at", { ascending: true })
-    .order("clinic_id", { ascending: true })
-    .limit(2);
+    .order("clinic_id", { ascending: true });
 
   if (membershipError) {
     logger.error("Active tenant membership query failed", {
@@ -63,7 +64,8 @@ export const getActiveTenantContext = cache(async (): Promise<ActiveTenantContex
   }
 
   const memberships = (membershipData ?? []) as ActiveMembership[];
-  const membership = memberships[0];
+  const selectedClinicId = (await cookies()).get("clinicontrol_active_clinic")?.value;
+  const membership = memberships.find((item) => item.clinic_id === selectedClinicId) ?? memberships[0];
 
   if (!membership) {
     return { state: "no_active_membership", user, tenant: null };
@@ -84,13 +86,29 @@ export const getActiveTenantContext = cache(async (): Promise<ActiveTenantContex
     return { state: "error", user, tenant: null };
   }
 
+  const { data: availableClinicData, error: availableClinicError } = await supabase
+    .from("clinics")
+    .select("id, name")
+    .in("id", memberships.map((item) => item.clinic_id))
+    .order("name", { ascending: true });
+
+  if (availableClinicError) {
+    logger.error("Active tenant clinic list query failed", {
+      component: "active_tenant",
+      status: "clinic_list_query_error",
+      code: availableClinicError.code
+    });
+    return { state: "error", user, tenant: null };
+  }
+
   return {
     state: "ready",
     user,
     tenant: {
       clinic: clinicData,
       membership,
-      hasMultipleActiveMemberships: memberships.length > 1
+      hasMultipleActiveMemberships: memberships.length > 1,
+      availableClinics: availableClinicData ?? []
     }
   };
 });

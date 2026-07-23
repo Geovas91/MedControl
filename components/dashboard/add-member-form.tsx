@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
-import { UserPlus } from "lucide-react";
+import { useActionState, useState } from "react";
+import { Copy, UserPlus } from "lucide-react";
 import { addClinicMemberAction } from "@/app/dashboard/members/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import { Field, Input, Select } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
   const [state, formAction] = useActionState(addClinicMemberAction, {});
+  const [copied, setCopied] = useState(false);
 
   return (
     <form action={formAction} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -16,8 +18,8 @@ export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
           <UserPlus className="h-5 w-5" />
         </div>
         <div>
-          <h2 className="font-bold text-ink">Agregar miembro</h2>
-          <p className="text-sm text-slate-500">Agrega un usuario que ya tenga cuenta en CliniControl.</p>
+          <h2 className="font-bold text-ink">Invitar miembro</h2>
+          <p className="text-sm text-slate-500">Crea un enlace personal para que el miembro complete su acceso.</p>
         </div>
       </div>
 
@@ -25,11 +27,9 @@ export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
       {state.message ? (
         <p className="mt-5 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{state.message}</p>
       ) : null}
+      {state.invitationUrl ? <div className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700"><p>El enlace se muestra una sola vez.</p><Button type="button" variant="secondary" className="mt-2" onClick={async () => { await navigator.clipboard?.writeText(state.invitationUrl ?? ""); setCopied(true); }}><Copy className="h-4 w-4" aria-hidden="true" />{copied ? "Enlace copiado" : "Copiar enlace"}</Button></div> : null}
 
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
-        <Field label="Nombre" htmlFor="full_name">
-          <Input id="full_name" name="full_name" placeholder="Dra. Ana López" required />
-        </Field>
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
         <Field label="Correo" htmlFor="email">
           <Input id="email" name="email" type="email" placeholder="medico@clinica.com" required />
         </Field>
@@ -51,7 +51,7 @@ export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
       ) : null}
 
       <div className="mt-5">
-        <AuthSubmitButton idleLabel="Agregar miembro" pendingLabel="Agregando miembro..." />
+        <AuthSubmitButton idleLabel="Crear invitación" pendingLabel="Creando invitación..." />
       </div>
     </form>
   );

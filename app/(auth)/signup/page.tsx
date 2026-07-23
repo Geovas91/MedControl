@@ -3,16 +3,20 @@ import { Stethoscope } from "lucide-react";
 import { signUpAction } from "@/app/(auth)/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import { Field, Input } from "@/components/ui/input";
+import { getSafeLocalPath, isInvitationPath } from "@/lib/auth/redirects";
 
 type SignupPageProps = {
   searchParams?: Promise<{
     error?: string;
     message?: string;
+    next?: string;
   }>;
 };
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = await searchParams;
+  const next = getSafeLocalPath(params?.next, "");
+  const invitationRegistration = isInvitationPath(next);
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
@@ -23,9 +27,9 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           </div>
           <span className="font-bold text-ink">CliniControl</span>
         </Link>
-        <h1 className="text-2xl font-bold text-ink">Crea tu espacio clínico</h1>
+        <h1 className="text-2xl font-bold text-ink">{invitationRegistration ? "Completa tu invitación" : "Crea tu espacio clínico"}</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Crea un usuario con Supabase Auth. La clínica y membresía se completan en el flujo de onboarding.
+          {invitationRegistration ? "Crea tu usuario para aceptar la invitación de clínica." : "Crea un usuario con Supabase Auth. La clínica y membresía se completan en el flujo de onboarding."}
         </p>
         {params?.error ? (
           <p className="mt-5 rounded-md bg-rose-50 p-3 text-sm leading-6 text-rose-700">{params.error}</p>
@@ -34,9 +38,10 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           <p className="mt-5 rounded-md bg-emerald-50 p-3 text-sm leading-6 text-emerald-700">{params.message}</p>
         ) : null}
         <form action={signUpAction} className="mt-6 grid gap-4">
-          <Field label="Nombre de la clínica" htmlFor="clinic">
+          <input type="hidden" name="next" value={next} />
+          {!invitationRegistration ? <Field label="Nombre de la clínica" htmlFor="clinic">
             <Input id="clinic" name="clinic" autoComplete="organization" placeholder="Clínica Familiar Norte" required />
-          </Field>
+          </Field> : null}
           <Field label="Tu nombre" htmlFor="full_name">
             <Input id="full_name" name="full_name" autoComplete="name" placeholder="Dr. Alex Morgan" required />
           </Field>
@@ -57,12 +62,11 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           <AuthSubmitButton idleLabel="Crear cuenta" pendingLabel="Creando cuenta..." />
         </form>
         <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">
-          Esta fase crea el usuario de autenticación y guarda metadata de registro. La clínica y membresía se completan
-          en onboarding.
+          {invitationRegistration ? "Después de confirmar tu correo volverás a la invitación para unirte a la clínica." : "Esta fase crea el usuario de autenticación y guarda metadata de registro. La clínica y membresía se completan en onboarding."}
         </p>
         <p className="mt-6 text-center text-sm text-slate-500">
           ¿Ya tienes cuenta?{" "}
-          <Link href="/login" className="font-semibold text-clinic">
+          <Link href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="font-semibold text-clinic">
             Iniciar sesión
           </Link>
         </p>
