@@ -14,7 +14,7 @@ import type { Database } from "@/types/database";
 type ConsentRow = Database["public"]["Tables"]["consents"]["Row"];
 type SignatureRow = Database["public"]["Tables"]["consent_signatures"]["Row"];
 type ConsentInsert = Database["public"]["Tables"]["consents"]["Insert"];
-type TemplateOption = { id: string; name: string; description: string | null; template_schema: Database["public"]["Tables"]["medical_note_templates"]["Row"]["template_schema"] };
+type TemplateOption = { id: string; name: string; description: string | null; template_schema: Database["public"]["Tables"]["medical_note_templates"]["Row"]["template_schema"]; is_system_template: boolean };
 export type ConsentDetail = Pick<ConsentRow, "id" | "consent_type" | "consent_version" | "consent_text" | "status" | "expires_at" | "signed_at" | "revoked_at" | "created_at" | "template_id" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at"> & { signatures: Pick<SignatureRow, "id" | "signer_full_name" | "signed_at" | "accepted_privacy_notice" | "accepted_sensitive_data_processing">[] };
 type Result<T> = { state: "ready"; data: T } | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "not_found" | "error"; data: null };
 
@@ -46,7 +46,7 @@ export async function getConsentForActiveTenant(patientId: string, consentId: st
 export async function getConsentTemplateOptions(patientId: string): Promise<Result<{ patient: { id: string; full_name: string }; templates: TemplateOption[] }>> {
   const resolved = await resolvePatient(patientId, true);
   if (resolved.state !== "ready") return resolved;
-  const result = await resolved.data.supabase.from("medical_note_templates").select("id, name, description, template_schema").eq("clinic_id", resolved.data.context.tenant.clinic.id).eq("template_kind", "consent").eq("is_active", true).order("name", { ascending: true });
+  const result = await resolved.data.supabase.from("medical_note_templates").select("id, name, description, template_schema, is_system_template").or(`is_system_template.eq.true,clinic_id.eq.${resolved.data.context.tenant.clinic.id}`).eq("template_kind", "consent").eq("is_active", true).order("is_system_template", { ascending: false }).order("name", { ascending: true });
   if (result.error) { logger.error("Consent templates query failed", { component: "clinical_consents", operation: "template_options", status: "query_error", code: result.error.code }); return { state: "error", data: null }; }
   return { state: "ready", data: { patient: resolved.data.patient, templates: (result.data ?? []) as TemplateOption[] } };
 }
@@ -60,7 +60,7 @@ export async function createConsentForActiveTenant(patientId: string, values: Co
   let template: TemplateOption | null = null;
   if (values.templateId) {
     if (!isValidPatientUuid(values.templateId)) return { state: "validation_error" as const, error: "La plantilla seleccionada no es valida.", errors: { templateId: "Selecciona una plantilla disponible." }, values };
-    const templateResult = await supabase.from("medical_note_templates").select("id, name, description, template_schema").eq("id", values.templateId).eq("clinic_id", context.tenant.clinic.id).eq("template_kind", "consent").eq("is_active", true).maybeSingle();
+    const templateResult = await supabase.from("medical_note_templates").select("id, name, description, template_schema").eq("id", values.templateId).or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).eq("template_kind", "consent").eq("is_active", true).maybeSingle();
     if (templateResult.error) { logger.error("Consent template query failed", { component: "clinical_consents", operation: "template", status: "query_error", code: templateResult.error.code }); return { state: "error" as const, error: "No fue posible validar la plantilla.", values }; }
     if (!templateResult.data) return { state: "validation_error" as const, error: "La plantilla ya no esta disponible.", errors: { templateId: "Selecciona una plantilla activa." }, values };
     template = templateResult.data as TemplateOption;

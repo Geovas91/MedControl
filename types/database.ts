@@ -58,7 +58,7 @@ export type Database = {
       clinic_subscriptions: {
         Row: {
           id: string;
-          clinic_id: string;
+          clinic_id: string | null;
           plan_id: "basic" | "plus" | "pro";
           status: "inactive" | "trialing" | "active" | "past_due" | "cancelled";
           billing_provider: "paypal" | "demo" | "manual";
@@ -334,12 +334,13 @@ export type Database = {
       medical_note_templates: {
         Row: {
           id: string;
-          clinic_id: string;
+          clinic_id: string | null;
           name: string;
           specialty: string | null;
           description: string | null;
           template_schema: Json;
           is_system_template: boolean;
+          system_key: string | null;
           is_active: boolean;
           template_kind: "note" | "consent";
           created_by: string | null;
@@ -348,12 +349,13 @@ export type Database = {
         };
         Insert: {
           id?: string;
-          clinic_id: string;
+          clinic_id?: string | null;
           name: string;
           specialty?: string | null;
           description?: string | null;
           template_schema: Json;
           is_system_template?: boolean;
+          system_key?: string | null;
           is_active?: boolean;
           template_kind?: "note" | "consent";
           created_by?: string | null;
