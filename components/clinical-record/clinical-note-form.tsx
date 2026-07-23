@@ -51,7 +51,8 @@ export function ClinicalNoteForm({
               if (template) setContent(getTemplateContentSeed(template.template_schema));
             }}>
               <option value="">Sin plantilla</option>
-              {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+              {templates.some((template) => template.is_system_template) ? <optgroup label="Recomendadas por CliniControl">{templates.filter((template) => template.is_system_template).map((template) => <option key={template.id} value={template.id}>{template.name}{template.specialty ? ` - ${template.specialty}` : ""}</option>)}</optgroup> : null}
+              {templates.some((template) => !template.is_system_template) ? <optgroup label="Mi clínica">{templates.filter((template) => !template.is_system_template).map((template) => <option key={template.id} value={template.id}>{template.name}{template.specialty ? ` - ${template.specialty}` : ""}</option>)}</optgroup> : null}
             </Select>
           </Field>
           <Field label="Cita relacionada" htmlFor="appointment_id">

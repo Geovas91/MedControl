@@ -14,7 +14,7 @@ type NoteRow = Tables["medical_notes"]["Row"];
 type TemplateRow = Tables["medical_note_templates"]["Row"];
 type NoteInsert = Tables["medical_notes"]["Insert"];
 
-export type NoteTemplateOption = Pick<TemplateRow, "id" | "name" | "specialty" | "template_schema">;
+export type NoteTemplateOption = Pick<TemplateRow, "id" | "name" | "specialty" | "template_schema" | "is_system_template">;
 export type NoteAppointmentOption = { id: string; title: string; starts_at: string };
 export type ClinicalNoteFormOptions = { patient: { id: string; full_name: string }; templates: NoteTemplateOption[]; appointments: NoteAppointmentOption[]; timeZone: string };
 export type ClinicalNoteDetail = Pick<NoteRow, "id" | "doctor_id" | "appointment_id" | "template_id" | "status" | "specialty" | "clinical_impression" | "diagnosis" | "icd10_code" | "note_data" | "created_at" | "updated_at"> & { doctorName: string | null; templateName: string | null; appointmentTitle: string | null };
@@ -40,7 +40,7 @@ export async function getClinicalNoteFormOptions(patientId: string): Promise<Bas
   if (resolved.state !== "ready") return resolved;
   const { context, supabase, patient } = resolved.data;
   const [templatesResult, appointmentsResult] = await Promise.all([
-    supabase.from("medical_note_templates").select("id, name, specialty, template_schema").eq("clinic_id", context.tenant.clinic.id).eq("template_kind", "note").eq("is_active", true).order("name", { ascending: true }),
+    supabase.from("medical_note_templates").select("id, name, specialty, template_schema, is_system_template").or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).eq("template_kind", "note").eq("is_active", true).order("is_system_template", { ascending: false }).order("specialty", { ascending: true }).order("name", { ascending: true }),
     supabase.from("appointments").select("id, title, starts_at").eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).order("starts_at", { ascending: false }).limit(30)
   ]);
   if (templatesResult.error || appointmentsResult.error) {
@@ -81,7 +81,7 @@ export async function createClinicalNoteForActiveTenant(patientId: string, value
   if (input.templateId && (!isCanonicalAppointmentUuid(input.templateId) || !canUseClinicalTemplate(context.tenant.membership.role))) return { state: "validation_error" as const, error: "La plantilla seleccionada no es válida.", errors: { templateId: "Selecciona una plantilla disponible." }, values };
   if (input.appointmentId && !isCanonicalAppointmentUuid(input.appointmentId)) return { state: "validation_error" as const, error: "La cita seleccionada no es válida.", errors: { appointmentId: "Selecciona una cita válida." }, values };
   const [templateResult, appointmentResult] = await Promise.all([
-    input.templateId ? supabase.from("medical_note_templates").select("id").eq("id", input.templateId).eq("clinic_id", context.tenant.clinic.id).eq("template_kind", "note").eq("is_active", true).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    input.templateId ? supabase.from("medical_note_templates").select("id").eq("id", input.templateId).or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).eq("template_kind", "note").eq("is_active", true).maybeSingle() : Promise.resolve({ data: null, error: null }),
     input.appointmentId ? supabase.from("appointments").select("id").eq("id", input.appointmentId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).maybeSingle() : Promise.resolve({ data: null, error: null })
   ]);
   if (templateResult.error || appointmentResult.error) { logger.error("Clinical note relation validation failed", { component: "clinical_notes", operation: "create_relations", status: "query_error", templateCode: templateResult.error?.code, appointmentCode: appointmentResult.error?.code }); return { state: "error" as const, error: "No fue posible validar las relaciones.", values }; }
