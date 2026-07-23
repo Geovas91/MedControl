@@ -58,7 +58,7 @@ export type Database = {
       clinic_subscriptions: {
         Row: {
           id: string;
-          clinic_id: string | null;
+          clinic_id: string;
           plan_id: "basic" | "plus" | "pro";
           status: "inactive" | "trialing" | "active" | "past_due" | "cancelled";
           billing_provider: "paypal" | "demo" | "manual";

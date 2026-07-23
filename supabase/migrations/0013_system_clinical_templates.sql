@@ -14,32 +14,69 @@ alter table public.medical_note_templates
     or (not is_system_template and clinic_id is not null and system_key is null)
   ) not valid;
 
+-- Do not rewrite clinic-owned rows. Fail the migration instead of leaving an
+-- unvalidated invariant if pre-existing data does not already fit this shape.
+do $$
+begin
+  if exists (
+    select 1
+    from public.medical_note_templates as template
+    where not (
+      (template.is_system_template and template.clinic_id is null and template.created_by is null and template.system_key is not null)
+      or (not template.is_system_template and template.clinic_id is not null and template.system_key is null)
+    )
+  ) then
+    raise exception 'medical_note_templates contains rows incompatible with system template ownership; resolve them before applying migration 0013';
+  end if;
+end;
+$$;
+
+alter table public.medical_note_templates
+  validate constraint medical_note_templates_system_shape_check;
+
 drop policy if exists "Clinical roles can read medical note templates" on public.medical_note_templates;
 drop policy if exists "Doctors and admins can manage medical note templates" on public.medical_note_templates;
 
 create policy "Clinical roles can read clinic or system templates" on public.medical_note_templates for select
   using (
-    is_system_template = true
+    (
+      is_system_template = true
+      and auth.uid() is not null
+      and exists (
+        select 1
+        from public.clinic_members as member
+        where member.user_id = auth.uid()
+          and member.status = 'active'
+          and member.role in ('owner', 'admin', 'doctor')
+      )
+    )
     or public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor'])
   );
 
-create policy "Clinical roles can insert clinic templates" on public.medical_note_templates for insert
+create policy "Owners and admins can insert clinic templates" on public.medical_note_templates for insert
   with check (
     is_system_template = false
     and clinic_id is not null
-    and public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor'])
+    and system_key is null
+    and created_by = auth.uid()
+    and public.has_clinic_role(clinic_id, array['owner', 'admin'])
   );
 
-create policy "Clinical roles can update clinic templates" on public.medical_note_templates for update
+create policy "Owners and admins can update clinic templates" on public.medical_note_templates for update
   using (
     is_system_template = false
-    and public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor'])
+    and public.has_clinic_role(clinic_id, array['owner', 'admin'])
   )
   with check (
     is_system_template = false
     and clinic_id is not null
-    and public.has_clinic_role(clinic_id, array['owner', 'admin', 'doctor'])
+    and system_key is null
+    and public.has_clinic_role(clinic_id, array['owner', 'admin'])
   );
+
+-- RLS also blocks anonymous reads, but remove the direct privilege as defense
+-- in depth. Authenticated access remains governed by the policies above.
+revoke select on table public.medical_note_templates from anon;
 
 comment on column public.medical_note_templates.system_key is
   'Stable identifier for a global CliniControl system template; null for clinic-owned templates.';
