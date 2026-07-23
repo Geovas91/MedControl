@@ -17,6 +17,12 @@ function defaultClinicName(fullName: string | null) {
   return fullName ? `Consultorio de ${fullName}` : "Mi consultorio";
 }
 
+const trialPlanLabels = {
+  basic: "Básico",
+  plus: "Plus",
+  pro: "Pro"
+} as const;
+
 export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
   const params = await searchParams;
   const status = await getOnboardingStatus();
@@ -48,12 +54,14 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             </div>
             <h1 className="mt-5 text-3xl font-bold text-ink">Configura tu clínica</h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Completa los datos operativos, confirma la responsabilidad del owner y selecciona el plan que revisarás
-              antes de pagar.
+              Completa los datos operativos, confirma la responsabilidad del owner y selecciona el plan con el que
+              iniciarás tu prueba gratuita.
             </p>
             <div className="mt-5 rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-              Se creará una membresía owner activa y una suscripción pendiente. Este paso no crea pagos clínicos ni
-              cobra con PayPal.
+              Se creará una membresía owner activa y comenzará una prueba gratuita de 30 días del plan seleccionado.
+              No se realizará ningún cobro en este paso. Al terminar la prueba deberás activar una suscripción para
+              continuar creando o modificando registros; los datos históricos permanecerán disponibles según la
+              política establecida.
             </div>
           </div>
 
@@ -91,7 +99,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
                 <label className="flex gap-2"><input name="accepted_clinical_responsibility" type="checkbox" required />Confirmo mi responsabilidad sobre la configuración y el uso clínico.</label>
               </div>
               <p className="pt-2 text-sm font-bold text-ink">Paso 3: Plan</p>
-              <Field label="Plan a configurar" htmlFor="plan_id"><Select id="plan_id" name="plan_id" defaultValue="basic">{commercialPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} - pendiente de pago</option>)}</Select></Field>
+              <Field label="Plan para la prueba gratuita" htmlFor="plan_id"><Select id="plan_id" name="plan_id" defaultValue="basic">{commercialPlans.map((plan) => <option key={plan.id} value={plan.id}>{trialPlanLabels[plan.id]} — prueba de 30 días</option>)}</Select></Field>
 
               <AuthSubmitButton idleLabel="Continuar al dashboard" pendingLabel="Configurando clínica..." />
             </form>
