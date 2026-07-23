@@ -29,10 +29,18 @@ finalizes a doctor's note.
 
 ## Inmutability and concurrency
 
-The migration adds a `BEFORE UPDATE OR DELETE` trigger with a fixed search path.
-It allows normal draft edits and one atomic `draft -> finalized` transition. During
-that transition PostgreSQL sets `finalized_at = now()` and
-`finalized_by = auth.uid()` itself; neither value is accepted from the client.
+The initial schema already creates `medical_notes_set_updated_at` as a `BEFORE
+UPDATE` trigger on `public.medical_notes`. It calls `public.set_updated_at()`,
+which unconditionally assigns `new.updated_at = now()` for normal draft edits.
+Migration `0014` adds a second `BEFORE UPDATE OR DELETE` trigger with a fixed
+search path. The finalization trigger explicitly sets `finalized_at = now()`,
+`finalized_by = auth.uid()`, and `updated_at = now()` itself. Both triggers assign
+the transaction timestamp, so finalization does not depend on their alphabetical
+or creation order and no client-supplied timestamp can persist.
+
+The finalization trigger allows normal draft edits and one atomic
+`draft -> finalized` transition. Neither finalization field is accepted from the
+client.
 After finalization, all updates are rejected. Deleting a finalized note is also
 rejected; there is no client DELETE policy for notes.
 
@@ -47,6 +55,13 @@ another tenant's data.
 Finalization never reloads or copies a template. The existing `note_data` remains
 the record snapshot, so later changes to either a system or clinic template cannot
 alter a draft or finalized note.
+
+Historical finalized rows may have `finalized_at` without `finalized_by`, because
+the author column did not exist before migration `0014`. They remain immutable and
+display `Sin registro` for the unavailable finalizer name. New finalizations always
+set both values in PostgreSQL. The display-name RPC returns only `profiles.full_name`
+for a current or historical `clinic_members` row in the active authorized clinic;
+it never returns profile contact data or resolves users outside that clinic.
 
 ## Audit limitation
 
@@ -71,6 +86,40 @@ evidence for this transition; no clinical content is emitted to application logs
    unchanged.
 7. At 390 px, open the dialog, use Escape and Cancel, verify focus returns to the
    Finalizar nota button, and verify the stacked actions have no horizontal scroll.
+
+## Post-migration SQL checks
+
+```sql
+select column_name, is_nullable
+from information_schema.columns
+where table_schema = 'public'
+  and table_name = 'medical_notes'
+  and column_name in ('finalized_at', 'finalized_by', 'updated_at');
+
+select
+  tgname,
+  pg_get_triggerdef(oid)
+from pg_trigger
+where tgrelid = 'public.medical_notes'::regclass
+  and not tgisinternal
+order by tgname;
+
+select
+  status,
+  finalized_at,
+  finalized_by,
+  created_at,
+  updated_at,
+  updated_at > created_at as timestamp_advanced
+from public.medical_notes
+where id = '<TEST_NOTE_ID>';
+
+select count(*) as inconsistent_finalization_rows
+from public.medical_notes
+where
+  (status = 'finalized' and finalized_at is null)
+  or (status = 'draft' and (finalized_at is not null or finalized_by is not null));
+```
 
 ## Applying
 

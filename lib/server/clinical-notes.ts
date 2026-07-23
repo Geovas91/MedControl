@@ -13,6 +13,12 @@ type Tables = Database["public"]["Tables"];
 type NoteRow = Tables["medical_notes"]["Row"];
 type TemplateRow = Tables["medical_note_templates"]["Row"];
 type NoteInsert = Tables["medical_notes"]["Insert"];
+type FinalizerNameRpcClient = {
+  rpc(
+    fn: "get_clinic_member_display_name_for_current_user",
+    args: { p_clinic_id: string; p_user_id: string }
+  ): Promise<{ data: string | null; error: { code: string } | null }>;
+};
 
 export type NoteTemplateOption = Pick<TemplateRow, "id" | "name" | "specialty" | "template_schema" | "is_system_template">;
 export type NoteAppointmentOption = { id: string; title: string; starts_at: string };
@@ -59,18 +65,21 @@ export async function getClinicalNoteForActiveTenant(patientId: string, noteId: 
   if (noteResult.error) { logger.error("Clinical note query failed", { component: "clinical_notes", operation: "detail", status: "query_error", code: noteResult.error.code }); return { state: "error", data: null }; }
   if (!noteResult.data) return { state: "not_found", data: null };
   const note = noteResult.data as Omit<ClinicalNoteDetail, "doctorName" | "finalizedByName" | "templateName" | "appointmentTitle">;
-  const [doctorResult, finalizedByResult, templateResult, appointmentResult] = await Promise.all([
+  const finalizerNameRpcClient = supabase as unknown as FinalizerNameRpcClient;
+  const [doctorResult, finalizedByNameResult, templateResult, appointmentResult] = await Promise.all([
     note.doctor_id ? supabase.from("doctor_public_profiles").select("display_name").eq("clinic_id", context.tenant.clinic.id).eq("profile_id", note.doctor_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-    note.finalized_by ? supabase.from("doctor_public_profiles").select("display_name").eq("clinic_id", context.tenant.clinic.id).eq("profile_id", note.finalized_by).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    note.finalized_by ? finalizerNameRpcClient.rpc("get_clinic_member_display_name_for_current_user", { p_clinic_id: context.tenant.clinic.id, p_user_id: note.finalized_by }) : Promise.resolve({ data: null, error: null }),
     note.template_id ? supabase.from("medical_note_templates").select("name").eq("id", note.template_id).or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).maybeSingle() : Promise.resolve({ data: null, error: null }),
     note.appointment_id ? supabase.from("appointments").select("title").eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).eq("id", note.appointment_id).maybeSingle() : Promise.resolve({ data: null, error: null })
   ]);
-  if (doctorResult.error || finalizedByResult.error || templateResult.error || appointmentResult.error) { logger.error("Clinical note relations failed", { component: "clinical_notes", operation: "relations", status: "query_error", doctorCode: doctorResult.error?.code, finalizedByCode: finalizedByResult.error?.code, templateCode: templateResult.error?.code, appointmentCode: appointmentResult.error?.code }); return { state: "error", data: null }; }
+  const finalizedByFallbackResult = !finalizedByNameResult.data && note.finalized_by ? await supabase.from("doctor_public_profiles").select("display_name").eq("clinic_id", context.tenant.clinic.id).eq("profile_id", note.finalized_by).maybeSingle() : { data: null, error: null };
+  if (doctorResult.error || templateResult.error || appointmentResult.error || finalizedByFallbackResult.error) { logger.error("Clinical note relations failed", { component: "clinical_notes", operation: "relations", status: "query_error", doctorCode: doctorResult.error?.code, finalizedByCode: finalizedByNameResult.error?.code, finalizedByFallbackCode: finalizedByFallbackResult.error?.code, templateCode: templateResult.error?.code, appointmentCode: appointmentResult.error?.code }); return { state: "error", data: null }; }
   const doctor = doctorResult.data as { display_name: string } | null;
-  const finalizedBy = finalizedByResult.data as { display_name: string } | null;
+  if (finalizedByNameResult.error) logger.error("Clinical note finalizer name lookup failed", { component: "clinical_notes", operation: "finalizer_name", status: "query_error", code: finalizedByNameResult.error.code });
+  const finalizedByFallback = finalizedByFallbackResult.data as { display_name: string } | null;
   const template = templateResult.data as { name: string } | null;
   const appointment = appointmentResult.data as { title: string } | null;
-  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, finalizedByName: finalizedBy?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), timeZone: context.tenant.clinic.timezone } };
+  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, finalizedByName: finalizedByNameResult.data ?? finalizedByFallback?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), timeZone: context.tenant.clinic.timezone } };
 }
 
 export async function createClinicalNoteForActiveTenant(patientId: string, values: ClinicalNoteFormValues) {

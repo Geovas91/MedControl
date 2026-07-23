@@ -707,6 +707,10 @@ export type Database = {
           created_at: Timestamp;
         }>;
       };
+      get_clinic_member_display_name_for_current_user: {
+        Args: { p_clinic_id: string; p_user_id: string };
+        Returns: string | null;
+      };
       add_clinic_member_by_email_for_current_user: {
         Args: {
           target_clinic_id: string;
