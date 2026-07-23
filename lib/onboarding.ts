@@ -10,9 +10,20 @@ export type ClinicMembershipRow = Tables["clinic_members"]["Row"];
 
 type OnboardingRpcClient = {
   rpc(
-    fn: "create_personal_clinic_for_current_user",
-    args: { clinic_name: string; full_name: string | null; email: string | null }
+    fn: "complete_clinic_onboarding_for_current_user",
+    args: {
+      p_clinic_name: string; p_legal_name: string | null; p_phone: string | null; p_clinic_email: string | null;
+      p_timezone: string; p_country: string | null; p_region: string | null; p_address: string | null;
+      p_owner_full_name: string; p_plan_id: "basic" | "plus" | "pro";
+      p_accepted_terms: boolean; p_accepted_privacy: boolean; p_accepted_clinical_responsibility: boolean;
+    }
   ): Promise<{ data: string | null; error: PostgrestError | null }>;
+};
+
+export type ClinicOnboardingInput = {
+  clinicName: string; legalName: string | null; phone: string | null; clinicEmail: string | null; timezone: string;
+  country: string | null; region: string | null; address: string | null; ownerFullName: string; planId: "basic" | "plus" | "pro";
+  acceptedTerms: boolean; acceptedPrivacy: boolean; acceptedClinicalResponsibility: boolean;
 };
 
 export type OnboardingStatus =
@@ -81,6 +92,7 @@ export async function getCurrentUserClinicMembership() {
     .from("clinic_members")
     .select("*")
     .eq("user_id", user.id)
+    .eq("status", "active")
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -155,8 +167,8 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus> {
   };
 }
 
-export async function ensurePersonalClinicForCurrentUser(clinicName?: string) {
-  const { user, profile, error: profileError } = await ensureProfileForCurrentUser();
+export async function completeClinicOnboardingForCurrentUser(input: ClinicOnboardingInput) {
+  const { user, error: profileError } = await ensureProfileForCurrentUser();
 
   if (profileError || !user) {
     return { clinicId: null, error: profileError ?? new Error("Authentication required.") };
@@ -169,13 +181,13 @@ export async function ensurePersonalClinicForCurrentUser(clinicName?: string) {
   }
 
   const supabase = await createClient();
-  const fullName = profile?.full_name ?? metadataString(user.user_metadata.full_name);
-  const fallbackName = personalClinicName(fullName);
   const onboardingRpcClient = supabase as unknown as OnboardingRpcClient;
-  const { data: clinicId, error } = await onboardingRpcClient.rpc("create_personal_clinic_for_current_user", {
-    clinic_name: clinicName?.trim() || fallbackName,
-    full_name: fullName,
-    email: user.email ?? null
+  const { data: clinicId, error } = await onboardingRpcClient.rpc("complete_clinic_onboarding_for_current_user", {
+    p_clinic_name: input.clinicName, p_legal_name: input.legalName, p_phone: input.phone, p_clinic_email: input.clinicEmail,
+    p_timezone: input.timezone, p_country: input.country, p_region: input.region, p_address: input.address,
+    p_owner_full_name: input.ownerFullName, p_plan_id: input.planId,
+    p_accepted_terms: input.acceptedTerms, p_accepted_privacy: input.acceptedPrivacy,
+    p_accepted_clinical_responsibility: input.acceptedClinicalResponsibility
   });
 
   return {

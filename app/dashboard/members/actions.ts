@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getOnboardingStatus } from "@/lib/onboarding";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { addClinicMemberByEmailToClinic, type ClinicMemberRole } from "@/lib/supabase/clinic-members";
 
 type AddMemberFormState = {
@@ -33,6 +34,10 @@ export async function addClinicMemberAction(
 
   if (onboardingStatus.state !== "complete") {
     redirect("/onboarding");
+  }
+
+  if (!canCreateWithEntitlements(await getClinicEntitlements(onboardingStatus.membership.clinic_id))) {
+    return { error: "La suscripción actual no permite administrar miembros." };
   }
 
   if (!fullName || !email || !role) {

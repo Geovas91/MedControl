@@ -6,6 +6,7 @@ import { canCreateClinicalNote, canEditClinicalNote, canFinalizeClinicalNote, ca
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -45,6 +46,7 @@ export async function getClinicalNoteFormOptions(patientId: string): Promise<Bas
   const resolved = await resolvePatient(patientId, true);
   if (resolved.state !== "ready") return resolved;
   const { context, supabase, patient } = resolved.data;
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return { state: "forbidden", data: null };
   const [templatesResult, appointmentsResult] = await Promise.all([
     supabase.from("medical_note_templates").select("id, name, specialty, template_schema, is_system_template").or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).eq("template_kind", "note").eq("is_active", true).order("is_system_template", { ascending: false }).order("specialty", { ascending: true }).order("name", { ascending: true }),
     supabase.from("appointments").select("id, title, starts_at").eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).order("starts_at", { ascending: false }).limit(30)
@@ -79,7 +81,8 @@ export async function getClinicalNoteForActiveTenant(patientId: string, noteId: 
   const finalizedByFallback = finalizedByFallbackResult.data as { display_name: string } | null;
   const template = templateResult.data as { name: string } | null;
   const appointment = appointmentResult.data as { title: string } | null;
-  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, finalizedByName: finalizedByNameResult.data ?? finalizedByFallback?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), canFinalize: note.status === "draft" && canFinalizeClinicalNote(context.tenant.membership.role), timeZone: context.tenant.clinic.timezone } };
+  const canMutate = canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id));
+  return { state: "ready", data: { note: { ...note, doctorName: doctor?.display_name ?? null, finalizedByName: finalizedByNameResult.data ?? finalizedByFallback?.display_name ?? null, templateName: template?.name ?? null, appointmentTitle: appointment?.title ?? null }, canEdit: canMutate && canEditClinicalNote({ role: context.tenant.membership.role, authorId: note.doctor_id, currentUserId: context.user.id, status: note.status }), canFinalize: canMutate && note.status === "draft" && canFinalizeClinicalNote(context.tenant.membership.role), timeZone: context.tenant.clinic.timezone } };
 }
 
 export async function createClinicalNoteForActiveTenant(patientId: string, values: ClinicalNoteFormValues) {
@@ -88,6 +91,9 @@ export async function createClinicalNoteForActiveTenant(patientId: string, value
   const validation = validateClinicalNoteValues(values);
   if (!validation.valid) return { state: "validation_error" as const, error: "Revisa los campos marcados.", errors: validation.errors, values };
   const { context, supabase, patient } = resolved.data;
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
+    return { state: "forbidden" as const, error: "La suscripción actual no permite crear notas clínicas." };
+  }
   const input = validation.data;
   if (input.templateId && (!isCanonicalAppointmentUuid(input.templateId) || !canUseClinicalTemplate(context.tenant.membership.role))) return { state: "validation_error" as const, error: "La plantilla seleccionada no es válida.", errors: { templateId: "Selecciona una plantilla disponible." }, values };
   if (input.appointmentId && !isCanonicalAppointmentUuid(input.appointmentId)) return { state: "validation_error" as const, error: "La cita seleccionada no es válida.", errors: { appointmentId: "Selecciona una cita válida." }, values };
@@ -115,6 +121,9 @@ export async function updateClinicalNoteForActiveTenant(patientId: string, noteI
   const validation = validateClinicalNoteValues(values);
   if (!validation.valid || !values.expectedUpdatedAt) return { state: "validation_error" as const, error: "Revisa los campos marcados.", errors: validation.valid ? { expectedUpdatedAt: "Actualiza la página e intenta nuevamente." } : validation.errors, values };
   const { context, supabase, patient } = resolved.data;
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
+    return { state: "forbidden" as const, error: "La suscripción actual no permite modificar notas clínicas." };
+  }
   const noteResult = await supabase.from("medical_notes").select("id, doctor_id, status, note_data").eq("id", noteId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).maybeSingle();
   if (noteResult.error) { logger.error("Clinical note update query failed", { component: "clinical_notes", operation: "update_lookup", status: "query_error", code: noteResult.error.code }); return { state: "error" as const, error: "No fue posible validar la nota.", values }; }
   if (!noteResult.data) return { state: "not_found" as const };
@@ -133,6 +142,10 @@ export async function finalizeClinicalNoteForActiveTenant(patientId: string, not
   const resolved = await resolvePatient(patientId);
   if (resolved.state !== "ready") return resolved;
   const { context, supabase, patient } = resolved.data;
+  // Finalization changes clinical data, so draft closure is blocked during read-only subscription states.
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
+    return { state: "forbidden" as const, error: "La suscripción actual no permite finalizar notas clínicas." };
+  }
   if (!canFinalizeClinicalNote(context.tenant.membership.role)) return { state: "forbidden" as const };
 
   const result = await supabase

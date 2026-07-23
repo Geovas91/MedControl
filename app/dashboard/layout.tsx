@@ -1,6 +1,7 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { signOutAction } from "@/app/(auth)/actions";
 import { getOnboardingStatus } from "@/lib/onboarding";
+import { getClinicEntitlements, getEntitlementNotice } from "@/lib/server/entitlements";
 import { redirect } from "next/navigation";
 
 async function getDashboardAccount() {
@@ -16,9 +17,11 @@ async function getDashboardAccount() {
 
   const fullName = onboardingStatus.profile.full_name;
 
+  const entitlements = await getClinicEntitlements(onboardingStatus.membership.clinic_id);
   return {
     name: fullName ?? onboardingStatus.user.email ?? "Usuario autenticado",
-    subtitle: onboardingStatus.user.email ?? "Sesión activa en Supabase"
+    subtitle: onboardingStatus.user.email ?? "Sesión activa en Supabase",
+    subscriptionNotice: getEntitlementNotice(entitlements)
   };
 }
 
@@ -28,6 +31,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <DashboardShell
       account={{ name: account.name, subtitle: account.subtitle }}
+      subscriptionNotice={account.subscriptionNotice}
       footer={
         <form action={signOutAction}>
           <button

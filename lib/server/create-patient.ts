@@ -8,6 +8,7 @@ import {
 } from "@/lib/patients/create";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import {
   getPatientClinicToday,
   getPatientFormOptions,
@@ -55,6 +56,10 @@ export async function getPatientCreationOptions(): Promise<PatientCreationOption
     return { state: "forbidden", data: null };
   }
 
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
+    return { state: "forbidden", data: null };
+  }
+
   const supabase = await createClient();
   const optionsResult = await getPatientFormOptions(
     supabase,
@@ -90,6 +95,11 @@ export async function createPatientForActiveTenant(values: PatientFormValues): P
 
   if (context.state !== "ready") {
     return { state: context.state };
+  }
+
+  const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  if (!canCreateWithEntitlements(entitlements)) {
+    return { state: "forbidden", values } as CreatePatientResult;
   }
 
   if (!canCreatePatients(context.tenant.membership.role)) {

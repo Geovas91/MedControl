@@ -90,3 +90,31 @@ export async function signOutAction() {
   revalidatePath("/", "layout");
   redirect(`/login?${encodedParam("message", "You have been signed out.")}`);
 }
+
+export async function requestPasswordRecoveryAction(formData: FormData) {
+  const email = asString(formData.get("email"));
+  if (email && hasSupabaseConfig()) {
+    const supabase = await createClient();
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${getAppBaseUrl()}/auth/callback?next=/reset-password`
+    });
+  }
+  redirect(`/forgot-password?${encodedParam("message", "Si existe una cuenta para ese correo, recibirás instrucciones para continuar.")}`);
+}
+
+export async function updatePasswordAction(formData: FormData) {
+  const password = asString(formData.get("password"));
+  const confirmation = asString(formData.get("confirmation"));
+  if (password.length < 8 || password !== confirmation) {
+    redirect(`/reset-password?${encodedParam("error", "Usa una contraseña de al menos 8 caracteres y confirma el mismo valor.")}`);
+  }
+  if (!hasSupabaseConfig()) {
+    redirect(`/reset-password?${encodedParam("error", "La configuración de autenticación no está disponible.")}`);
+  }
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect(`/login?${encodedParam("message", "Tu enlace de recuperación expiró. Solicita uno nuevo.")}`);
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) redirect(`/reset-password?${encodedParam("error", "No fue posible actualizar la contraseña. Solicita un enlace nuevo.")}`);
+  redirect(`/login?${encodedParam("message", "Tu contraseña fue actualizada. Inicia sesión.")}`);
+}

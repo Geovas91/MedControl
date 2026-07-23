@@ -79,7 +79,9 @@ if (authorizedReferences.length > 0) {
 function* walk(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (entry.isDirectory()) {
-      if (!ignoredDirectories.has(entry.name)) {
+      // Supabase CLI writes the linked-project metadata here; it is ignored by Git and not application source.
+      const isSupabaseTemporaryDirectory = entry.name === ".temp" && normalizePath(path.relative(rootDir, directory)) === "supabase";
+      if (!ignoredDirectories.has(entry.name) && !isSupabaseTemporaryDirectory) {
         yield* walk(path.join(directory, entry.name));
       }
 

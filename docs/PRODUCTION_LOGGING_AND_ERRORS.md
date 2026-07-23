@@ -1,0 +1,5 @@
+# Logging y errores de producción
+
+El logger estructurado elimina claves sensibles como contraseñas, tokens, cookies, datos clínicos, nombres, correos y teléfonos. Los logs deben contener sólo componente, operación, código técnico y estado. No registrar payloads de formularios, notas, consentimientos, firmas ni respuestas completas de Supabase/PayPal.
+
+`app/error.tsx`, `app/global-error.tsx` y `app/not-found.tsx` muestran mensajes genéricos. Las referencias de error son identificadores técnicos sin datos clínicos. Las rutas clínicas deben seguir usando `dynamic`/`no-store` según corresponda y nunca colocar información clínica en metadata o URLs.
