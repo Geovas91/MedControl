@@ -13,9 +13,14 @@ function encodedParam(name: "error" | "message", value: string) {
   return `${name}=${encodeURIComponent(value)}`;
 }
 
+function safeNext(value: string) {
+  return value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") ? value : "/dashboard";
+}
+
 export async function signInAction(formData: FormData) {
   const email = asString(formData.get("email"));
   const password = asString(formData.get("password"));
+  const next = safeNext(asString(formData.get("next")));
 
   if (!email || !password) {
     redirect(`/login?${encodedParam("error", "Enter your email and password.")}`);
@@ -37,7 +42,7 @@ export async function signInAction(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect(next);
 }
 
 export async function signUpAction(formData: FormData) {
@@ -45,6 +50,7 @@ export async function signUpAction(formData: FormData) {
   const fullName = asString(formData.get("full_name"));
   const email = asString(formData.get("email"));
   const password = asString(formData.get("password"));
+  const next = safeNext(asString(formData.get("next")));
 
   if (!clinicName || !fullName || !email || !password) {
     redirect(`/register?${encodedParam("error", "Complete all required fields.")}`);
@@ -64,7 +70,7 @@ export async function signUpAction(formData: FormData) {
         clinic_name: clinicName,
         full_name: fullName
       },
-      emailRedirectTo: `${getAppBaseUrl()}/auth/callback?next=/dashboard`
+      emailRedirectTo: `${getAppBaseUrl()}/auth/callback?next=${encodeURIComponent(next)}`
     }
   });
 
@@ -74,9 +80,9 @@ export async function signUpAction(formData: FormData) {
 
   revalidatePath("/", "layout");
   redirect(
-    `/login?${encodedParam(
+    `/login?next=${encodeURIComponent(next)}&${encodedParam(
       "message",
-      data.session ? "Account created. You can continue to the dashboard." : "Check your email to confirm your account."
+      data.session ? "Account created. You can continue." : "Check your email to confirm your account."
     )}`
   );
 }

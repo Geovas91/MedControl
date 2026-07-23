@@ -20,3 +20,5 @@ Configurar un proceso reiniciable en CloudPanel/PM2 y el puerto asignado por `pr
 ## Operación
 
 Antes de actualizar, verificar backup y el commit desplegado. Para rollback, volver al último commit validado, ejecutar `npm ci`, `npm run build` y reiniciar el proceso. Revisar logs estructurados sin copiar secretos ni datos clínicos. Las migraciones se revisan y ejecutan por separado; no se aplican desde este PR.
+
+Si staging debe exigir configuración de correo antes de aceptar tráfico beta, usar `EMAIL_REQUIRED=true` junto con `EMAIL_PROVIDER` y `EMAIL_FROM`, y comprobar que `/api/ready` responda 200. Esta configuración no activa entrega de correo; la integración de proveedor sigue fuera de esta etapa.

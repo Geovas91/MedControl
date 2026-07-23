@@ -13,7 +13,8 @@
 ## Bloqueantes para beta privada
 
 - [ ] Onboarding, trial de 30 días, owner y aceptaciones versionadas verificados.
-- [ ] Invitaciones seguras y proveedor de correo configurados.
+- [ ] Invitaciones seguras probadas: crear, rotar, revocar, aceptar con el correo exacto y rechazar acceso REST directo.
+- [ ] Si se exigirá correo en beta, `EMAIL_REQUIRED=true`, `EMAIL_PROVIDER` y `EMAIL_FROM` están configurados y `/api/ready` responde 200 sin exponer secretos.
 - [ ] Recuperación de contraseña probada.
 - [ ] Guardas de suscripción y límites probadas para `active`, trial futuro/igual a ahora/vencido/nulo, `past_due`, `inactive`, `cancelled` y error temporal.
 - [ ] Términos y aviso de privacidad publicados y revisados.

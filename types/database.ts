@@ -134,6 +134,47 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["clinic_members"]["Insert"]>;
       };
+      clinic_member_invitations: {
+        Row: {
+          id: string;
+          clinic_id: string;
+          invited_email: string;
+          normalized_email: string;
+          role: Database["public"]["Enums"]["clinic_member_role"];
+          status: "pending" | "accepted" | "revoked" | "expired";
+          token_hash: string | null;
+          expires_at: Timestamp;
+          accepted_at: Timestamp | null;
+          revoked_at: Timestamp | null;
+          created_by: string;
+          accepted_user_id: string | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+          last_sent_at: Timestamp | null;
+          send_count: number;
+          provider_message_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          clinic_id: string;
+          invited_email: string;
+          normalized_email: string;
+          role: Database["public"]["Enums"]["clinic_member_role"];
+          status?: "pending" | "accepted" | "revoked" | "expired";
+          token_hash?: string | null;
+          expires_at: Timestamp;
+          accepted_at?: Timestamp | null;
+          revoked_at?: Timestamp | null;
+          created_by: string;
+          accepted_user_id?: string | null;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+          last_sent_at?: Timestamp | null;
+          send_count?: number;
+          provider_message_id?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["clinic_member_invitations"]["Insert"]>;
+      };
       paypal_webhook_events: {
         Row: {
           id: string;
@@ -749,6 +790,30 @@ export type Database = {
           member_role: Database["public"]["Enums"]["clinic_member_role"];
         };
         Returns: string;
+      };
+      create_clinic_member_invitation_for_current_user: {
+        Args: { p_clinic_id: string; p_email: string; p_role: string };
+        Returns: Array<{ invitation_id: string; raw_token: string; expires_at: Timestamp; invited_email: string; invited_role: string }>;
+      };
+      rotate_clinic_member_invitation_token_for_current_user: {
+        Args: { p_invitation_id: string };
+        Returns: Array<{ raw_token: string; expires_at: Timestamp }>;
+      };
+      revoke_clinic_member_invitation_for_current_user: {
+        Args: { p_invitation_id: string };
+        Returns: boolean;
+      };
+      list_clinic_member_invitations_for_current_user: {
+        Args: { p_clinic_id: string };
+        Returns: Array<{ id: string; invited_email: string; role: string; status: string; expires_at: Timestamp; created_at: Timestamp; last_sent_at: Timestamp | null; send_count: number }>;
+      };
+      get_public_clinic_member_invitation: {
+        Args: { p_token_hash: string };
+        Returns: Array<{ is_valid: boolean; clinic_name: string | null; invited_role: string | null; masked_email: string | null; expires_at: Timestamp | null }>;
+      };
+      accept_clinic_member_invitation_for_current_user: {
+        Args: { p_token_hash: string };
+        Returns: boolean;
       };
       create_verified_doctor_review_for_completed_appointment: {
         Args: {

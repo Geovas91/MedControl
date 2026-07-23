@@ -8,11 +8,13 @@ type SignupPageProps = {
   searchParams?: Promise<{
     error?: string;
     message?: string;
+    next?: string;
   }>;
 };
 
 export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = await searchParams;
+  const next = params?.next?.startsWith("/") && !params.next.startsWith("//") && !params.next.startsWith("/\\") ? params.next : "";
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
@@ -34,6 +36,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           <p className="mt-5 rounded-md bg-emerald-50 p-3 text-sm leading-6 text-emerald-700">{params.message}</p>
         ) : null}
         <form action={signUpAction} className="mt-6 grid gap-4">
+          <input type="hidden" name="next" value={next} />
           <Field label="Nombre de la clínica" htmlFor="clinic">
             <Input id="clinic" name="clinic" autoComplete="organization" placeholder="Clínica Familiar Norte" required />
           </Field>
@@ -62,7 +65,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
         </p>
         <p className="mt-6 text-center text-sm text-slate-500">
           ¿Ya tienes cuenta?{" "}
-          <Link href="/login" className="font-semibold text-clinic">
+          <Link href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="font-semibold text-clinic">
             Iniciar sesión
           </Link>
         </p>

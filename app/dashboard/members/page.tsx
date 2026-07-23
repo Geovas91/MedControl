@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { AddMemberForm } from "@/components/dashboard/add-member-form";
+import { InvitationActions } from "@/components/dashboard/invitation-actions";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { getOnboardingStatus } from "@/lib/onboarding";
-import { listClinicMembersForClinic, type ClinicMemberRole } from "@/lib/supabase/clinic-members";
+import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { listClinicInvitations, listClinicMembersForClinic, type ClinicMemberRole } from "@/lib/supabase/clinic-members";
 import { getClinicPlanContext } from "@/lib/supabase/subscriptions";
 import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { formatDate } from "@/lib/utils";
@@ -36,25 +37,27 @@ function formatDoctorUsage(currentDoctorCount: number, doctorLimit: number | nul
 }
 
 export default async function MembersPage() {
-  const onboardingStatus = await getOnboardingStatus();
+  const activeTenant = await getActiveTenantContext();
 
-  if (onboardingStatus.state === "unauthenticated") {
+  if (activeTenant.state === "unauthenticated") {
     redirect("/login");
   }
 
-  if (onboardingStatus.state !== "complete") {
-    redirect("/onboarding");
+  if (activeTenant.state !== "ready") {
+    return <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">No tienes una membresía activa para administrar miembros.</section>;
   }
 
-  const clinicId = onboardingStatus.membership.clinic_id;
-  const [planContextResult, membersResult, entitlementsResult] = await Promise.all([
+  const clinicId = activeTenant.tenant.clinic.id;
+  const [planContextResult, membersResult, entitlementsResult, invitationsResult] = await Promise.all([
     getClinicPlanContext(clinicId),
     listClinicMembersForClinic(clinicId),
-    getClinicEntitlements(clinicId)
+    getClinicEntitlements(clinicId),
+    listClinicInvitations(clinicId)
   ]);
 
   const planContext = planContextResult.data;
   const members = membersResult.data ?? [];
+  const invitations = invitationsResult.data ?? [];
 
   return (
     <>
@@ -125,6 +128,22 @@ export default async function MembersPage() {
                   </td>
                 </tr>
               ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-5">
+          <h2 className="font-bold text-ink">Invitaciones</h2>
+          <p className="mt-1 text-sm text-slate-500">Los enlaces se muestran sólo al crearlos o rotarlos. Correo no enviado sin proveedor configurado.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Correo</th><th className="px-5 py-3">Rol</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3">Expira</th><th className="px-5 py-3">Acciones</th></tr></thead>
+            <tbody className="divide-y divide-slate-200">
+              {invitations.map((invitation) => <tr key={invitation.id}><td className="px-5 py-4 text-slate-700">{invitation.invited_email}</td><td className="px-5 py-4 text-slate-600">{roleLabels[invitation.role]}</td><td className="px-5 py-4 text-slate-600">{invitation.status}</td><td className="px-5 py-4 text-slate-600">{formatDate(invitation.expires_at.slice(0, 10))}</td><td className="px-5 py-4">{invitation.status === "pending" ? <InvitationActions invitationId={invitation.id} /> : null}</td></tr>)}
+              {invitations.length === 0 ? <tr><td className="px-5 py-6 text-center text-slate-500" colSpan={5}>No hay invitaciones registradas.</td></tr> : null}
             </tbody>
           </table>
         </div>

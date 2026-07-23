@@ -8,11 +8,13 @@ type AuthPageProps = {
   searchParams?: Promise<{
     error?: string;
     message?: string;
+    next?: string;
   }>;
 };
 
 export default async function LoginPage({ searchParams }: AuthPageProps) {
   const params = await searchParams;
+  const next = params?.next?.startsWith("/") && !params.next.startsWith("//") && !params.next.startsWith("/\\") ? params.next : "";
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
@@ -34,6 +36,7 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
           <p className="mt-5 rounded-md bg-emerald-50 p-3 text-sm leading-6 text-emerald-700">{params.message}</p>
         ) : null}
         <form action={signInAction} className="mt-6 grid gap-4">
+          <input type="hidden" name="next" value={next} />
           <Field label="Email" htmlFor="email">
             <Input id="email" name="email" type="email" autoComplete="email" placeholder="doctor@clinic.com" required />
           </Field>
@@ -55,7 +58,7 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
         <p className="mt-4 text-sm"><Link href="/forgot-password" className="font-semibold text-clinic">¿Olvidaste tu contraseña?</Link></p>
         <p className="mt-6 text-center text-sm text-slate-500">
           ¿Nuevo en CliniControl?{" "}
-          <Link href="/register" className="font-semibold text-clinic">
+          <Link href={next ? `/register?next=${encodeURIComponent(next)}` : "/register"} className="font-semibold text-clinic">
             Crear cuenta
           </Link>
         </p>
