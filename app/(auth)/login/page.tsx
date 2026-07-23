@@ -3,6 +3,7 @@ import { Stethoscope } from "lucide-react";
 import { signInAction } from "@/app/(auth)/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import { Field, Input } from "@/components/ui/input";
+import { getSafeLocalPath } from "@/lib/auth/redirects";
 
 type AuthPageProps = {
   searchParams?: Promise<{
@@ -14,7 +15,7 @@ type AuthPageProps = {
 
 export default async function LoginPage({ searchParams }: AuthPageProps) {
   const params = await searchParams;
-  const next = params?.next?.startsWith("/") && !params.next.startsWith("//") && !params.next.startsWith("/\\") ? params.next : "";
+  const next = getSafeLocalPath(params?.next, "");
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">

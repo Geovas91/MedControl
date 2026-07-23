@@ -13,7 +13,7 @@ export type ManagedClinicMember = {
   status: Database["public"]["Enums"]["clinic_member_status"];
   created_at: string;
 };
-export type ManagedClinicInvitation = { id: string; invited_email: string; role: Exclude<ClinicMemberRole, "owner">; status: "pending" | "accepted" | "revoked" | "expired"; expires_at: string; created_at: string; last_sent_at: string | null; send_count: number };
+export type ManagedClinicInvitation = { id: string; invited_email: string; role: Exclude<ClinicMemberRole, "owner">; status: "pending" | "accepted" | "revoked" | "expired"; expires_at: string; created_at: string; last_rotated_at: string | null; rotation_count: number };
 export type InvitationTokenResult = { invitation_id: string; raw_token: string; expires_at: string; invited_email: string; invited_role: Exclude<ClinicMemberRole, "owner"> };
 
 type ClinicMembersRpcClient = {

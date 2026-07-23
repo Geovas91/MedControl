@@ -8,23 +8,27 @@ La migración `0016_clinic_member_invitations.sql` agrega invitaciones seguras p
 - Las invitaciones duran siete días. Sólo se permiten los roles `admin`, `doctor` y `assistant`; nunca `owner`.
 - Los RPC `SECURITY DEFINER` tienen `search_path` fijo, verifican Auth, rol owner/admin, entitlement de escritura, clínica, límites de médicos y el estado de la invitación. Las escrituras directas a la tabla están revocadas para `anon` y `authenticated`.
 - El RPC público sólo recibe el hash calculado en servidor y devuelve datos mínimos. No expone el email completo ni el hash. La aceptación bloquea la fila, exige que el email autenticado coincida, crea o reactiva una membresía compatible y anula el token en la misma transacción.
-- Crear, rotar, revocar y aceptar escriben auditoría sin correo, token ni URL. La rotación invalida el token anterior, limita reenvíos a cinco y aplica una espera de 60 segundos.
+- Crear, rotar, revocar y aceptar escriben auditoría sin correo, token ni URL. La rotación invalida el token anterior, limita a cinco renovaciones y aplica una espera de 60 segundos. `rotation_count` y `last_rotated_at` describen enlaces renovados, no correos enviados.
+- `clinic_has_write_entitlement` no se modifica y sigue exigiendo membresía activa para escrituras normales. La función interna no ejecutable `clinic_subscription_allows_member_acceptance` sólo permite que la RPC de aceptación compruebe `active` o un trial vigente antes de crear la primera membresía.
 
 ## Flujo operativo sin proveedor de correo
 
 No hay proveedor de correo configurado ni se envían mensajes en esta etapa. Owner/admin crea la invitación desde `/dashboard/members`, copia el enlace que se muestra una sola vez y lo comparte por un canal aprobado. El destinatario abre `/invite/[token]`, inicia sesión o se registra y acepta con el mismo correo invitado.
 
-El enlace es personal, no debe compartirse ni incluirse en logs, capturas o tickets. Owner/admin puede rotarlo o revocarlo desde la lista de invitaciones. El estado del proveedor sólo afecta readiness: `EMAIL_REQUIRED=true` hace que `/api/ready` devuelva `503` hasta que haya `EMAIL_PROVIDER` y `EMAIL_FROM`; no habilita envío.
+El enlace es personal, no debe compartirse ni incluirse en logs, capturas o tickets. Owner/admin puede rotarlo o revocarlo desde la lista de invitaciones. Una invitación vencida se presenta como `expired` y debe crearse otra; no conserva acciones como si siguiera vigente. La entrega de correo aún no está implementada: `EMAIL_REQUIRED=true` mantiene `/api/ready` en `503` hasta que exista y se valide un proveedor real. Las variables de correo no habilitan envío.
 
 ## Verificación manual
 
 1. Owner crea una invitación `doctor`, copia la URL y verifica que la tabla no devuelve `token_hash` en el listado.
 2. Intentar crear `owner`, superar el límite del plan o invitar a un miembro activo debe fallar.
 3. Rotar el enlace: el anterior debe ser inválido y el nuevo válido. Revocarlo debe invalidarlo.
-4. Con sesión de otro correo, aceptar debe fallar con mensaje genérico. Con el correo invitado, debe crear perfil/membresía activa y marcar la invitación como `accepted`.
-5. Intentar `select`, `insert`, `update` o `delete` REST directo sobre `clinic_member_invitations` como `anon` y como `authenticated` debe ser denegado.
-6. Probar token inválido, vencido, revocado, repetido y dos aceptaciones simultáneas: no debe aparecer una segunda membresía ni reactivarse un token usado.
+4. Un usuario sin membresías con el correo invitado y una suscripción `active` o trial vigente debe crear perfil/membresía activa, marcar la invitación como `accepted` y eliminar el token. Un segundo intento debe fallar sin duplicar la membresía.
+5. Un trial vencido, sin fecha, una suscripción `past_due`, `inactive`, `cancelled` o faltante debe rechazar la aceptación. Un correo diferente, límite de médicos alcanzado y rol `owner` también deben rechazarse.
+6. Un usuario invitado no puede escribir antes de aceptar; después sólo puede hacerlo según su rol. `clinic_has_write_entitlement` debe seguir rechazando a usuarios sin membresía.
+7. Registro normal exige clínica. Registro con un `next` local exacto `/invite/<token>` no pide clínica ni guarda `clinic_name`; el callback conserva el enlace. `//evil`, `/\\evil` y redirects externos se rechazan.
+8. Intentar `select`, `insert`, `update` o `delete` REST directo sobre `clinic_member_invitations` como `anon` y como `authenticated` debe ser denegado. La función interna de suscripción tampoco debe ser ejecutable directamente.
+9. Con `EMAIL_REQUIRED=false`, `/api/ready` puede responder 200 y `email: disabled`. Con `EMAIL_REQUIRED=true`, debe responder 503 y `email: required_unavailable`, incluso con variables ficticias.
 
 ## Multi-clínica
 
-El dashboard ofrece un selector de clínica activa cuando el usuario tiene más de una membresía activa. La selección se almacena en una cookie HTTP-only y se verifica contra la membresía activa antes de cambiarla. Tras aceptar una invitación, el usuario puede elegir la nueva clínica activa desde el menú del dashboard.
+La aceptación devuelve exclusivamente el `clinic_id` de la invitación consumida. La Server Action lo guarda en la cookie HTTP-only de clínica activa y redirige a `/dashboard` sin token. Esto selecciona la clínica invitada tanto para la primera membresía como para un usuario con clínicas existentes; el selector permite volver a otra clínica autorizada.

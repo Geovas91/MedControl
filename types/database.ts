@@ -150,8 +150,8 @@ export type Database = {
           accepted_user_id: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
-          last_sent_at: Timestamp | null;
-          send_count: number;
+          last_rotated_at: Timestamp | null;
+          rotation_count: number;
           provider_message_id: string | null;
         };
         Insert: {
@@ -169,8 +169,8 @@ export type Database = {
           accepted_user_id?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
-          last_sent_at?: Timestamp | null;
-          send_count?: number;
+          last_rotated_at?: Timestamp | null;
+          rotation_count?: number;
           provider_message_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["clinic_member_invitations"]["Insert"]>;
@@ -805,7 +805,7 @@ export type Database = {
       };
       list_clinic_member_invitations_for_current_user: {
         Args: { p_clinic_id: string };
-        Returns: Array<{ id: string; invited_email: string; role: string; status: string; expires_at: Timestamp; created_at: Timestamp; last_sent_at: Timestamp | null; send_count: number }>;
+        Returns: Array<{ id: string; invited_email: string; role: string; status: string; expires_at: Timestamp; created_at: Timestamp; last_rotated_at: Timestamp | null; rotation_count: number }>;
       };
       get_public_clinic_member_invitation: {
         Args: { p_token_hash: string };
@@ -813,6 +813,10 @@ export type Database = {
       };
       accept_clinic_member_invitation_for_current_user: {
         Args: { p_token_hash: string };
+        Returns: string;
+      };
+      clinic_subscription_allows_member_acceptance: {
+        Args: { p_clinic_id: string };
         Returns: boolean;
       };
       create_verified_doctor_review_for_completed_appointment: {

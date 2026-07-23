@@ -14,7 +14,7 @@
 
 - [ ] Onboarding, trial de 30 días, owner y aceptaciones versionadas verificados.
 - [ ] Invitaciones seguras probadas: crear, rotar, revocar, aceptar con el correo exacto y rechazar acceso REST directo.
-- [ ] Si se exigirá correo en beta, `EMAIL_REQUIRED=true`, `EMAIL_PROVIDER` y `EMAIL_FROM` están configurados y `/api/ready` responde 200 sin exponer secretos.
+- [ ] La entrega de correo fue implementada y validada antes de activar `EMAIL_REQUIRED=true`. Hasta entonces, readiness debe permanecer `503` con `required_unavailable` cuando se exige correo.
 - [ ] Recuperación de contraseña probada.
 - [ ] Guardas de suscripción y límites probadas para `active`, trial futuro/igual a ahora/vencido/nulo, `past_due`, `inactive`, `cancelled` y error temporal.
 - [ ] Términos y aviso de privacidad publicados y revisados.

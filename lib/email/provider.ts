@@ -1,13 +1,11 @@
 import "server-only";
 
-export type EmailProviderReadiness = "disabled" | "ready" | "required";
+export type EmailProviderReadiness = "disabled" | "required_unavailable";
 
 /**
  * Email delivery is intentionally not implemented in this stage. This exposes
- * readiness only, so invitation links can be copied safely until a provider is configured.
+ * readiness only. Environment values cannot enable delivery until a real provider is implemented and verified.
  */
 export function getEmailProviderReadiness(): EmailProviderReadiness {
-  const providerConfigured = Boolean(process.env.EMAIL_PROVIDER?.trim() && process.env.EMAIL_FROM?.trim());
-  if (providerConfigured) return "ready";
-  return process.env.EMAIL_REQUIRED === "true" ? "required" : "disabled";
+  return process.env.EMAIL_REQUIRED === "true" ? "required_unavailable" : "disabled";
 }

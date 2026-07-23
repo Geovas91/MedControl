@@ -22,7 +22,7 @@ Este plan es para staging controlado. No despliega, no aplica migraciones y no a
 
 ## D. Correo
 
-La entrega de invitaciones no está implementada. Configurar `EMAIL_PROVIDER` y `EMAIL_FROM` sólo cuando exista una integración aprobada. Para exigirlo antes de beta, establecer `EMAIL_REQUIRED=true` y confirmar `GET /api/ready` con estado `ready`; la respuesta no expone secretos ni configuración del proveedor.
+La entrega de invitaciones no está implementada. `EMAIL_REQUIRED=false` deja el chequeo de correo como `disabled` y permite readiness si base de datos está disponible. `EMAIL_REQUIRED=true` mantiene `GET /api/ready` en `503` como `required_unavailable` hasta que exista y se valide un proveedor real; variables ficticias no producen estado `ready`.
 
 ## E. Operación y rollback
 

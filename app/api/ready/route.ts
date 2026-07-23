@@ -25,7 +25,7 @@ export async function GET() {
     // A successful empty result is still a connectivity success under RLS; only a transport/PostgREST error is not ready.
     const { error } = await supabase.from("clinics").select("id", { head: true }).limit(1);
     if (error) throw error;
-    if (email === "required") {
+    if (email === "required_unavailable") {
       return response({ status: "not_ready", checks: { configuration: true, database: true, email } }, 503);
     }
     return response({ status: "ready", checks: { configuration: true, database: true, email } }, 200);

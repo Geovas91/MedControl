@@ -15,8 +15,8 @@ create table public.clinic_member_invitations (
   accepted_user_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  last_sent_at timestamptz,
-  send_count integer not null default 0 check (send_count >= 0),
+  last_rotated_at timestamptz,
+  rotation_count integer not null default 0 check (rotation_count >= 0),
   provider_message_id text,
   constraint clinic_member_invitations_role_check check (role in ('admin', 'doctor', 'assistant')),
   constraint clinic_member_invitations_email_check check (normalized_email = lower(trim(invited_email))),
@@ -98,10 +98,11 @@ declare v_actor_id uuid := auth.uid(); v_invitation public.clinic_member_invitat
   if not found or not public.has_clinic_role(v_invitation.clinic_id, array['owner', 'admin']) then raise exception 'Invitation is unavailable.'; end if;
   if not public.clinic_has_write_entitlement(v_invitation.clinic_id) then raise exception 'Subscription does not allow invitations.'; end if;
   if v_invitation.status <> 'pending' then raise exception 'Invitation cannot be rotated.'; end if;
-  if v_invitation.last_sent_at is not null and v_invitation.last_sent_at > now() - interval '60 seconds' then raise exception 'Please wait before resending.'; end if;
-  if v_invitation.send_count >= 5 then raise exception 'Invitation resend limit reached.'; end if;
+  if v_invitation.expires_at <= now() then raise exception 'Expired invitations must be recreated.'; end if;
+  if v_invitation.last_rotated_at is not null and v_invitation.last_rotated_at > now() - interval '60 seconds' then raise exception 'Please wait before rotating.'; end if;
+  if v_invitation.rotation_count >= 5 then raise exception 'Invitation rotation limit reached.'; end if;
   v_token := encode(gen_random_bytes(32), 'hex');
-  update public.clinic_member_invitations set token_hash = encode(digest(v_token, 'sha256'), 'hex'), expires_at = now() + interval '7 days', last_sent_at = now(), send_count = send_count + 1 where id = v_invitation.id returning clinic_member_invitations.expires_at into expires_at;
+  update public.clinic_member_invitations set token_hash = encode(digest(v_token, 'sha256'), 'hex'), expires_at = now() + interval '7 days', last_rotated_at = now(), rotation_count = rotation_count + 1 where id = v_invitation.id returning clinic_member_invitations.expires_at into expires_at;
   raw_token := v_token;
   insert into public.audit_logs (clinic_id, actor_user_id, entity_type, entity_id, action, metadata) values (v_invitation.clinic_id, v_actor_id, 'clinic_member_invitation', v_invitation.id, 'invitation_rotated', '{}'::jsonb);
   return next;
@@ -124,9 +125,9 @@ end;
 $$;
 
 create or replace function public.list_clinic_member_invitations_for_current_user(p_clinic_id uuid)
-returns table(id uuid, invited_email text, role text, status text, expires_at timestamptz, created_at timestamptz, last_sent_at timestamptz, send_count integer)
+returns table(id uuid, invited_email text, role text, status text, expires_at timestamptz, created_at timestamptz, last_rotated_at timestamptz, rotation_count integer)
 language sql security definer set search_path = public, pg_temp stable
-as $$ select i.id, i.invited_email, i.role::text, i.status, i.expires_at, i.created_at, i.last_sent_at, i.send_count from public.clinic_member_invitations i where public.has_clinic_role(p_clinic_id, array['owner', 'admin']) and i.clinic_id = p_clinic_id order by i.created_at desc; $$;
+as $$ select i.id, i.invited_email, i.role::text, case when i.status = 'pending' and i.expires_at <= now() then 'expired' else i.status end, i.expires_at, i.created_at, i.last_rotated_at, i.rotation_count from public.clinic_member_invitations i where public.has_clinic_role(p_clinic_id, array['owner', 'admin']) and i.clinic_id = p_clinic_id order by i.created_at desc; $$;
 
 create or replace function public.get_public_clinic_member_invitation(p_token_hash text)
 returns table(is_valid boolean, clinic_name text, invited_role text, masked_email text, expires_at timestamptz)
@@ -137,8 +138,24 @@ as $$ declare v_invitation public.clinic_member_invitations%rowtype; begin
   return query select true, c.name, v_invitation.role::text, regexp_replace(v_invitation.invited_email, '^(.).+(@.*)$', '\\1***\\2'), v_invitation.expires_at from public.clinics c where c.id = v_invitation.clinic_id;
 end; $$;
 
+create or replace function public.clinic_subscription_allows_member_acceptance(p_clinic_id uuid)
+returns boolean
+language sql security definer set search_path = public, pg_temp stable
+as $$
+  select exists (
+    select 1
+    from public.clinics as cl
+    join public.clinic_subscriptions as cs on cs.clinic_id = cl.id
+    where cl.id = p_clinic_id
+      and (
+        cs.status = 'active'
+        or (cs.status = 'trialing' and cs.current_period_end is not null and cs.current_period_end > now())
+      )
+  );
+$$;
+
 create or replace function public.accept_clinic_member_invitation_for_current_user(p_token_hash text)
-returns boolean language plpgsql security definer set search_path = public, pg_temp
+returns uuid language plpgsql security definer set search_path = public, pg_temp
 as $$
 declare v_user_id uuid := auth.uid(); v_email text; v_invitation public.clinic_member_invitations%rowtype; v_existing public.clinic_members%rowtype; v_has_member boolean := false; v_plan_id text; v_doctors integer; begin
   if v_user_id is null then raise exception 'Authentication required.'; end if;
@@ -146,7 +163,7 @@ declare v_user_id uuid := auth.uid(); v_email text; v_invitation public.clinic_m
   select * into v_invitation from public.clinic_member_invitations i where i.token_hash = p_token_hash for update;
   if not found or v_invitation.status <> 'pending' or v_invitation.expires_at <= now() or v_invitation.revoked_at is not null then raise exception 'Invitation is unavailable.'; end if;
   if v_email is null or v_email <> v_invitation.normalized_email then raise exception 'Invitation is unavailable.'; end if;
-  if not public.clinic_has_write_entitlement(v_invitation.clinic_id) then raise exception 'Invitation is unavailable.'; end if;
+  if not public.clinic_subscription_allows_member_acceptance(v_invitation.clinic_id) then raise exception 'Invitation is unavailable.'; end if;
   select * into v_existing from public.clinic_members cm where cm.clinic_id = v_invitation.clinic_id and cm.user_id = v_user_id for update;
   v_has_member := found;
   if found and v_existing.role = 'owner' then raise exception 'Invitation is unavailable.'; end if;
@@ -172,15 +189,16 @@ declare v_user_id uuid := auth.uid(); v_email text; v_invitation public.clinic_m
   end if;
   update public.clinic_member_invitations set status = 'accepted', accepted_at = now(), accepted_user_id = v_user_id, token_hash = null where id = v_invitation.id;
   insert into public.audit_logs (clinic_id, actor_user_id, entity_type, entity_id, action, metadata) values (v_invitation.clinic_id, v_user_id, 'clinic_member_invitation', v_invitation.id, 'invitation_accepted', jsonb_build_object('role', v_invitation.role));
-  return true;
+  return v_invitation.clinic_id;
 end; $$;
 
-revoke all on table public.clinic_member_invitations from anon, authenticated;
+revoke all on table public.clinic_member_invitations from public, anon, authenticated;
 revoke all on function public.create_clinic_member_invitation_for_current_user(uuid, text, text) from public, anon;
 revoke all on function public.rotate_clinic_member_invitation_token_for_current_user(uuid) from public, anon;
 revoke all on function public.revoke_clinic_member_invitation_for_current_user(uuid) from public, anon;
 revoke all on function public.list_clinic_member_invitations_for_current_user(uuid) from public, anon;
 revoke all on function public.accept_clinic_member_invitation_for_current_user(text) from public, anon;
 revoke all on function public.get_public_clinic_member_invitation(text) from public;
+revoke all on function public.clinic_subscription_allows_member_acceptance(uuid) from public, anon, authenticated;
 grant execute on function public.create_clinic_member_invitation_for_current_user(uuid, text, text), public.rotate_clinic_member_invitation_token_for_current_user(uuid), public.revoke_clinic_member_invitation_for_current_user(uuid), public.list_clinic_member_invitations_for_current_user(uuid), public.accept_clinic_member_invitation_for_current_user(text) to authenticated;
 grant execute on function public.get_public_clinic_member_invitation(text) to anon, authenticated;

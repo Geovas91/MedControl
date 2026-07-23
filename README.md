@@ -69,6 +69,8 @@ EMAIL_FROM=
 EMAIL_REQUIRED=false
 ```
 
+La entrega de correo aún no está implementada. `EMAIL_REQUIRED=true` mantiene readiness en `503` hasta que exista y se valide un proveedor real; configurar variables por sí solo no habilita correo.
+
 También existen variables para PayPal sandbox, Google Calendar y proveedores de mensajería. Mantén `NEXT_PUBLIC_SUPABASE_URL` como URL base del proyecto, sin `/rest/v1/`.
 
 ## Setup Local

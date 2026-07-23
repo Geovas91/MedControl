@@ -14,5 +14,5 @@ export async function getPublicMemberInvitation(token: string) {
 
 export async function acceptPublicMemberInvitation(token: string) {
   const supabase = await createClient();
-  return (supabase as unknown as { rpc(fn: string, args: Record<string, string>): Promise<{ data: boolean | null; error: { message: string } | null }> }).rpc("accept_clinic_member_invitation_for_current_user", { p_token_hash: hashInvitationToken(token) });
+  return (supabase as unknown as { rpc(fn: string, args: Record<string, string>): Promise<{ data: string | null; error: { message: string } | null }> }).rpc("accept_clinic_member_invitation_for_current_user", { p_token_hash: hashInvitationToken(token) });
 }

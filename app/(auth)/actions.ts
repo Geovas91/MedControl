@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAppBaseUrl, getSupabaseConfigError, hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { getSafeLocalPath, isInvitationPath } from "@/lib/auth/redirects";
 
 function asString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -13,14 +14,10 @@ function encodedParam(name: "error" | "message", value: string) {
   return `${name}=${encodeURIComponent(value)}`;
 }
 
-function safeNext(value: string) {
-  return value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") ? value : "/dashboard";
-}
-
 export async function signInAction(formData: FormData) {
   const email = asString(formData.get("email"));
   const password = asString(formData.get("password"));
-  const next = safeNext(asString(formData.get("next")));
+  const next = getSafeLocalPath(asString(formData.get("next")));
 
   if (!email || !password) {
     redirect(`/login?${encodedParam("error", "Enter your email and password.")}`);
@@ -50,9 +47,10 @@ export async function signUpAction(formData: FormData) {
   const fullName = asString(formData.get("full_name"));
   const email = asString(formData.get("email"));
   const password = asString(formData.get("password"));
-  const next = safeNext(asString(formData.get("next")));
+  const next = getSafeLocalPath(asString(formData.get("next")));
+  const invitationRegistration = isInvitationPath(next);
 
-  if (!clinicName || !fullName || !email || !password) {
+  if ((!invitationRegistration && !clinicName) || !fullName || !email || !password) {
     redirect(`/register?${encodedParam("error", "Complete all required fields.")}`);
   }
 
@@ -66,10 +64,7 @@ export async function signUpAction(formData: FormData) {
     email,
     password,
     options: {
-      data: {
-        clinic_name: clinicName,
-        full_name: fullName
-      },
+      data: invitationRegistration ? { full_name: fullName } : { clinic_name: clinicName, full_name: fullName },
       emailRedirectTo: `${getAppBaseUrl()}/auth/callback?next=${encodeURIComponent(next)}`
     }
   });
