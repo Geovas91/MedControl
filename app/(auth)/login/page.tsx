@@ -52,6 +52,7 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
         <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">
           El dashboard se valida con sesión, onboarding y membresía de clínica.
         </p>
+        <p className="mt-4 text-sm"><Link href="/forgot-password" className="font-semibold text-clinic">¿Olvidaste tu contraseña?</Link></p>
         <p className="mt-6 text-center text-sm text-slate-500">
           ¿Nuevo en CliniControl?{" "}
           <Link href="/register" className="font-semibold text-clinic">

@@ -43,9 +43,10 @@ type DashboardShellProps = {
     name: string;
     subtitle: string;
   };
+  subscriptionNotice?: string | null;
 };
 
-export function DashboardShell({ children, footer, account }: DashboardShellProps) {
+export function DashboardShell({ children, footer, account, subscriptionNotice }: DashboardShellProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -139,6 +140,7 @@ export function DashboardShell({ children, footer, account }: DashboardShellProp
             <p className="font-semibold">Ambiente de demostración</p>
             <p>Algunos módulos muestran datos de ejemplo y todavía no deben usarse con pacientes reales.</p>
           </section>
+          {subscriptionNotice ? <section className="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">{subscriptionNotice}</section> : null}
           {children}
           <footer className="mt-8 border-t border-slate-200 pt-4 lg:hidden">
             <AppVersionLabel />

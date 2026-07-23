@@ -11,6 +11,7 @@ import {
 import { isCanonicalPaymentUuid } from "@/lib/payments/query";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -62,6 +63,10 @@ export async function getClinicalPaymentCreationOptions(
   }
 
   if (!canCreateClinicalPayments(context.tenant.membership.role)) {
+    return { state: "forbidden", data: null };
+  }
+
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
     return { state: "forbidden", data: null };
   }
 
@@ -126,6 +131,11 @@ export async function createClinicalPaymentForActiveTenant(
 
   if (context.state !== "ready") {
     return { state: context.state };
+  }
+
+  const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  if (!canCreateWithEntitlements(entitlements)) {
+    return { state: "forbidden", values } as CreateClinicalPaymentResult;
   }
 
   if (!canCreateClinicalPayments(context.tenant.membership.role)) {

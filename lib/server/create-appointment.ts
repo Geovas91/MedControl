@@ -12,6 +12,7 @@ import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -85,6 +86,10 @@ export async function getAppointmentCreationOptions(
   }
 
   if (!canCreateAppointments(context.tenant.membership.role)) {
+    return { state: "forbidden", data: null };
+  }
+
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
     return { state: "forbidden", data: null };
   }
 
@@ -175,6 +180,11 @@ export async function createAppointmentForActiveTenant(
 
   if (context.state !== "ready") {
     return { state: context.state };
+  }
+
+  const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  if (!canCreateWithEntitlements(entitlements)) {
+    return { state: "forbidden", values } as CreateAppointmentResult;
   }
 
   if (!canCreateAppointments(context.tenant.membership.role)) {

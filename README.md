@@ -1,6 +1,6 @@
 # CliniControl
 
-CliniControl es una aplicación SaaS para médicos y clínicas pequeñas en México. Este repositorio está preparado para staging público controlado, no para producción ni para uso con pacientes reales.
+CliniControl es una aplicación SaaS para médicos y clínicas pequeñas en México. Este repositorio está preparado para staging controlado y una beta privada sólo después de completar los bloqueantes documentados; no está aprobado para uso abierto con pacientes reales.
 
 ## Estado Actual
 
@@ -33,6 +33,7 @@ CliniControl es una aplicación SaaS para médicos y clínicas pequeñas en Méx
 - Guía DonWeb staging: `docs/DONWEB_STAGING.md`.
 - Runbook operativo DonWeb CloudPanel: `docs/DONWEB_CLOUDPANEL_RUNBOOK.md`.
 - Guía de deploy staging: `docs/STAGING_DEPLOY.md`.
+- Preparación de onboarding/producción: `docs/CLINIC_ONBOARDING_AND_MEMBERS.md`, `docs/SUBSCRIPTION_ENTITLEMENTS.md`, `docs/PRODUCTION_READINESS_CHECKLIST.md` y `docs/DONWEB_DEPLOYMENT.md`.
 
 ## Pendiente Antes de Producción
 
@@ -60,6 +61,7 @@ APP_STAGING_URL=
 APP_PRODUCTION_URL=
 NEXT_PUBLIC_DEFAULT_LOCALE=es
 NEXT_PUBLIC_ENABLE_DEMO_CONSENT=false
+NEXT_PUBLIC_SITE_URL=
 ```
 
 También existen variables para PayPal sandbox, Google Calendar y proveedores de mensajería. Mantén `NEXT_PUBLIC_SUPABASE_URL` como URL base del proyecto, sin `/rest/v1/`.

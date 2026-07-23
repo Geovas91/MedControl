@@ -34,6 +34,8 @@ export type Database = {
           phone: string | null;
           email: string | null;
           address: string | null;
+          country: string | null;
+          region: string | null;
           timezone: string;
           plan: Database["public"]["Enums"]["clinic_plan"];
           tenant_type: Database["public"]["Enums"]["tenant_type"];
@@ -47,6 +49,8 @@ export type Database = {
           phone?: string | null;
           email?: string | null;
           address?: string | null;
+          country?: string | null;
+          region?: string | null;
           timezone?: string;
           plan?: Database["public"]["Enums"]["clinic_plan"];
           tenant_type?: Database["public"]["Enums"]["tenant_type"];
@@ -680,6 +684,10 @@ export type Database = {
       };
       create_personal_clinic_for_current_user: {
         Args: { clinic_name: string; full_name?: string | null; email?: string | null };
+        Returns: string;
+      };
+      complete_clinic_onboarding_for_current_user: {
+        Args: { p_clinic_name: string; p_legal_name: string | null; p_phone: string | null; p_email: string | null; p_timezone: string; p_country: string | null; p_region: string | null; p_address: string | null; p_owner_full_name: string; p_plan_id: string; p_accepted_terms: boolean; p_accepted_privacy: boolean; p_accepted_clinical_responsibility: boolean };
         Returns: string;
       };
       get_public_consent_for_signing: {
