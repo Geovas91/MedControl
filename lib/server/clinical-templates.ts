@@ -5,6 +5,7 @@ import type { TemplateOrigin } from "@/lib/clinical-record/template-catalog";
 import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -38,7 +39,8 @@ export async function listClinicalTemplates(filters: { kind?: TemplateKind; acti
   if (filters.active !== undefined) query = query.eq("is_active", filters.active);
   const result = await query;
   if (result.error) { logger.error("Clinical template list failed", { component: "clinical_templates", operation: "list", status: "query_error", code: result.error.code }); return { state: "error", data: null }; }
-  return { state: "ready", data: { templates: (result.data ?? []) as TemplateDetail[], canManage: canManageTemplates(tenant.membership.role) } };
+  const canManage = canManageTemplates(tenant.membership.role) && canCreateWithEntitlements(await getClinicEntitlements(tenant.clinic.id));
+  return { state: "ready", data: { templates: (result.data ?? []) as TemplateDetail[], canManage } };
 }
 
 export async function getClinicalTemplate(templateId: string, requireManage = false): Promise<Result<{ template: TemplateDetail; canManage: boolean }>> {
@@ -50,7 +52,8 @@ export async function getClinicalTemplate(templateId: string, requireManage = fa
   const result = await supabase.from("medical_note_templates").select("id, name, specialty, description, template_schema, template_kind, is_active, is_system_template, system_key, created_at, updated_at").eq("id", templateId).or(`is_system_template.eq.true,clinic_id.eq.${tenant.clinic.id}`).maybeSingle();
   if (result.error) { logger.error("Clinical template detail failed", { component: "clinical_templates", operation: "detail", status: "query_error", code: result.error.code }); return { state: "error", data: null }; }
   if (!result.data) return { state: "not_found", data: null };
-  return { state: "ready", data: { template: result.data as TemplateDetail, canManage: canManageTemplates(tenant.membership.role) } };
+  const canManage = canManageTemplates(tenant.membership.role) && canCreateWithEntitlements(await getClinicEntitlements(tenant.clinic.id));
+  return { state: "ready", data: { template: result.data as TemplateDetail, canManage } };
 }
 
 export async function createClinicalTemplate(values: TemplateFormValues) {
@@ -59,6 +62,7 @@ export async function createClinicalTemplate(values: TemplateFormValues) {
   const validation = validateTemplateValues(values);
   if (!validation.valid) return { state: "validation_error" as const, errors: validation.errors, values };
   const { tenant, user } = resolved.data;
+  if (!canCreateWithEntitlements(await getClinicEntitlements(tenant.clinic.id))) return { state: "forbidden" as const, data: null };
   const insert: TemplateInsert = { clinic_id: tenant.clinic.id, name: values.name, specialty: values.specialty || null, description: values.description || null, template_schema: createTemplateSchema(values.content, values.kind), template_kind: values.kind, is_active: values.isActive, created_by: user.id };
   const supabase = await createClient();
   const result = (await supabase.from("medical_note_templates").insert(insert as never).select("id").single()) as unknown as { data: { id: string } | null; error: { code: string } | null };
@@ -96,6 +100,7 @@ export async function duplicateClinicalTemplate(templateId: string) {
   if (context.state !== "ready") return { state: context.state, data: null };
   const source = detail.data.template;
   if (!canManageTemplates(context.tenant.membership.role)) return { state: "forbidden" as const, data: null };
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return { state: "forbidden" as const, data: null };
   const insert: TemplateInsert = { clinic_id: context.tenant.clinic.id, name: source.is_system_template ? `${source.name} Personalizada` : `${source.name} Copia`, specialty: source.specialty, description: source.description, template_schema: source.template_schema, template_kind: source.template_kind, is_system_template: false, system_key: null, is_active: source.is_system_template, created_by: context.user.id };
   const supabase = await createClient();
   const result = (await supabase.from("medical_note_templates").insert(insert as never).select("id").single()) as unknown as { data: { id: string } | null; error: { code: string } | null };

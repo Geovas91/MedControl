@@ -12,10 +12,10 @@
 
 ## Bloqueantes para beta privada
 
-- [ ] Onboarding y owner verificados.
+- [ ] Onboarding, trial de 14 días, owner y aceptaciones versionadas verificados.
 - [ ] Invitaciones seguras y proveedor de correo configurados.
 - [ ] Recuperación de contraseña probada.
-- [ ] Guardas de suscripción y límites aprobados.
+- [ ] Guardas de suscripción y límites probadas para `active`, `trialing`, `past_due`, `inactive`, `cancelled` y error temporal.
 - [ ] Términos y aviso de privacidad publicados y revisados.
 - [ ] Backups y smoke test verificados.
 

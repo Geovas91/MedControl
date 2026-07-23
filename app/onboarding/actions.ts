@@ -25,7 +25,7 @@ export async function completeOnboardingAction(formData: FormData) {
     clinicName,
     legalName: asString(formData.get("legal_name")) || null,
     phone: asString(formData.get("phone")) || null,
-    email: asString(formData.get("email")) || null,
+    clinicEmail: asString(formData.get("clinic_email")) || null,
     timezone: asString(formData.get("timezone")) || "America/Mexico_City",
     country: asString(formData.get("country")) || null,
     region: asString(formData.get("region")) || null,

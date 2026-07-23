@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { getOnboardingStatus } from "@/lib/onboarding";
 import { listClinicMembersForClinic, type ClinicMemberRole } from "@/lib/supabase/clinic-members";
 import { getClinicPlanContext } from "@/lib/supabase/subscriptions";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { formatDate } from "@/lib/utils";
 
 const roleLabels: Record<ClinicMemberRole, string> = {
@@ -46,9 +47,10 @@ export default async function MembersPage() {
   }
 
   const clinicId = onboardingStatus.membership.clinic_id;
-  const [planContextResult, membersResult] = await Promise.all([
+  const [planContextResult, membersResult, entitlementsResult] = await Promise.all([
     getClinicPlanContext(clinicId),
-    listClinicMembersForClinic(clinicId)
+    listClinicMembersForClinic(clinicId),
+    getClinicEntitlements(clinicId)
   ]);
 
   const planContext = planContextResult.data;
@@ -84,7 +86,7 @@ export default async function MembersPage() {
         </section>
       ) : null}
 
-      {planContext ? <AddMemberForm canAddDoctor={planContext.canAddDoctor} /> : null}
+      {planContext && canCreateWithEntitlements(entitlementsResult) ? <AddMemberForm canAddDoctor={planContext.canAddDoctor} /> : null}
 
       <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-5">

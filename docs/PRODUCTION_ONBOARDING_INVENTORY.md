@@ -15,9 +15,9 @@
 
 ## Implementado aquí
 
-- Migración 0015 pendiente de aplicar con RPC de onboarding atómica y campos operativos de clínica.
+- Migración 0015 pendiente de aplicar con RPC de onboarding atómica, bloqueo de concurrencia, correo de identidad separado del correo de clínica, trial de 14 días y evidencia versionada de aceptaciones.
 - Formulario de onboarding en tres pasos, sin cobrar ni crear pagos clínicos.
-- Entitlements de servidor y bloqueo de altas de pacientes, citas y pagos cuando no hay trial/estado activo.
+- Entitlements de servidor con estados explícitos y bloqueo de altas de pacientes, citas, pagos, notas, consentimientos, plantillas y miembros cuando no hay trial/estado activo.
 - `/api/health` mínimo, `/api/ready`, cabeceras HTTP básicas y páginas de error.
 - Recuperación de contraseña, documentación operativa, inventario demo y revisión estática de aislamiento.
 

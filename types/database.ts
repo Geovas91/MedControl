@@ -59,6 +59,29 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["clinics"]["Insert"]>;
       };
+      clinic_onboarding_acceptances: {
+        Row: {
+          id: string;
+          clinic_id: string;
+          user_id: string;
+          terms_version: string;
+          privacy_version: string;
+          clinical_responsibility_version: string;
+          accepted_at: Timestamp;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          clinic_id: string;
+          user_id: string;
+          terms_version: string;
+          privacy_version: string;
+          clinical_responsibility_version: string;
+          accepted_at?: Timestamp;
+          created_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["clinic_onboarding_acceptances"]["Insert"]>;
+      };
       clinic_subscriptions: {
         Row: {
           id: string;
@@ -687,7 +710,7 @@ export type Database = {
         Returns: string;
       };
       complete_clinic_onboarding_for_current_user: {
-        Args: { p_clinic_name: string; p_legal_name: string | null; p_phone: string | null; p_email: string | null; p_timezone: string; p_country: string | null; p_region: string | null; p_address: string | null; p_owner_full_name: string; p_plan_id: string; p_accepted_terms: boolean; p_accepted_privacy: boolean; p_accepted_clinical_responsibility: boolean };
+        Args: { p_clinic_name: string; p_legal_name: string | null; p_phone: string | null; p_clinic_email: string | null; p_timezone: string; p_country: string | null; p_region: string | null; p_address: string | null; p_owner_full_name: string; p_plan_id: string; p_accepted_terms: boolean; p_accepted_privacy: boolean; p_accepted_clinical_responsibility: boolean };
         Returns: string;
       };
       get_public_consent_for_signing: {

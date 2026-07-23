@@ -1,7 +1,7 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { signOutAction } from "@/app/(auth)/actions";
 import { getOnboardingStatus } from "@/lib/onboarding";
-import { getClinicEntitlements } from "@/lib/server/entitlements";
+import { getClinicEntitlements, getEntitlementNotice } from "@/lib/server/entitlements";
 import { redirect } from "next/navigation";
 
 async function getDashboardAccount() {
@@ -21,7 +21,7 @@ async function getDashboardAccount() {
   return {
     name: fullName ?? onboardingStatus.user.email ?? "Usuario autenticado",
     subtitle: onboardingStatus.user.email ?? "Sesión activa en Supabase",
-    subscriptionNotice: entitlements.readOnlyReason
+    subscriptionNotice: getEntitlementNotice(entitlements)
   };
 }
 

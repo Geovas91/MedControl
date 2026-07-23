@@ -77,7 +77,7 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
               <Field label="Nombre legal (opcional)" htmlFor="legal_name"><Input id="legal_name" name="legal_name" autoComplete="organization" /></Field>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Teléfono" htmlFor="phone"><Input id="phone" name="phone" autoComplete="tel" /></Field>
-                <Field label="Correo de la clínica" htmlFor="email"><Input id="email" name="email" type="email" autoComplete="email" defaultValue={status.user?.email ?? ""} /></Field>
+                <Field label="Correo administrativo de la clínica" htmlFor="clinic_email"><Input id="clinic_email" name="clinic_email" type="email" autoComplete="email" /></Field>
                 <Field label="Zona horaria" htmlFor="timezone"><Select id="timezone" name="timezone" defaultValue="America/Mexico_City"><option value="America/Mexico_City">Ciudad de México</option><option value="America/Tijuana">Tijuana</option><option value="America/Cancun">Cancún</option></Select></Field>
                 <Field label="País" htmlFor="country"><Input id="country" name="country" defaultValue="México" autoComplete="country-name" /></Field>
                 <Field label="Estado o región" htmlFor="region"><Input id="region" name="region" autoComplete="address-level1" /></Field>
