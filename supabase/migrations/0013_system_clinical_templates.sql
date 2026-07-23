@@ -14,8 +14,17 @@ alter table public.medical_note_templates
     or (not is_system_template and clinic_id is not null and system_key is null)
   ) not valid;
 
--- Do not rewrite clinic-owned rows. Fail the migration instead of leaving an
--- unvalidated invariant if pre-existing data does not already fit this shape.
+-- Older local seeds marked clinic-owned demo templates as system rows. They are
+-- not global masters: preserve their identity and tenant ownership while
+-- normalizing only that incompatible legacy shape before validating the rule.
+update public.medical_note_templates as template
+set is_system_template = false,
+    system_key = null
+where template.is_system_template = true
+  and template.clinic_id is not null;
+
+-- Do not rewrite any other clinic-owned rows. Fail the migration instead of
+-- leaving an unvalidated invariant if pre-existing data still does not fit.
 do $$
 begin
   if exists (

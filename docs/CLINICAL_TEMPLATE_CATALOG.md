@@ -6,8 +6,9 @@ obstetricia, Medicina interna, Cardiología, Endocrinología, Dermatología,
 Traumatología y ortopedia, Gastroenterología, Neurología, Psiquiatría, and
 Psicología.
 
-Each master has a stable `system_key` ending in `v1`. Future revisions must use a
-new key rather than rewriting a template copied by a clinic. The current seed uses
+Each master has an explicit semantic `system_key` ending in `v1`; no key depends on
+its position in the catalog. Future revisions must use a new `_v2` key rather than
+rewriting a template copied by a clinic. The current seed uses
 `template_schema.content` as safe text and does not render HTML, Markdown, scripts,
 or dynamic placeholders.
 

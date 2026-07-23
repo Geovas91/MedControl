@@ -159,7 +159,7 @@ values (
   'General Medicine',
   'Fictional template for local development.',
   '{"sections":[{"id":"reason","title":"Reason for consultation","fields":[{"id":"reason","label":"Reason","type":"textarea","required":true}]}]}'::jsonb,
-  true,
+  false,
   '00000000-0000-0000-0000-000000000001'
 )
 on conflict (id) do nothing;
