@@ -9,12 +9,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#16213f",
+        ink: "var(--foreground)",
         mint: "#10b981",
-        clinic: "#0f766e"
+        clinic: "var(--clinic)"
       },
       boxShadow: {
-        soft: "0 18px 45px rgba(15, 23, 42, 0.08)"
+        soft: "var(--shadow-soft)",
+        glass: "var(--shadow-glass)",
+        dialog: "var(--shadow-dialog)"
       }
     }
   },

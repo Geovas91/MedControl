@@ -2,9 +2,9 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const styles = {
-  primary: "bg-clinic text-white shadow-soft hover:bg-teal-800",
-  secondary: "bg-white text-ink ring-1 ring-slate-200 hover:bg-slate-50",
-  ghost: "text-slate-700 hover:bg-slate-100"
+  primary: "bg-clinic text-white shadow-xs hover:bg-[var(--clinic-hover)]",
+  secondary: "border border-[var(--border)] bg-white text-ink shadow-xs hover:bg-[var(--surface-muted)]",
+  ghost: "text-[var(--foreground-soft)] hover:bg-[var(--surface-muted)]"
 };
 
 type BaseProps = {
@@ -22,7 +22,7 @@ export function ButtonLink({ children, className, href, variant = "primary" }: B
     <Link
       href={href}
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition",
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 text-sm font-semibold transition duration-150 disabled:pointer-events-none disabled:opacity-55",
         styles[variant],
         className
       )}
@@ -41,7 +41,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-md px-4 text-sm font-semibold transition",
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 text-sm font-semibold transition duration-150 disabled:pointer-events-none disabled:opacity-55",
         styles[variant],
         className
       )}

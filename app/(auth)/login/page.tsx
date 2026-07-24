@@ -19,8 +19,8 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
   const forgotPasswordHref = next ? `/forgot-password?next=${encodeURIComponent(next)}` : "/forgot-password";
 
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-50 px-4 py-10">
-      <section className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
+    <main className="auth-shell grid place-items-center">
+      <section className="auth-card w-full max-w-md p-6 sm:p-7">
         <Link href="/" className="mb-8 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
             <Stethoscope className="h-5 w-5" />

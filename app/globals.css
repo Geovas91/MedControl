@@ -4,26 +4,141 @@
 
 :root {
   color-scheme: light;
+  --background: #f4f7f9;
+  --background-soft: #eef4f5;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --surface-glass: rgba(255, 255, 255, 0.78);
+  --foreground: #172033;
+  --foreground-soft: #475569;
+  --foreground-muted: #64748b;
+  --clinic: #0f766e;
+  --clinic-hover: #0b665f;
+  --clinic-soft: #e7f5f3;
+  --clinic-border: #b9e3de;
+  --medical-blue: #2563eb;
+  --medical-blue-soft: #eff6ff;
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --warning: #b45309;
+  --warning-soft: #fff7ed;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --info: #1d4ed8;
+  --info-soft: #eff6ff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 5px 16px rgba(15, 23, 42, 0.06);
+  --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.08);
+  --shadow-glass: 0 10px 35px rgba(15, 23, 42, 0.08);
+  --shadow-dialog: 0 24px 70px rgba(15, 23, 42, 0.18);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
+
+html { max-width: 100%; overflow-x: hidden; background: var(--background); }
 
 body {
   margin: 0;
-  background: #f7faf9;
-  color: #16213f;
+  min-width: 320px;
+  max-width: 100%;
+  overflow-x: hidden;
+  background:
+    radial-gradient(ellipse 55% 34% at 88% -5%, rgba(20, 184, 166, 0.1), transparent 72%),
+    radial-gradient(ellipse 42% 28% at 5% 0%, rgba(37, 99, 235, 0.06), transparent 72%),
+    var(--background);
+  color: var(--foreground);
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+button, input, select, textarea { font: inherit; }
+
+button, [role="button"], a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+
+::selection { background: var(--clinic-border); color: var(--foreground); }
+
+:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.35);
+  outline-offset: 2px;
 }
 
-::selection {
-  background: #b7f7e5;
-  color: #0f172a;
+@layer components {
+  .surface-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .clinical-surface {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .glass-panel, .glass-nav, .glass-toolbar {
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    background: var(--surface-glass);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-panel { border-radius: var(--radius-lg); }
+  .glass-nav { border-radius: var(--radius-md); }
+  .glass-toolbar { border-radius: var(--radius-md); }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass-panel, .glass-nav, .glass-toolbar {
+      -webkit-backdrop-filter: blur(18px);
+      backdrop-filter: blur(18px);
+    }
+  }
+
+  .auth-shell {
+    min-height: 100vh;
+    padding: 2.5rem 1rem;
+    background:
+      radial-gradient(ellipse 55% 40% at 85% 10%, rgba(20, 184, 166, 0.16), transparent 70%),
+      radial-gradient(ellipse 45% 30% at 8% 6%, rgba(37, 99, 235, 0.1), transparent 70%),
+      var(--background-soft);
+  }
+
+  .auth-card {
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: var(--radius-xl);
+    background: var(--surface);
+    box-shadow: var(--shadow-dialog);
+  }
+
+  .filter-toolbar {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-glass);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .responsive-grid-child { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .glass-panel, .glass-nav, .glass-toolbar, .filter-toolbar { background: rgba(255, 255, 255, 0.94); }
+}
+
+@media print {
+  * { box-shadow: none !important; text-shadow: none !important; }
+  html, body { background: #fff !important; color: #000 !important; }
+  .glass-panel, .glass-nav, .glass-toolbar, .filter-toolbar, .auth-card, .surface-card { background: #fff !important; }
+  nav, header, footer, button, [role="button"], .print-hidden { display: none !important; }
+  a { color: inherit !important; text-decoration: none !important; }
 }

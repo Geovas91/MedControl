@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { defaultLocale, getHtmlLang, getMessages } from "@/config/i18n";
 import { seoConfig } from "@/config/seo";
@@ -11,6 +11,12 @@ export const metadata: Metadata = {
   title: defaultMessages.metadata.title || seoConfig.title,
   description: defaultMessages.metadata.description || seoConfig.description,
   applicationName: seoConfig.siteName
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover"
 };
 
 export default function RootLayout({

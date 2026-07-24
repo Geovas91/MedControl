@@ -38,8 +38,8 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
   const fullName = status.profile?.full_name ?? null;
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-10">
-      <section className="mx-auto w-full max-w-3xl rounded-lg border border-slate-200 bg-white p-6 shadow-soft sm:p-8">
+    <main className="auth-shell">
+      <section className="auth-card mx-auto w-full max-w-3xl p-6 sm:p-8">
         <Link href="/" className="mb-8 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
             <Stethoscope className="h-5 w-5" />

@@ -9,8 +9,10 @@
     "lint": "eslint .",
     "audit:brand": "node scripts/audit-brand.mjs",
     "audit:server-only": "node scripts/audit-server-only-admin.mjs",
+    "audit:ui": "node scripts/audit-ui.mjs",
     "check:supabase": "node scripts/check-supabase-config.mjs",
-    "test:invitation-email": "node --experimental-strip-types scripts/test-invitation-email.ts"
+    "test:invitation-email": "node --experimental-strip-types scripts/test-invitation-email.ts",
+    "test:pre-staging": "node scripts/test-pre-staging.mjs"
   },
   "engines": {
     "node": ">=20.9.0"

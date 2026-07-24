@@ -164,7 +164,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         </div>
       </section>
 
-      <form className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_12rem_14rem_auto] xl:items-end">
+      <form className="filter-toolbar mb-5 grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_12rem_14rem_auto] xl:items-end">
         <input type="hidden" name="date" value={data.query.date} />
         <label className="grid gap-1.5 text-sm font-medium text-slate-700">
           <span>Buscar</span>
@@ -215,7 +215,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         </div>
       </section>
 
-      <section className="mt-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <section className="surface-card mt-5 p-4 sm:p-5">
         <div className="grid gap-4">
           {data.appointments.map((appointment) => {
             const time = formatAppointmentTimeRange(appointment.starts_at, appointment.ends_at, timeZone);

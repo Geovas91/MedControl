@@ -87,7 +87,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
         }
       />
 
-      <form className="mb-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
+      <form className="filter-toolbar mb-5 grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
         <label className="grid gap-1.5 text-sm font-medium text-slate-700">
           <span>Buscar pacientes</span>
           <span className="relative">
@@ -144,7 +144,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
         </form>
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="surface-card overflow-hidden">
         <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.6fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
           <span>Paciente</span>
           <span>Contacto</span>

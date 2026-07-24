@@ -1,10 +1,10 @@
 import { cn } from "@/lib/utils";
 
 const variants = {
-  green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  amber: "bg-amber-50 text-amber-700 ring-amber-200",
-  slate: "bg-slate-100 text-slate-700 ring-slate-200",
-  teal: "bg-teal-50 text-teal-700 ring-teal-200"
+  green: "bg-[var(--success-soft)] text-[var(--success)] ring-emerald-200",
+  amber: "bg-[var(--warning-soft)] text-[var(--warning)] ring-amber-200",
+  slate: "bg-[var(--surface-muted)] text-[var(--foreground-soft)] ring-[var(--border)]",
+  teal: "bg-[var(--clinic-soft)] text-clinic ring-[var(--clinic-border)]"
 };
 
 type BadgeProps = {
