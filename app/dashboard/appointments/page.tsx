@@ -164,7 +164,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         </div>
       </section>
 
-      <form className="filter-toolbar mb-5 grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_12rem_14rem_auto] xl:items-end">
+      <form className="filter-toolbar print-hidden mb-5 grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_12rem_14rem_auto] xl:items-end">
         <input type="hidden" name="date" value={data.query.date} />
         <label className="grid gap-1.5 text-sm font-medium text-slate-700">
           <span>Buscar</span>

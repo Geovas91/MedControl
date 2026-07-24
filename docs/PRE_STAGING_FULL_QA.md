@@ -37,3 +37,11 @@ Esta lista verifica el PR visual sin usar credenciales reales, datos reales ni S
 - [ ] Confirmar que glass se limita a navegación, toolbar y paneles no clínicos; revisar fallback sin `backdrop-filter`.
 - [ ] Revisar impresión de nota, consentimiento y expediente: sin navegación/glass/botones, firma visible y sin cortes.
 - [ ] Capturas locales sin datos sensibles: landing desktop/móvil, dashboard desktop/móvil, expediente desktop, agenda móvil, login y miembros.
+- [ ] Drawer a 320/390 px: Enter/Espacio abre, foco entra, Tab/Shift+Tab no escapan, Escape/backdrop/cambio de ruta cierran, body no scroll y el foco regresa al control de origen.
+- [ ] Navegación inferior: safe area de iPhone y Android, formularios/mensajes no quedan tapados y “Más” abre el drawer modal correcto.
+- [ ] Print preview: nota clínica, consentimiento firmado, expediente y pago conservan encabezados internos, firma, identidad y badges importantes como texto; sólo shell/acciones desaparecen.
+- [ ] Overflow: en landing, login, dashboard, pacientes, agenda, pagos y miembros a 320/360/390 px comprobar `document.documentElement.scrollWidth <= document.documentElement.clientWidth`.
+
+## Estado de ejecución
+
+La base de QA pre-staging y los checks estáticos automatizados están completados. La ejecución autenticada, cross-browser, en dispositivos físicos y print preview continúa pendiente y debe registrarse en la matriz; esta lista no afirma QA completo.

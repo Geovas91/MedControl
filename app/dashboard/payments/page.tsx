@@ -114,7 +114,7 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
         </p>
       ) : null}
 
-      <form className="filter-toolbar grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-6 xl:items-end">
+      <form className="filter-toolbar print-hidden grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-6 xl:items-end">
         <label className="grid gap-1.5 text-sm font-medium text-slate-700 sm:col-span-2 xl:col-span-2">
           <span>Buscar</span>
           <span className="relative">

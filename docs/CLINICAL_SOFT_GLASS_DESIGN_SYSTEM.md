@@ -24,7 +24,11 @@ Glass está prohibido en notas, expediente, consentimientos, firmas, pagos, tabl
 
 ## Responsive, accesibilidad e impresión
 
-La sidebar es persistente sólo desde escritorio; móvil mantiene drawer y navegación inferior de acciones esenciales. Las tablas existentes conservan scroll horizontal cuando es necesario y las listas principales ya se adaptan a filas/cards. Los controles tienen foco visible y altura mínima de 44 px cuando usan los componentes base. La impresión elimina glass, navegación, sombras y controles, conserva superficies blancas y texto negro.
+La sidebar es persistente sólo desde escritorio; móvil mantiene un drawer modal y navegación inferior de acciones esenciales. Al abrir el drawer, el foco se mueve al cierre, Tab y Shift+Tab permanecen dentro, Escape/backdrop/ruta lo cierran, el body bloquea scroll y el foco vuelve al control de origen. La raíz de la aplicación queda inerte mientras el diálogo está abierto, sin aplicar `aria-hidden` al ancestro del drawer.
+
+La navegación inferior y el contenido del dashboard consideran `safe-area-inset-bottom`. Las tablas existentes conservan scroll horizontal cuando es necesario; no se usa `overflow-x: hidden` global para ocultar errores de layout. Las listas principales ya se adaptan a filas/cards y los hijos de grids/flex deben usar `min-w-0` cuando el contenido pueda desbordar.
+
+La impresión elimina glass, navegación y controles sólo mediante clases semánticas: `app-navigation`, `app-topbar`, `app-mobile-navigation`, `app-sidebar`, `app-version-footer`, `non-printable-action` y `print-hidden`. No se ocultan globalmente `header`, `footer`, `nav`, botones ni roles, por lo que encabezados, pies, firma y contenido clínico interno se conservan. `print-only` permite encabezados imprimibles cuando una ruta ya los necesita.
 
 ## Motion y mantenimiento
 

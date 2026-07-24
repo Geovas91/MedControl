@@ -87,7 +87,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
         }
       />
 
-      <form className="filter-toolbar mb-5 grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
+      <form className="filter-toolbar print-hidden mb-5 grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
         <label className="grid gap-1.5 text-sm font-medium text-slate-700">
           <span>Buscar pacientes</span>
           <span className="relative">

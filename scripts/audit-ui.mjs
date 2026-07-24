@@ -47,6 +47,23 @@ else {
   for (const token of ["--background", "--surface", "--clinic", "--shadow-glass", "--radius-md", ".glass-panel", "@media print"]) {
     if (!css.includes(token)) failures.push(`${globals}: missing required design token or fallback ${token}`);
   }
+  if (/overflow-x\s*:\s*hidden/i.test(css)) failures.push(`${globals}: global overflow-x:hidden hides responsive regressions`);
+  const printCss = css.slice(css.indexOf("@media print"));
+  if (/nav\s*,\s*header\s*,\s*footer|button\s*,\s*\[role=["']button["']\]/i.test(printCss)) {
+    failures.push(`${globals}: print styles must not indiscriminately hide document headers, footers, navigation, or all buttons`);
+  }
+  for (const selector of [".app-navigation", ".app-topbar", ".app-mobile-navigation", ".non-printable-action", ".print-only", "safe-area-inset-bottom"]) {
+    if (!css.includes(selector)) failures.push(`${globals}: missing print or safe-area selector ${selector}`);
+  }
+}
+
+const dashboardShell = "components/dashboard/dashboard-shell.tsx";
+if (!existsSync(dashboardShell)) failures.push(`${dashboardShell}: accessible mobile drawer is missing`);
+else {
+  const source = readFileSync(dashboardShell, "utf8");
+  for (const requirement of ['role="dialog"', 'aria-modal="true"', "aria-controls={DRAWER_ID}", "focusableSelector", 'event.key === "Escape"', "document.body.style.overflow", "appContent.inert", "safe-area-inset-bottom"]) {
+    if (!source.includes(requirement)) failures.push(`${dashboardShell}: missing accessible drawer requirement ${requirement}`);
+  }
 }
 
 if (failures.length) {

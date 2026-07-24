@@ -41,13 +41,11 @@
 
 * { box-sizing: border-box; }
 
-html { max-width: 100%; overflow-x: hidden; background: var(--background); }
+html { background: var(--background); }
 
 body {
   margin: 0;
   min-width: 320px;
-  max-width: 100%;
-  overflow-x: hidden;
   background:
     radial-gradient(ellipse 55% 34% at 88% -5%, rgba(20, 184, 166, 0.1), transparent 72%),
     radial-gradient(ellipse 42% 28% at 5% 0%, rgba(37, 99, 235, 0.06), transparent 72%),
@@ -122,6 +120,13 @@ button, [role="button"], a, input, select, textarea { -webkit-tap-highlight-colo
   }
 
   .responsive-grid-child { min-width: 0; }
+
+  .print-only { display: none; }
+}
+
+@media (max-width: 1023px) {
+  .app-main-content { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+  .app-mobile-drawer { padding-bottom: env(safe-area-inset-bottom); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -139,6 +144,7 @@ button, [role="button"], a, input, select, textarea { -webkit-tap-highlight-colo
   * { box-shadow: none !important; text-shadow: none !important; }
   html, body { background: #fff !important; color: #000 !important; }
   .glass-panel, .glass-nav, .glass-toolbar, .filter-toolbar, .auth-card, .surface-card { background: #fff !important; }
-  nav, header, footer, button, [role="button"], .print-hidden { display: none !important; }
+  .app-navigation, .app-topbar, .app-mobile-navigation, .app-sidebar, .app-version-footer, .non-printable-action, .print-hidden { display: none !important; }
+  .print-only { display: block !important; }
   a { color: inherit !important; text-decoration: none !important; }
 }

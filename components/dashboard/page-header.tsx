@@ -18,7 +18,7 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
         <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--foreground-muted)]">{description}</p>
       </div>
       {action ? (
-        <ButtonLink href={action.href} className="sm:w-auto">
+        <ButtonLink href={action.href} className="non-printable-action sm:w-auto">
           {action.icon}
           {action.label}
         </ButtonLink>
