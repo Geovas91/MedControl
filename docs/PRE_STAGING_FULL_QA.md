@@ -6,12 +6,13 @@ Esta lista verifica el PR visual sin usar credenciales reales, datos reales ni S
 
 ## Automatizado
 
-- [ ] `npm ci`
-- [ ] `npm run test:pre-staging`
-- [ ] `npm run lint`
-- [ ] `npm run build`
-- [ ] `git diff --check`
-- [ ] Si existe PostgreSQL local: `supabase db lint --local`
+- [x] `npm ci`
+- [x] `npm run test:pre-staging`
+- [x] `npm run test:browser` para rutas públicas, overflow, redirects, health/readiness, 404 y Axe básico
+- [x] `npm run lint`
+- [x] `npm run build`
+- [x] `git diff --check`
+- [ ] Blocked — `supabase db lint --local`: PostgreSQL local no está disponible
 
 ## Funcional y seguridad
 
@@ -44,4 +45,4 @@ Esta lista verifica el PR visual sin usar credenciales reales, datos reales ni S
 
 ## Estado de ejecución
 
-La base de QA pre-staging y los checks estáticos automatizados están completados. La ejecución autenticada, cross-browser, en dispositivos físicos y print preview continúa pendiente y debe registrarse en la matriz; esta lista no afirma QA completo.
+La base de QA pre-staging, los checks estáticos y las rutas públicas automatizadas están completados. La ejecución autenticada, cross-browser, en dispositivos físicos y print preview continúa pendiente y debe registrarse en la matriz; esta lista no afirma QA completo.

@@ -12,6 +12,7 @@
     "audit:ui": "node scripts/audit-ui.mjs",
     "check:supabase": "node scripts/check-supabase-config.mjs",
     "test:invitation-email": "node --experimental-strip-types scripts/test-invitation-email.ts",
+    "test:browser": "playwright test",
     "test:pre-staging": "node scripts/test-pre-staging.mjs"
   },
   "engines": {
@@ -29,6 +30,8 @@
     "tailwind-merge": "^2.6.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.61.1",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",

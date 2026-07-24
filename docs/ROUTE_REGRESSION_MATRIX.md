@@ -1,18 +1,28 @@
 # Route regression matrix
 
-| Ruta | Rol/estado | Función preservada | Cambio visual | Prueba | Resultado | Observaciones |
+Results below distinguish executed checks from environmental/manual work. `Pass` means the named automated test ran; it does not imply all authenticated workflows were exercised.
+
+| Ruta | Rol/estado | Viewport | Navegador | Prueba | Resultado | Observaciones |
 | --- | --- | --- | --- | --- | --- | --- |
-| `/` | Público | Landing y pricing | Hero y navegación glass moderado | Carga + 390/1280 px | Pendiente manual | Sin cambios comerciales |
-| `/login`, `/register` | Público | Auth y `next` seguro | Auth shell y formulario sólido | Carga + teclado | Pendiente manual | Sin cambios de action |
-| `/onboarding` | Auth | Trial y alta | Auth shell | Formulario responsive | Pendiente manual | Sin cambios de FormData |
-| `/dashboard` | Miembro activo | Métricas reales | Shell, topbar y KPI | Sesión demo | Pendiente manual | Aviso demo visible |
-| `/dashboard` | Miembro activo, 320/390 px | Drawer y navegación inferior | Diálogo accesible + safe area | Teclado, Escape, Tab/Shift+Tab, backdrop y cambio de ruta | Pendiente manual | Foco/scroll deben restaurarse |
-| `/dashboard/patients` | Miembro activo | Filtro y paginación | Toolbar y tabla sólida | Query params | Pendiente manual | Sin cambios de consulta |
-| `/dashboard/appointments` | Miembro activo | Agenda y acciones | Toolbar y superficies sólidas | Estados | Pendiente manual | Sin cambios de action |
-| `/dashboard/payments` | Miembro activo | Pagos clínicos | Toolbar y tabla sólida | Filtros | Pendiente manual | Sin cambio a SaaS billing |
-| `/dashboard/members` | Owner/admin | Miembros e invitaciones | Tablas sólidas | Estados de invitación | Pendiente manual | Sin cambios Resend |
-| `/consent/sign/[token]` | Público | Firma | Superficie sólida | Token inválido/firmado | Pendiente manual | Headers intactos |
-| `*` | Público | Not found/error | Auth shell sólido | Carga + teclado | Pendiente manual | Sin datos en metadata |
+| `/` | Público | 320, 360, 390, 430, 768, 1280, 1440 | Chromium local | Carga, `main`, consola y `scrollWidth <= clientWidth` | Pass | Playwright, sin credenciales ni datos reales |
+| `/login` | Público | 320, 360, 390, 430, 768, 1280, 1440 | Chromium local | Carga, consola y overflow | Pass | Playwright |
+| `/register` | Público | 320, 360, 390, 430, 768, 1280, 1440 | Chromium local | Carga, consola y overflow | Pass | Playwright |
+| `/forgot-password` | Público | 320, 360, 390, 430, 768, 1280, 1440 | Chromium local | Carga, consola y overflow | Pass | Playwright |
+| `/onboarding` | Sin sesión | 1280 | Chromium local | Redirect seguro a login | Pass | Playwright; flujo autenticado pendiente |
+| `/dashboard` | Sin sesión | 1280 | Chromium local | Redirect seguro a login | Pass | Playwright; métricas reales pendientes |
+| `/invite/token-invalido` | Público | 1280 | Chromium local | Contenido genérico, sin correo expuesto | Pass | Playwright |
+| `/api/health` | Público | N/A | Request local | HTTP 200 | Pass | Playwright request |
+| `/api/ready` | Público | N/A | Request local | HTTP 200 o 503 según configuración local | Pass | Playwright request; no se cambió configuración |
+| `/ruta-inexistente` | Público | 1280 | Chromium local | HTTP 404 y heading de not found | Pass | Playwright |
+| `/`, `/login` | Público | 1280 | Chromium local | Axe WCAG 2 A/AA, sin severidad serious/critical | Pass | Auditoría automática; no afirma WCAG completa |
+| `/`, `/login` | Público | 1440 / 390 | Chromium local | Capturas locales sin sesión ni datos sensibles | Pass | Artefactos efímeros de Playwright, ignorados por Git |
+| `/dashboard` | Miembro demo | 320, 390 | Chromium/Edge | Drawer, topbar, sidebar, safe area y retorno de foco | Blocked | No se usó sesión demo durante la ejecución pública |
+| `/dashboard/patients` y detalle | Miembro demo | 320–1440 | Chromium/Edge | Listado, búsqueda, filtro, paginación, crear/editar | Blocked | Requiere sesión demo y datos de prueba autorizados |
+| `/dashboard/appointments` y detalle | Miembro demo | 320–1440 | Chromium/Edge | Agenda, filtros, crear, editar, estados | Blocked | Requiere sesión demo |
+| `/dashboard/payments` | Miembro demo | 320–1440 | Chromium/Edge | Pagos clínicos, importes y mobile | Blocked | Requiere sesión demo |
+| Notas, expediente y consentimientos | Miembro demo/público | 320–1440 | Chromium/Edge | Permisos, firma, inmutabilidad y superficies sólidas | Blocked | No se usaron datos clínicos ni tokens de firma |
+| Nota, consentimiento, expediente y pago | Datos demo | Print preview | Chromium/Edge/Firefox | Shell/acciones ocultas; contenido y firma conservados | Blocked | Revisión manual de impresión pendiente |
+| Todas las rutas visuales | Público/autenticado | 1920, Firefox, WebKit y dispositivos físicos | Firefox/WebKit/dispositivo | Layout, contraste, safe area, glass fallback | Blocked | Sólo Chromium local fue ejecutado |
 
 ## Rollback
 
