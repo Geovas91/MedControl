@@ -22,7 +22,7 @@ Este plan es para staging controlado. No despliega, no aplica migraciones y no a
 
 ## D. Correo
 
-La entrega de invitaciones no está implementada. `EMAIL_REQUIRED=false` deja el chequeo de correo como `disabled` y permite readiness si base de datos está disponible. `EMAIL_REQUIRED=true` mantiene `GET /api/ready` en `503` como `required_unavailable` hasta que exista y se valide un proveedor real; variables ficticias no producen estado `ready`.
+Con Resend válido, readiness reporta `ready` sin enviar correo. Sin configuración, `EMAIL_REQUIRED=false` reporta `disabled` y permite staging; con `EMAIL_REQUIRED=true` reporta `required_unavailable` y 503. Confirmar dominio, SPF y DKIM durante la preparación DonWeb, sin usar destinatarios reales no autorizados.
 
 ## E. Operación y rollback
 

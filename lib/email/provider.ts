@@ -1,11 +1,13 @@
 import "server-only";
 
-export type EmailProviderReadiness = "disabled" | "required_unavailable";
+export { getInvitationEmailConfiguration } from "@/lib/email/config";
+import { getInvitationEmailConfiguration } from "@/lib/email/config";
+
+export type EmailProviderReadiness = "disabled" | "ready" | "required_unavailable";
 
 /**
- * Email delivery is intentionally not implemented in this stage. This exposes
- * readiness only. Environment values cannot enable delivery until a real provider is implemented and verified.
+ * Readiness is derived from the implemented Resend integration and validated server-only configuration.
  */
 export function getEmailProviderReadiness(): EmailProviderReadiness {
-  return process.env.EMAIL_REQUIRED === "true" ? "required_unavailable" : "disabled";
+  return getInvitationEmailConfiguration().state;
 }

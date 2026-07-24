@@ -13,9 +13,11 @@ La migración `0016_clinic_member_invitations.sql` agrega invitaciones seguras p
 
 ## Flujo operativo sin proveedor de correo
 
-No hay proveedor de correo configurado ni se envían mensajes en esta etapa. Owner/admin crea la invitación desde `/dashboard/members`, copia el enlace que se muestra una sola vez y lo comparte por un canal aprobado. El destinatario abre `/invite/[token]`, inicia sesión o se registra y acepta con el mismo correo invitado.
+Cuando Resend no está configurado, owner/admin crea la invitación desde `/dashboard/members`, copia el enlace que se muestra una sola vez y lo comparte por un canal aprobado. El destinatario abre `/invite/[token]`, inicia sesión o se registra y acepta con el mismo correo invitado.
 
-El enlace es personal, no debe compartirse ni incluirse en logs, capturas o tickets. Owner/admin puede rotarlo o revocarlo desde la lista de invitaciones. Una invitación vencida se presenta como `expired` y debe crearse otra; no conserva acciones como si siguiera vigente. La entrega de correo aún no está implementada: `EMAIL_REQUIRED=true` mantiene `/api/ready` en `503` hasta que exista y se valide un proveedor real. Las variables de correo no habilitan envío.
+Cuando Resend está configurado, la creación y la generación de enlace nuevo envían una sola vez el enlace recién emitido. Si la entrega falla o está deshabilitada, la invitación sigue activa y la interfaz ofrece copia manual. Los detalles operativos están en `docs/INVITATION_EMAIL_DELIVERY.md`.
+
+El enlace es personal, no debe compartirse ni incluirse en logs, capturas o tickets. Owner/admin puede rotarlo o revocarlo desde la lista de invitaciones. Una invitación vencida se presenta como `expired` y debe crearse otra; no conserva acciones como si siguiera vigente. Con `EMAIL_REQUIRED=true`, `/api/ready` mantiene `503` hasta que exista una configuración real y válida de Resend; las variables válidas habilitan el envío desde servidor. Un timeout se informa como entrega no confirmada y no activa reintentos automáticos.
 
 ## Verificación manual
 

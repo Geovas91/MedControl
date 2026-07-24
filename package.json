@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint .",
     "audit:brand": "node scripts/audit-brand.mjs",
-    "check:supabase": "node scripts/check-supabase-config.mjs"
+    "audit:server-only": "node scripts/audit-server-only-admin.mjs",
+    "check:supabase": "node scripts/check-supabase-config.mjs",
+    "test:invitation-email": "node --experimental-strip-types scripts/test-invitation-email.ts"
   },
   "engines": {
     "node": ">=20.9.0"
@@ -21,6 +23,7 @@
     "next": "^16.2.7",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "resend": "^6.18.0",
     "tailwind-merge": "^2.6.1"
   },
   "devDependencies": {
