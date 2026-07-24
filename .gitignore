@@ -11,4 +11,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+dev-server.log
+docs/screenshots/
+playwright-report/
+test-results/
 .DS_Store

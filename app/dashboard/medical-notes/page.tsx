@@ -26,7 +26,7 @@ export default function MedicalNotesPage() {
         </ButtonLink>
       </div>
 
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="surface-card overflow-hidden">
         <div className="hidden grid-cols-[1fr_0.8fr_0.8fr_0.8fr_0.6fr_0.7fr_0.9fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 xl:grid">
           <span>Paciente</span>
           <span>Médico</span>

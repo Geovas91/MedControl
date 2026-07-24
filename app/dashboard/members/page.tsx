@@ -67,7 +67,7 @@ export default async function MembersPage() {
       />
 
       {planContext ? (
-        <section className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="surface-card mb-6 p-5">
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <p className="text-sm font-semibold text-slate-500">Plan actual</p>
@@ -91,7 +91,7 @@ export default async function MembersPage() {
 
       {planContext && canCreateWithEntitlements(entitlementsResult) ? <AddMemberForm canAddDoctor={planContext.canAddDoctor} /> : null}
 
-      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="surface-card mt-6 overflow-hidden">
         <div className="border-b border-slate-200 p-5">
           <h2 className="font-bold text-ink">Miembros actuales</h2>
           <p className="mt-1 text-sm text-slate-500">
@@ -133,7 +133,7 @@ export default async function MembersPage() {
         </div>
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <section className="surface-card mt-6 overflow-hidden">
         <div className="border-b border-slate-200 p-5">
           <h2 className="font-bold text-ink">Invitaciones</h2>
           <p className="mt-1 text-sm text-slate-500">Los enlaces se muestran sólo al crearlos o generar uno nuevo. Si Resend está configurado, también se intenta enviar el correo.</p>

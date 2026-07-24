@@ -57,7 +57,7 @@ export function EditAppointmentForm({
   const canSubmit = patients.length > 0 && doctors.length > 0;
 
   return (
-    <form action={formAction} className="grid gap-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+    <form action={formAction} className="surface-card grid gap-6 p-4 sm:p-6">
       <div className="flex items-start gap-3">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-teal-50 text-clinic">
           <CalendarClock className="h-5 w-5" />

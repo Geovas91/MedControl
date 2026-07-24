@@ -114,7 +114,7 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
         </p>
       ) : null}
 
-      <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6 xl:items-end">
+      <form className="filter-toolbar print-hidden grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-6 xl:items-end">
         <label className="grid gap-1.5 text-sm font-medium text-slate-700 sm:col-span-2 xl:col-span-2">
           <span>Buscar</span>
           <span className="relative">
@@ -175,7 +175,7 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {data.summaries.map((summary) => (
-            <article key={summary.currency} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <article key={summary.currency} className="surface-card p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-500">{summary.currency}</p>
@@ -200,7 +200,7 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
         </div>
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white shadow-sm" aria-label="Listado de pagos clínicos">
+      <section className="surface-card mt-6" aria-label="Listado de pagos clínicos">
         <div className="border-b border-slate-200 px-4 py-3 text-sm text-slate-600 sm:px-5">
           {data.filteredTotal > 0
             ? `Mostrando ${data.visibleFrom}-${data.visibleTo} de ${data.filteredTotal} resultados`

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { getSalesWhatsAppUrl } from "@/config/contact";
 import { commercialPlans, commonCommercialFeatures } from "@/config/plans";
 import { AppVersionLabel } from "@/components/app-version-label";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 import { ButtonLink } from "@/components/ui/button";
 import { formatMXN } from "@/lib/format";
 
@@ -70,13 +71,13 @@ export default function LandingPage() {
 
   return (
     <main className="bg-white">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <header className="glass-nav sticky top-0 z-30 mx-2 mt-2">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-[var(--radius-md)] bg-clinic text-white shadow-xs">
               <Sparkles className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold text-ink">CliniControl</span>
+            <span className="truncate text-lg font-bold text-ink">CliniControl</span>
           </div>
           <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
             <a href="#features" className="hover:text-clinic">
@@ -92,20 +93,20 @@ export default function LandingPage() {
               Contacto
             </a>
           </nav>
-          <ButtonLink href="/login" variant="secondary" className="h-10">
+          <ButtonLink href="/login" variant="secondary" className="h-10 min-h-10 shrink-0 px-3 text-xs sm:px-4 sm:text-sm">
             Iniciar sesión
           </ButtonLink>
         </div>
       </header>
 
-      <section className="relative overflow-hidden border-b border-slate-200 bg-[#f4fbf8]">
-        <div className="mx-auto grid max-w-7xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
-          <div className="flex flex-col justify-center">
+      <section className="relative overflow-hidden border-b border-[var(--border)] bg-[var(--background-soft)]">
+        <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
+          <div className="responsive-grid-child flex flex-col justify-center">
             <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-clinic">
               Gestión médica para clínicas en México
             </p>
             <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-ink sm:text-5xl lg:text-6xl">
-              CliniControl
+              El control total de tu clínica, en una sola plataforma
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
               Un SaaS claro para médicos y clínicas pequeñas que necesitan organizar pacientes, agenda, notas médicas,
@@ -120,11 +121,12 @@ export default function LandingPage() {
                 Ver planes
               </ButtonLink>
             </div>
+            <InstallAppButton className="mt-3 w-fit" />
           </div>
 
-          <div className="min-h-[360px] rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-            <div className="grid gap-4">
-              <div className="flex items-center justify-between rounded-md bg-slate-50 p-4">
+          <div className="responsive-grid-child glass-panel min-h-[360px] p-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="flex items-center justify-between rounded-[var(--radius-md)] bg-white/85 p-4">
                 <div>
                   <p className="text-sm font-semibold text-ink">Flujo de consulta de hoy</p>
                   <p className="text-xs text-slate-500">Lunes, 25 de mayo</p>
@@ -134,8 +136,8 @@ export default function LandingPage() {
                 </span>
               </div>
               {["09:00 Alicia Ramírez", "10:30 Nora Benítez", "12:00 Marco Silva"].map((item, index) => (
-                <div key={item} className="flex items-center gap-4 rounded-md border border-slate-200 p-4">
-                  <div className="grid h-10 w-10 place-items-center rounded-md bg-teal-50 text-sm font-bold text-clinic">
+                <div key={item} className="clinical-surface flex items-center gap-4 p-4">
+                  <div className="grid h-10 w-10 place-items-center rounded-[var(--radius-sm)] bg-[var(--clinic-soft)] text-sm font-bold text-clinic">
                     {index + 1}
                   </div>
                   <div>
@@ -145,11 +147,11 @@ export default function LandingPage() {
                 </div>
               ))}
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-md bg-clinic p-4 text-white">
+                <div className="rounded-[var(--radius-md)] bg-clinic p-4 text-white">
                   <p className="text-sm text-teal-50">Cobrado</p>
                   <p className="mt-2 text-2xl font-bold">{formatMXN(390)}</p>
                 </div>
-                <div className="rounded-md bg-amber-50 p-4 text-amber-800">
+                <div className="rounded-[var(--radius-md)] bg-[var(--warning-soft)] p-4 text-[var(--warning)]">
                   <p className="text-sm">Pendiente</p>
                   <p className="mt-2 text-2xl font-bold">{formatMXN(360)}</p>
                 </div>
@@ -159,7 +161,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="features" className="border-b border-slate-200 py-20">
+      <section id="features" className="border-b border-[var(--border)] py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-bold text-ink">Diseñado para el trabajo diario de consulta</h2>
@@ -171,8 +173,8 @@ export default function LandingPage() {
             {features.map((feature) => {
               const Icon = feature.icon;
               return (
-                <article key={feature.title} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="grid h-11 w-11 place-items-center rounded-md bg-teal-50 text-clinic">
+                <article key={feature.title} className="surface-card p-5">
+                  <div className="grid h-11 w-11 place-items-center rounded-[var(--radius-md)] bg-[var(--clinic-soft)] text-clinic">
                     <Icon className="h-5 w-5" />
                   </div>
                   <h3 className="mt-5 font-bold text-ink">{feature.title}</h3>
@@ -184,7 +186,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="pricing" className="border-b border-slate-200 bg-slate-50 py-20">
+      <section id="pricing" className="border-b border-[var(--border)] bg-[var(--background-soft)] py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <h2 className="text-3xl font-bold text-ink">Planes para médicos y clínicas pequeñas</h2>
@@ -197,8 +199,8 @@ export default function LandingPage() {
             {commercialPlans.map((plan) => (
               <article
                 key={plan.id}
-                className={`relative rounded-lg border p-6 shadow-sm ${
-                  plan.highlighted ? "border-clinic bg-white ring-2 ring-teal-100" : "border-slate-200 bg-white"
+                className={`relative rounded-[var(--radius-lg)] border p-6 shadow-sm ${
+                  plan.highlighted ? "border-clinic bg-white ring-2 ring-teal-100" : "border-[var(--border)] bg-white"
                 }`}
               >
                 {plan.badgeLabel ? (
@@ -228,7 +230,7 @@ export default function LandingPage() {
             ))}
           </div>
 
-          <div className="mt-10 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="surface-card mt-10 overflow-hidden">
             <div className="grid gap-4 border-b border-slate-200 p-5 md:grid-cols-[1fr_auto] md:items-center">
               <div>
                 <h3 className="text-xl font-bold text-ink">Comparación comercial</h3>
@@ -273,7 +275,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="mt-10 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="surface-card mt-10 p-6">
             <h3 className="text-xl font-bold text-ink">Incluido en todos los planes</h3>
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {commonCommercialFeatures.map((feature) => (

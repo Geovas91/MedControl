@@ -38,7 +38,7 @@ function DashboardUnavailable({ title, description }: { title: string; descripti
   return (
     <>
       <PageHeader title={title} description={description} />
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="surface-card p-5">
         <p className="text-sm text-slate-600">No hay datos disponibles para mostrar en este momento.</p>
       </section>
     </>
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <section className="surface-card p-4 sm:p-5">
           <h2 className="text-lg font-bold text-ink">Agenda de hoy</h2>
           <div className="mt-4 grid gap-3">
             {agendaState === "empty" ? (
@@ -115,7 +115,7 @@ export default async function DashboardPage() {
               data.appointmentsToday.map((appointment) => (
                 <div
                   key={appointment.id}
-                  className="flex flex-col gap-3 rounded-md border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                className="clinical-surface flex flex-col gap-3 p-3 transition hover:border-[var(--clinic-border)] sm:flex-row sm:items-center sm:justify-between sm:p-4"
                 >
                   <div>
                     <p className="font-semibold text-ink">
@@ -138,9 +138,9 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="surface-card p-5">
           <h2 className="text-lg font-bold text-ink">Actividad reciente</h2>
-          <div className="mt-4 rounded-md bg-slate-50 p-4">
+          <div className="mt-4 rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-4">
             <p className="text-sm text-slate-500">No hay una fuente de actividad reciente disponible.</p>
           </div>
         </section>

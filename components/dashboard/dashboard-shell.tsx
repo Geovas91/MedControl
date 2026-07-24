@@ -2,25 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  CalendarDays,
-  ClipboardList,
-  CreditCard,
-  FileSignature,
-  Globe2,
-  MessageSquareText,
-  Plug,
-  LayoutDashboard,
-  Menu,
-  Settings,
-  Stethoscope,
-  UsersRound,
-  X
-} from "lucide-react";
-import { useState } from "react";
+import { CalendarDays, ClipboardList, CreditCard, FileSignature, Globe2, LayoutDashboard, Menu, MessageSquareText, Plug, Settings, Stethoscope, UsersRound, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { AppVersionLabel } from "@/components/app-version-label";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 import { cn } from "@/lib/utils";
 
+const DRAWER_ID = "dashboard-mobile-navigation";
 const navItems = [
   { href: "/dashboard", label: "Resumen", icon: LayoutDashboard },
   { href: "/dashboard/patients", label: "Pacientes", icon: UsersRound },
@@ -35,118 +23,120 @@ const navItems = [
   { href: "/dashboard/settings/integrations", label: "Integraciones", icon: Plug },
   { href: "/dashboard/settings", label: "Configuración", icon: Settings }
 ];
+const mobileNavItems = navItems.filter((item) => ["/dashboard", "/dashboard/appointments", "/dashboard/patients"].includes(item.href));
+const focusableSelector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 type DashboardShellProps = {
   children: React.ReactNode;
   footer?: React.ReactNode;
-  account?: {
-    name: string;
-    subtitle: string;
-  };
+  account?: { name: string; subtitle: string };
   subscriptionNotice?: string | null;
 };
 
 export function DashboardShell({ children, footer, account, subscriptionNotice }: DashboardShellProps) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
+  const [drawerPath, setDrawerPath] = useState<string | null>(null);
+  const appContentRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLButtonElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  const sidebar = (
-    <aside className="flex h-full w-[min(18rem,calc(100vw-2rem))] flex-col border-r border-slate-200 bg-white">
-      <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-5">
-        <div className="grid h-10 w-10 place-items-center rounded-md bg-clinic text-white">
-          <Stethoscope className="h-5 w-5" />
-        </div>
-        <div>
-          <p className="text-sm font-bold text-ink">CliniControl</p>
-          <p className="text-xs text-slate-500">Espacio clínico</p>
-        </div>
+  const open = drawerPath === pathname;
+  const closeDrawer = () => setDrawerPath(null);
+  const openDrawer = (event: React.MouseEvent<HTMLButtonElement>) => {
+    openerRef.current = event.currentTarget;
+    setDrawerPath(pathname);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const appContent = appContentRef.current;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (appContent) {
+      appContent.setAttribute("aria-hidden", "true");
+      appContent.inert = true;
+    }
+
+    const focusTimer = window.setTimeout(() => closeButtonRef.current?.focus(), 0);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeDrawer();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? []).filter((element) => !element.hasAttribute("disabled"));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (appContent) {
+        appContent.removeAttribute("aria-hidden");
+        appContent.inert = false;
+      }
+      (openerRef.current ?? previousFocusRef.current)?.focus();
+    };
+  }, [open]);
+
+  const sidebar = (inDrawer = false) => (
+    <aside className="app-sidebar flex h-full w-[min(18rem,calc(100vw-2rem))] flex-col border-r border-[var(--border)] bg-white/95 shadow-[var(--shadow-xs)]">
+      <div className="flex h-[4.5rem] items-center gap-3 border-b border-[var(--border)] px-5">
+        <div className="grid h-10 w-10 place-items-center rounded-[var(--radius-md)] bg-clinic text-white shadow-xs"><Stethoscope className="h-5 w-5" /></div>
+        <div><p className="text-sm font-bold text-ink">CliniControl</p><p className="text-xs text-[var(--foreground-muted)]">Espacio clínico</p></div>
       </div>
-      <nav className="grid gap-1 p-3">
+      <nav className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto p-3" aria-label={inDrawer ? "Navegación principal" : undefined}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-ink",
-                active && "bg-teal-50 text-clinic"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
+          return <Link key={item.href} href={item.href} onClick={closeDrawer} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium text-[var(--foreground-soft)] transition duration-150 hover:bg-[var(--surface-muted)] hover:text-ink", active && "bg-[var(--clinic-soft)] text-clinic")}><Icon className="h-4 w-4" />{item.label}</Link>;
         })}
       </nav>
-      <div className="mt-auto border-t border-slate-200 p-4">
-        <div className="rounded-md bg-slate-50 p-3">
-          <p className="truncate text-sm font-semibold text-ink">{account?.name ?? "Dr. Morgan"}</p>
-          <p className="truncate text-xs text-slate-500">{account?.subtitle ?? "Primary care clinic"}</p>
-        </div>
+      <div className="mt-auto border-t border-[var(--border)] p-4">
+        <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3"><p className="truncate text-sm font-semibold text-ink">{account?.name ?? "Dr. Morgan"}</p><p className="truncate text-xs text-[var(--foreground-muted)]">{account?.subtitle ?? "Primary care clinic"}</p></div>
         {footer ? <div className="mt-3">{footer}</div> : null}
-        <AppVersionLabel className="mt-3" />
+        <InstallAppButton className="mt-3" />
+        <AppVersionLabel className="app-version-footer mt-3" />
       </div>
     </aside>
   );
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:block">{sidebar}</div>
-
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
-        <Link href="/dashboard" className="flex items-center gap-2 font-bold text-ink">
-          <Stethoscope className="h-5 w-5 text-clinic" />
-          CliniControl
-        </Link>
-        <button
-          type="button"
-          aria-label="Abrir navegación"
-          onClick={() => setOpen(true)}
-          className="grid h-10 w-10 place-items-center rounded-md border border-slate-200 text-slate-700"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
+  return <div className="min-h-screen bg-[var(--background)]">
+    <div ref={appContentRef}>
+      <div className="app-navigation hidden lg:fixed lg:inset-y-0 lg:left-0 lg:block">{sidebar()}</div>
+      <header className="app-topbar app-navigation glass-nav sticky top-0 z-30 m-2 flex h-14 items-center justify-between px-4 lg:hidden">
+        <Link href="/dashboard" className="flex items-center gap-2 font-bold text-ink"><Stethoscope className="h-5 w-5 text-clinic" />CliniControl</Link>
+        <button type="button" aria-label="Abrir navegación" aria-expanded={open} aria-controls={DRAWER_ID} onClick={openDrawer} className="grid h-11 w-11 place-items-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-white/80 text-[var(--foreground-soft)]"><Menu className="h-5 w-5" /></button>
       </header>
-
-      {open ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button
-            type="button"
-            aria-label="Cerrar navegación"
-            className="absolute inset-0 bg-slate-950/40"
-            onClick={() => setOpen(false)}
-          />
-          <div className="relative h-full w-[min(18rem,calc(100vw-2rem))] bg-white shadow-soft">
-            <button
-              type="button"
-              aria-label="Cerrar navegación"
-              onClick={() => setOpen(false)}
-              className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-md border border-slate-200 bg-white text-slate-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            {sidebar}
-          </div>
-        </div>
-      ) : null}
-
-      <main className="lg:pl-72">
-        <div className="mx-auto w-full max-w-7xl px-4 py-5 pb-10 sm:px-6 lg:px-8 lg:py-6">
-          <section className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-            <p className="font-semibold">Ambiente de demostración</p>
-            <p>Algunos módulos muestran datos de ejemplo y todavía no deben usarse con pacientes reales.</p>
-          </section>
-          {subscriptionNotice ? <section className="mb-5 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">{subscriptionNotice}</section> : null}
+      <main className="app-main-content lg:pl-72">
+        <div className="app-topbar app-navigation hidden lg:sticky lg:top-0 lg:z-20 lg:block lg:px-6 lg:pt-3 xl:px-8"><div className="glass-nav flex h-14 items-center justify-between px-4 text-sm text-[var(--foreground-muted)]"><span>Espacio de trabajo clínico</span><span>Datos protegidos por clínica activa</span></div></div>
+        <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8 lg:py-6 lg:pb-10">
+          <section className="mb-5 rounded-[var(--radius-md)] border border-amber-200 bg-[var(--warning-soft)] p-4 text-sm leading-6 text-[var(--warning)]"><p className="font-semibold">Ambiente de demostración</p><p>Algunos módulos muestran datos de ejemplo y todavía no deben usarse con pacientes reales.</p></section>
+          {subscriptionNotice ? <section className="mb-5 rounded-[var(--radius-md)] border border-rose-200 bg-[var(--danger-soft)] p-4 text-sm leading-6 text-[var(--danger)]">{subscriptionNotice}</section> : null}
           {children}
-          <footer className="mt-8 border-t border-slate-200 pt-4 lg:hidden">
-            <AppVersionLabel />
-          </footer>
+          <footer className="app-version-footer mt-8 border-t border-[var(--border)] pt-4 lg:hidden"><AppVersionLabel /></footer>
         </div>
       </main>
+      <nav className="app-mobile-navigation app-navigation glass-nav fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 grid grid-cols-4 p-1 lg:hidden" aria-label="Navegación móvil principal">
+        {mobileNavItems.map((item) => { const Icon = item.icon; const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href)); return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("grid min-h-12 place-items-center gap-0.5 rounded-[var(--radius-sm)] px-2 text-[11px] font-semibold text-[var(--foreground-muted)]", active && "bg-[var(--clinic-soft)] text-clinic")}><Icon className="h-4 w-4" />{item.label}</Link>; })}
+        <button type="button" aria-label="Abrir más opciones" aria-expanded={open} aria-controls={DRAWER_ID} onClick={openDrawer} className="grid min-h-12 place-items-center gap-0.5 rounded-[var(--radius-sm)] px-2 text-[11px] font-semibold text-[var(--foreground-muted)]"><Menu className="h-4 w-4" />Más</button>
+      </nav>
     </div>
-  );
+    {open ? <div className="app-mobile-navigation fixed inset-0 z-40 lg:hidden"><button type="button" aria-label="Cerrar navegación" className="absolute inset-0 bg-slate-950/40" onClick={closeDrawer} tabIndex={-1} /><div ref={dialogRef} id={DRAWER_ID} role="dialog" aria-modal="true" aria-label="Navegación principal" className="app-mobile-drawer relative h-full w-[min(18rem,calc(100vw-2rem))] bg-white shadow-dialog"><button ref={closeButtonRef} type="button" aria-label="Cerrar navegación" onClick={closeDrawer} className="non-printable-action absolute right-3 top-3 z-10 grid h-11 w-11 place-items-center rounded-[var(--radius-sm)] border border-[var(--border)] bg-white text-[var(--foreground-soft)]"><X className="h-4 w-4" /></button>{sidebar(true)}</div></div> : null}
+  </div>;
 }
