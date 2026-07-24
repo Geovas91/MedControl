@@ -1,4 +1,4 @@
-export type InvitationEmailDeliveryStatus = "sent" | "failed" | "disabled";
+export type InvitationEmailDeliveryStatus = "sent" | "failed" | "disabled" | "delivery_unknown";
 
 export type SendEmailInput = {
   to: string;

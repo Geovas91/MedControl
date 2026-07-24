@@ -19,7 +19,7 @@ export type InvitationActionState = {
   error?: string;
   message?: string;
   invitationUrl?: string;
-  deliveryStatus?: "sent" | "failed" | "disabled";
+  deliveryStatus?: "sent" | "failed" | "disabled" | "delivery_unknown";
 };
 
 function asString(value: FormDataEntryValue | null) {
@@ -79,6 +79,7 @@ export async function addClinicMemberAction(
     });
     revalidatePath("/dashboard/members");
     if (delivery.status === "sent") return { message: "Invitación creada y correo enviado.", invitationUrl: delivery.invitationUrl, deliveryStatus: "sent" };
+    if (delivery.status === "delivery_unknown") return { message: "No pudimos confirmar el envío. La invitación sigue activa y puedes copiar el enlace.", invitationUrl: delivery.invitationUrl, deliveryStatus: "delivery_unknown" };
     if (delivery.status === "failed") return { message: "Invitación creada, pero el correo no pudo enviarse. Copia el enlace.", invitationUrl: delivery.invitationUrl, deliveryStatus: "failed" };
     return { message: "Invitación creada. El correo no está configurado; copia el enlace.", invitationUrl: delivery.invitationUrl, deliveryStatus: "disabled" };
   } catch {
@@ -108,6 +109,7 @@ export async function rotateClinicInvitationAction(
     const delivery = await deliverMemberInvitation({ invitationId, clinicId: activeTenant.tenant.clinic.id, clinicName: activeTenant.tenant.clinic.name, invitedEmail: details.invited_email, role: details.role, expiresAt: data[0].expires_at, rawToken: data[0].raw_token });
     revalidatePath("/dashboard/members");
     if (delivery.status === "sent") return { message: "Se generó un enlace nuevo y correo enviado.", invitationUrl: delivery.invitationUrl, deliveryStatus: "sent" };
+    if (delivery.status === "delivery_unknown") return { message: "No pudimos confirmar el envío. El enlace nuevo sigue activo y puedes copiarlo.", invitationUrl: delivery.invitationUrl, deliveryStatus: "delivery_unknown" };
     if (delivery.status === "failed") return { message: "Se generó un enlace nuevo, pero el correo no pudo enviarse. Copia el enlace.", invitationUrl: delivery.invitationUrl, deliveryStatus: "failed" };
     return { message: "Se generó un enlace nuevo. El correo no está configurado; copia el enlace.", invitationUrl: delivery.invitationUrl, deliveryStatus: "disabled" };
   } catch {

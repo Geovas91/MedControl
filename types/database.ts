@@ -153,7 +153,7 @@ export type Database = {
           last_rotated_at: Timestamp | null;
           rotation_count: number;
           provider_message_id: string | null;
-          email_delivery_status: "sent" | "failed" | "disabled" | null;
+          email_delivery_status: "sent" | "failed" | "disabled" | "delivery_unknown" | null;
           email_sent_at: Timestamp | null;
           email_last_attempted_at: Timestamp | null;
           email_failure_code: string | null;
@@ -176,7 +176,7 @@ export type Database = {
           last_rotated_at?: Timestamp | null;
           rotation_count?: number;
           provider_message_id?: string | null;
-          email_delivery_status?: "sent" | "failed" | "disabled" | null;
+          email_delivery_status?: "sent" | "failed" | "disabled" | "delivery_unknown" | null;
           email_sent_at?: Timestamp | null;
           email_last_attempted_at?: Timestamp | null;
           email_failure_code?: string | null;
@@ -827,8 +827,8 @@ export type Database = {
         Args: { p_clinic_id: string };
         Returns: boolean;
       };
-      record_clinic_member_invitation_email_result_for_current_user: {
-        Args: { p_invitation_id: string; p_delivery_status: string; p_provider_message_id?: string | null; p_error_code?: string | null };
+      record_clinic_member_invitation_email_result_internal: {
+        Args: { p_invitation_id: string; p_actor_user_id: string; p_delivery_status: string; p_provider_message_id?: string | null; p_error_code?: string | null; p_provider?: string | null };
         Returns: boolean;
       };
       create_verified_doctor_review_for_completed_appointment: {

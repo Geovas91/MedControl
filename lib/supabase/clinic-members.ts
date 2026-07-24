@@ -29,7 +29,6 @@ type ClinicMembersRpcClient = {
   rpc(fn: "list_clinic_member_invitations_for_current_user", args: { p_clinic_id: string }): Promise<{ data: ManagedClinicInvitation[] | null; error: PostgrestError | null }>;
   rpc(fn: "rotate_clinic_member_invitation_token_for_current_user", args: { p_invitation_id: string }): Promise<{ data: { raw_token: string; expires_at: string }[] | null; error: PostgrestError | null }>;
   rpc(fn: "revoke_clinic_member_invitation_for_current_user", args: { p_invitation_id: string }): Promise<{ data: boolean | null; error: PostgrestError | null }>;
-  rpc(fn: "record_clinic_member_invitation_email_result_for_current_user", args: { p_invitation_id: string; p_delivery_status: "sent" | "failed" | "disabled"; p_provider_message_id: string | null; p_error_code: string | null }): Promise<{ data: boolean | null; error: PostgrestError | null }>;
 };
 
 export type AddClinicMemberByEmailInput = {
@@ -65,12 +64,3 @@ export async function createClinicInvitation(clinicId: string, email: string, ro
 export async function listClinicInvitations(clinicId: string) { const supabase = await createClient(); return (supabase as unknown as ClinicMembersRpcClient).rpc("list_clinic_member_invitations_for_current_user", { p_clinic_id: clinicId }); }
 export async function rotateClinicInvitation(invitationId: string) { const supabase = await createClient(); return (supabase as unknown as ClinicMembersRpcClient).rpc("rotate_clinic_member_invitation_token_for_current_user", { p_invitation_id: invitationId }); }
 export async function revokeClinicInvitation(invitationId: string) { const supabase = await createClient(); return (supabase as unknown as ClinicMembersRpcClient).rpc("revoke_clinic_member_invitation_for_current_user", { p_invitation_id: invitationId }); }
-export async function recordClinicInvitationEmailResult(invitationId: string, status: "sent" | "failed" | "disabled", messageId: string | null, errorCode: string | null) {
-  const supabase = await createClient();
-  return (supabase as unknown as ClinicMembersRpcClient).rpc("record_clinic_member_invitation_email_result_for_current_user", {
-    p_invitation_id: invitationId,
-    p_delivery_status: status,
-    p_provider_message_id: messageId,
-    p_error_code: errorCode
-  });
-}

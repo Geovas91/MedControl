@@ -14,7 +14,8 @@
 
 - [ ] Onboarding, trial de 30 días, owner y aceptaciones versionadas verificados.
 - [ ] Invitaciones seguras probadas: crear, rotar, revocar, aceptar con el correo exacto y rechazar acceso REST directo.
-- [ ] Resend configurado con dominio verificado, `APP_BASE_URL` HTTPS, pruebas de sent/failed/disabled y auditoría segura antes de activar `EMAIL_REQUIRED=true`.
+- [ ] Resend configurado con dominio verificado, `APP_BASE_URL` HTTPS, pruebas de sent/failed/disabled/delivery_unknown y auditoría segura antes de activar `EMAIL_REQUIRED=true`.
+- [ ] `npm run audit:server-only` aprobado; `SUPABASE_SERVICE_ROLE_KEY` permanece sólo en el proceso servidor y los navegadores no pueden registrar resultados de entrega.
 - [ ] Recuperación de contraseña probada.
 - [ ] Guardas de suscripción y límites probadas para `active`, trial futuro/igual a ahora/vencido/nulo, `past_due`, `inactive`, `cancelled` y error temporal.
 - [ ] Términos y aviso de privacidad publicados y revisados.
