@@ -13,6 +13,8 @@
     "check:supabase": "node scripts/check-supabase-config.mjs",
     "test:invitation-email": "node --experimental-strip-types scripts/test-invitation-email.ts",
     "test:browser": "playwright test",
+    "test:pwa": "node scripts/test-pwa-production.mjs",
+    "audit:pwa": "node scripts/audit-pwa.mjs",
     "test:pre-staging": "node scripts/test-pre-staging.mjs"
   },
   "engines": {

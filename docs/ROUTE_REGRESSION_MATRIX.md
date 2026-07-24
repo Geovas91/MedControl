@@ -16,6 +16,8 @@ Results below distinguish executed checks from environmental/manual work. `Pass`
 | `/ruta-inexistente` | Público | 1280 | Chromium local | HTTP 404 y heading de not found | Pass | Playwright |
 | `/`, `/login` | Público | 1280 | Chromium local | Axe WCAG 2 A/AA, sin severidad serious/critical | Pass | Auditoría automática; no afirma WCAG completa |
 | `/`, `/login` | Público | 1440 / 390 | Chromium local | Capturas locales sin sesión ni datos sensibles | Pass | Artefactos efímeros de Playwright, ignorados por Git |
+| `/manifest.webmanifest`, `/sw.js` | Público | N/A | Chromium local | Manifest, iconos, registro, cache estático y control de instalación contra build productivo | Pass | `npm run test:pwa`: 3 pruebas con `NEXT_PUBLIC_PWA_ENABLED=true` |
+| Rutas clínicas e invitaciones offline | Miembro demo/público | 390–1440 | Chrome/Edge | Sin HTML o datos clínicos en Cache Storage | Blocked | Requiere sesión demo autorizada y desconexión manual; debe mostrar red/offline genérico |
 | `/dashboard` | Miembro demo | 320, 390 | Chromium/Edge | Drawer, topbar, sidebar, safe area y retorno de foco | Blocked | No se usó sesión demo durante la ejecución pública |
 | `/dashboard/patients` y detalle | Miembro demo | 320–1440 | Chromium/Edge | Listado, búsqueda, filtro, paginación, crear/editar | Blocked | Requiere sesión demo y datos de prueba autorizados |
 | `/dashboard/appointments` y detalle | Miembro demo | 320–1440 | Chromium/Edge | Agenda, filtros, crear, editar, estados | Blocked | Requiere sesión demo |

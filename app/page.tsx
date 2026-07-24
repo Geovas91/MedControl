@@ -16,6 +16,7 @@ import Link from "next/link";
 import { getSalesWhatsAppUrl } from "@/config/contact";
 import { commercialPlans, commonCommercialFeatures } from "@/config/plans";
 import { AppVersionLabel } from "@/components/app-version-label";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 import { ButtonLink } from "@/components/ui/button";
 import { formatMXN } from "@/lib/format";
 
@@ -120,6 +121,7 @@ export default function LandingPage() {
                 Ver planes
               </ButtonLink>
             </div>
+            <InstallAppButton className="mt-3 w-fit" />
           </div>
 
           <div className="responsive-grid-child glass-panel min-h-[360px] p-4">

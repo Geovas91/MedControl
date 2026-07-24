@@ -9,6 +9,7 @@ Esta lista verifica el PR visual sin usar credenciales reales, datos reales ni S
 - [x] `npm ci`
 - [x] `npm run test:pre-staging`
 - [x] `npm run test:browser` para rutas públicas, overflow, redirects, health/readiness, 404 y Axe básico
+- [x] `npm run test:pwa` contra un build de producción con `NEXT_PUBLIC_PWA_ENABLED=true`
 - [x] `npm run lint`
 - [x] `npm run build`
 - [x] `git diff --check`
@@ -34,6 +35,9 @@ Esta lista verifica el PR visual sin usar credenciales reales, datos reales ni S
 
 - [ ] Revisar landing, login, register, onboarding, dashboard, agenda, pacientes, detalle, pagos, notas, consentimientos, plantillas, miembros, settings, invite, 404 y error en 320/360/390/430/768/1024/1280/1440/1920 px.
 - [ ] Confirmar ausencia de overflow horizontal, texto cortado, botones fuera de viewport, navegación tapada o footer sobre contenido.
+- [ ] Verificar instalación PWA en Chrome/Edge, standalone, desinstalación/reinstalación y que el botón desaparece instalada.
+- [ ] Verificar Safari iOS: Compartir -> Agregar a pantalla de inicio, icono y nombre.
+- [ ] Con sesión demo autorizada, confirmar offline que pacientes, citas, notas, pagos e invitaciones/firma no revelan contenido previamente visto.
 - [ ] Confirmar contraste, foco, teclado, targets táctiles, labels, aria-live/expanded/current, headings y zoom 200%.
 - [ ] Confirmar que glass se limita a navegación, toolbar y paneles no clínicos; revisar fallback sin `backdrop-filter`.
 - [ ] Revisar impresión de nota, consentimiento y expediente: sin navegación/glass/botones, firma visible y sin cortes.
@@ -45,4 +49,4 @@ Esta lista verifica el PR visual sin usar credenciales reales, datos reales ni S
 
 ## Estado de ejecución
 
-La base de QA pre-staging, los checks estáticos y las rutas públicas automatizadas están completados. La ejecución autenticada, cross-browser, en dispositivos físicos y print preview continúa pendiente y debe registrarse en la matriz; esta lista no afirma QA completo.
+La base de QA pre-staging, los checks estáticos, las rutas públicas automatizadas y la prueba PWA de producción están completados. La ejecución autenticada, cross-browser, en dispositivos físicos y print preview continúa pendiente y debe registrarse en la matriz; esta lista no afirma QA completo.

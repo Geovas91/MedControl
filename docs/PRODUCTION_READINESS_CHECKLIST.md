@@ -8,6 +8,8 @@
 - [ ] `/api/health` y `/api/ready` responden correctamente.
 - [ ] Auth callback y tenant isolation verificados.
 - [ ] HTTPS y proxy inverso configurados.
+- [ ] PWA validada en build productivo: manifest, iconos, service worker e instalación Chrome/Edge; `NEXT_PUBLIC_PWA_ENABLED=true` sólo después de verificar la política de cache.
+- [ ] Privacidad offline PWA validada con demo: ninguna ruta clínica, invitación o firma muestra contenido cacheado.
 - [ ] No se ejecutaron seeds demo.
 
 ## Bloqueantes para beta privada
@@ -26,4 +28,5 @@
 - [ ] Cobros productivos, cancelaciones y reembolsos revisados.
 - [ ] Soporte, monitoreo y alertas operativos.
 - [ ] Revisión legal y de seguridad completada.
+- [ ] Safari iOS probado mediante Compartir -> Agregar a pantalla de inicio; no se asume `beforeinstallprompt`.
 - [ ] Plan de recuperación ante desastre, exportación y retención aprobado.

@@ -48,6 +48,8 @@ CliniControl es una aplicación SaaS para médicos y clínicas pequeñas en Méx
 - Revisión de seguridad del flujo PayPal en producción.
 - Revisión manual de todos los textos visibles para evitar promesas clínicas indebidas.
 
+La instalación PWA, su política de cache y la prueba local se documentan en `docs/PWA_INSTALLATION_AND_SECURITY.md`.
+
 ## Variables de Entorno
 
 Usa `.env.example` como plantilla. No agregues valores reales a archivos versionados.
@@ -63,6 +65,7 @@ APP_STAGING_URL=
 APP_PRODUCTION_URL=
 NEXT_PUBLIC_DEFAULT_LOCALE=es
 NEXT_PUBLIC_ENABLE_DEMO_CONSENT=false
+NEXT_PUBLIC_PWA_ENABLED=false
 NEXT_PUBLIC_SITE_URL=
 EMAIL_PROVIDER=
 EMAIL_FROM=
@@ -96,6 +99,7 @@ Validar:
 ```bash
 npm run lint
 npm run build
+npm run audit:pwa
 ```
 
 ## Estructura

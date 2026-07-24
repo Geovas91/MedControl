@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, ClipboardList, CreditCard, FileSignature, Globe2, LayoutDashboard, Menu, MessageSquareText, Plug, Settings, Stethoscope, UsersRound, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AppVersionLabel } from "@/components/app-version-label";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 import { cn } from "@/lib/utils";
 
 const DRAWER_ID = "dashboard-mobile-navigation";
@@ -109,6 +110,7 @@ export function DashboardShell({ children, footer, account, subscriptionNotice }
       <div className="mt-auto border-t border-[var(--border)] p-4">
         <div className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-3"><p className="truncate text-sm font-semibold text-ink">{account?.name ?? "Dr. Morgan"}</p><p className="truncate text-xs text-[var(--foreground-muted)]">{account?.subtitle ?? "Primary care clinic"}</p></div>
         {footer ? <div className="mt-3">{footer}</div> : null}
+        <InstallAppButton className="mt-3" />
         <AppVersionLabel className="app-version-footer mt-3" />
       </div>
     </aside>

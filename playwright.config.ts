@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 
 const chromePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
   ?? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const productionServer = process.env.PLAYWRIGHT_WEB_SERVER === "production";
 
 export default defineConfig({
   testDir: "./tests/browser",
@@ -18,7 +19,7 @@ export default defineConfig({
     trace: "retain-on-failure"
   },
   webServer: {
-    command: "npm run dev -- --port 3100",
+    command: productionServer ? "npm run start -- --port 3100" : "npm run dev -- --port 3100",
     url: "http://localhost:3100",
     reuseExistingServer: false,
     timeout: 60_000
