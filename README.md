@@ -66,10 +66,12 @@ NEXT_PUBLIC_ENABLE_DEMO_CONSENT=false
 NEXT_PUBLIC_SITE_URL=
 EMAIL_PROVIDER=
 EMAIL_FROM=
+EMAIL_REPLY_TO=
 EMAIL_REQUIRED=false
+RESEND_API_KEY=
 ```
 
-La entrega de correo aún no está implementada. `EMAIL_REQUIRED=true` mantiene readiness en `503` hasta que exista y se valide un proveedor real; configurar variables por sí solo no habilita correo.
+Las invitaciones usan Resend cuando `EMAIL_PROVIDER=resend`, la API key server-only, un remitente de dominio verificado y `APP_BASE_URL` válido están configurados. Sin ello, el enlace sigue disponible para copia manual. Consulta `docs/INVITATION_EMAIL_DELIVERY.md`.
 
 También existen variables para PayPal sandbox, Google Calendar y proveedores de mensajería. Mantén `NEXT_PUBLIC_SUPABASE_URL` como URL base del proyecto, sin `/rest/v1/`.
 

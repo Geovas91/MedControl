@@ -136,7 +136,7 @@ export default async function MembersPage() {
       <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-5">
           <h2 className="font-bold text-ink">Invitaciones</h2>
-          <p className="mt-1 text-sm text-slate-500">Los enlaces se muestran sólo al crearlos o rotarlos. Correo no enviado sin proveedor configurado.</p>
+          <p className="mt-1 text-sm text-slate-500">Los enlaces se muestran sólo al crearlos o generar uno nuevo. Si Resend está configurado, también se intenta enviar el correo.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">

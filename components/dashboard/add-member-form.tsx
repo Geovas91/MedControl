@@ -23,11 +23,11 @@ export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
         </div>
       </div>
 
-      {state.error ? <p className="mt-5 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{state.error}</p> : null}
+      {state.error ? <p aria-live="polite" className="mt-5 rounded-md bg-rose-50 p-3 text-sm text-rose-700">{state.error}</p> : null}
       {state.message ? (
-        <p className="mt-5 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{state.message}</p>
+        <p aria-live="polite" className="mt-5 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{state.message}</p>
       ) : null}
-      {state.invitationUrl ? <div className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700"><p>El enlace se muestra una sola vez.</p><Button type="button" variant="secondary" className="mt-2" onClick={async () => { await navigator.clipboard?.writeText(state.invitationUrl ?? ""); setCopied(true); }}><Copy className="h-4 w-4" aria-hidden="true" />{copied ? "Enlace copiado" : "Copiar enlace"}</Button></div> : null}
+      {state.invitationUrl ? <div className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700"><p>El enlace es personal y se muestra sólo en esta respuesta.</p><input readOnly aria-label="Enlace de invitación para copiar" value={state.invitationUrl} className="mt-2 w-full rounded border border-slate-200 bg-white p-2 text-xs" onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="secondary" className="mt-2" onClick={async () => { try { if (!navigator.clipboard) throw new Error("Clipboard unavailable"); await navigator.clipboard.writeText(state.invitationUrl ?? ""); setCopied(true); } catch { setCopied(false); } }}><Copy className="h-4 w-4" aria-hidden="true" />{copied ? "Enlace copiado" : "Copiar enlace"}</Button>{!copied ? <p className="mt-2 text-xs text-slate-500">Si no puedes copiarlo con el botón, selecciónalo en el campo.</p> : null}</div> : null}
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <Field label="Correo" htmlFor="email">
