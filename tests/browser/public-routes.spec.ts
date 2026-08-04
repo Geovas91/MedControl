@@ -41,6 +41,27 @@ test("protected routes redirect to login without a session", async ({ page }) =>
   await expect(page).toHaveURL(/\/login/);
 });
 
+test("Google OAuth button renders on login and signup", async ({ page }) => {
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();
+
+  await page.goto("/signup");
+  await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();
+});
+
+test("auth callback without code returns a safe login error", async ({ page }) => {
+  await page.goto("/auth/callback?next=https://evil.example/steal");
+  await expect(page).toHaveURL(/\/login\?error=/);
+  await expect(page.getByText(/callback de autenticación no es válido/i)).toBeVisible();
+  expect(page.url()).not.toContain("evil.example");
+});
+
+test("auth callback handles an OAuth provider error", async ({ page }) => {
+  await page.goto("/auth/callback?error=access_denied&error_description=cancelled");
+  await expect(page).toHaveURL(/\/login\?error=/);
+  await expect(page.getByText(/acceso con Google fue cancelado/i)).toBeVisible();
+});
+
 test("invalid invitation is generic and does not disclose identity details", async ({ page }) => {
   await page.goto("/invite/token-invalido");
   await expect(page.locator("main")).toBeVisible();

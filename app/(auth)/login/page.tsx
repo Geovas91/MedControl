@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Stethoscope } from "lucide-react";
 import { signInAction } from "@/app/(auth)/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
+import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
 import { Field, Input } from "@/components/ui/input";
 import { getSafeLocalPath } from "@/lib/auth/redirects";
 
@@ -37,7 +38,8 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
         {params?.message ? (
           <p className="mt-5 rounded-md bg-emerald-50 p-3 text-sm leading-6 text-emerald-700">{params.message}</p>
         ) : null}
-        <form action={signInAction} className="mt-6 grid gap-4">
+        <GoogleOAuthButton next={next || undefined} />
+        <form action={signInAction} className="grid gap-4">
           <input type="hidden" name="next" value={next} />
           <Field label="Email" htmlFor="email">
             <Input id="email" name="email" type="email" autoComplete="email" placeholder="doctor@clinic.com" required />

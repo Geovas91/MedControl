@@ -1,13 +1,71 @@
 export function getSafeLocalPath(value: string | null | undefined, fallback = "/dashboard") {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) {
+  if (!value) {
     return fallback;
   }
 
-  return value;
+  const candidate = value.trim();
+  if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\") || /[\u0000-\u001F\u007F]/.test(candidate)) {
+    return fallback;
+  }
+
+  try {
+    const baseUrl = new URL("https://clinicontrol.invalid");
+    const parsed = new URL(candidate, baseUrl);
+
+    if (parsed.origin !== baseUrl.origin) {
+      return fallback;
+    }
+
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return fallback;
+  }
 }
 
 export function isInvitationPath(value: string) {
   return /^\/invite\/[A-Za-z0-9_-]{1,128}$/.test(value);
+}
+
+export function buildGoogleOAuthCallbackUrl(origin: string, next?: string | null) {
+  const callbackUrl = new URL("/auth/callback", origin);
+  const safeNext = getSafeLocalPath(next, "");
+
+  if (safeNext) {
+    callbackUrl.searchParams.set("next", safeNext);
+  }
+
+  return callbackUrl.toString();
+}
+
+export function getGoogleOAuthErrorMessage(error: string | null | undefined, description?: string | null) {
+  if (error === "access_denied") {
+    return "El acceso con Google fue cancelado.";
+  }
+
+  const providerError = `${error ?? ""} ${description ?? ""}`;
+  if (/provider.+(disabled|not enabled|unavailable)|unsupported provider/i.test(providerError)) {
+    return "Google no está disponible como proveedor de acceso en este momento.";
+  }
+
+  return "No fue posible completar el acceso con Google. Intenta nuevamente.";
+}
+
+export function getPostAuthRedirect(options: {
+  next?: string | null;
+  profileComplete: boolean;
+  hasClinic: boolean;
+}) {
+  const next = getSafeLocalPath(options.next, "");
+
+  if (isInvitationPath(next) || next === "/reset-password" || next.startsWith("/reset-password?")) {
+    return next;
+  }
+
+  if (!options.profileComplete || !options.hasClinic) {
+    return "/onboarding";
+  }
+
+  return next || "/dashboard";
 }
 
 export function buildAuthRedirect(
