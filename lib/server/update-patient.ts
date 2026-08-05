@@ -52,7 +52,7 @@ export type UpdatePatientResult =
     };
 
 const editablePatientColumns =
-  "id, full_name, status, email, phone, date_of_birth, sex, relevant_history, primary_doctor_id";
+  "id, full_name, first_names, paternal_surname, maternal_surname, status, email, phone, date_of_birth, sex, gender_identity, address, marital_status, occupation, education_level, emergency_contact_name, emergency_contact_relationship, emergency_contact_phone, primary_doctor_id";
 
 export async function getPatientEditForActiveTenant(patientId: string): Promise<PatientEditResult> {
   if (!isValidPatientUuid(patientId)) {

@@ -11,7 +11,7 @@ type PatientRow = Database["public"]["Tables"]["patients"]["Row"];
 
 export type PatientListItem = Pick<
   PatientRow,
-  "id" | "full_name" | "status" | "email" | "phone" | "date_of_birth" | "sex"
+  "id" | "full_name" | "internal_identifier" | "status" | "email" | "phone" | "date_of_birth" | "sex"
 >;
 
 export type PatientListData = {
@@ -43,7 +43,7 @@ function applyPatientFilters<T extends {
   if (filters.search) {
     const value = `*${filters.search}*`;
     filteredQuery = filteredQuery.or(
-      `full_name.ilike."${value}",email.ilike."${value}",phone.ilike."${value}"`
+      `full_name.ilike."${value}",email.ilike."${value}",phone.ilike."${value}",internal_identifier.ilike."${value}"`
     );
   }
 
@@ -84,7 +84,7 @@ export async function getPatientsForActiveTenant(filters: PatientListQuery): Pro
   const patientsResult = await applyPatientFilters(
     supabase
       .from("patients")
-      .select("id, full_name, status, email, phone, date_of_birth, sex"),
+      .select("id, full_name, internal_identifier, status, email, phone, date_of_birth, sex"),
     clinicId,
     filters
   )

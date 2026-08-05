@@ -27,7 +27,7 @@ export async function listPatientsForClinic(clinicId: string) {
 
   return supabase
     .from("patients")
-    .select("*")
+    .select("id, clinic_id, primary_doctor_id, full_name, first_names, paternal_surname, maternal_surname, date_of_birth, sex, gender_identity, phone, email, address, marital_status, occupation, education_level, internal_identifier, emergency_contact_name, emergency_contact_relationship, emergency_contact_phone, status, created_by, created_at, updated_by, updated_at, archived_at")
     .eq("clinic_id", clinicId)
     .order("created_at", { ascending: false });
 }

@@ -19,13 +19,25 @@ export type PatientDetailRecord = Pick<
   PatientRow,
   | "id"
   | "full_name"
+  | "first_names"
+  | "paternal_surname"
+  | "maternal_surname"
+  | "internal_identifier"
   | "status"
   | "email"
   | "phone"
   | "date_of_birth"
   | "sex"
+  | "gender_identity"
+  | "address"
+  | "marital_status"
+  | "occupation"
+  | "education_level"
+  | "emergency_contact_name"
+  | "emergency_contact_relationship"
+  | "emergency_contact_phone"
+  | "primary_doctor_id"
   | "created_at"
-  | "relevant_history"
 >;
 
 export type PatientDetailAppointment = Pick<
@@ -105,7 +117,7 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
   const supabase = await createClient();
   const patientResult = await supabase
     .from("patients")
-    .select("id, full_name, status, email, phone, date_of_birth, sex, created_at, relevant_history")
+    .select("id, full_name, first_names, paternal_surname, maternal_surname, internal_identifier, status, email, phone, date_of_birth, sex, gender_identity, address, marital_status, occupation, education_level, emergency_contact_name, emergency_contact_relationship, emergency_contact_phone, primary_doctor_id, created_at")
     .eq("id", id)
     .eq("clinic_id", clinicId)
     .maybeSingle();
