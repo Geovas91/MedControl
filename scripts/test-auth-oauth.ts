@@ -70,11 +70,10 @@ const internalRequest = originRequest("http://localhost:3000", {
   "x-forwarded-proto": "https",
   host: "localhost:3000"
 });
-const savedSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-process.env.NEXT_PUBLIC_SITE_URL = "https://staging.clinicontrol.mx/";
-assert.equal(getPublicAppOrigin(internalRequest), "https://staging.clinicontrol.mx");
-if (savedSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
-else process.env.NEXT_PUBLIC_SITE_URL = savedSiteUrl;
+assert.equal(
+  getPublicAppOrigin(internalRequest, "https://staging.clinicontrol.mx/"),
+  "https://staging.clinicontrol.mx"
+);
 assert.equal(
   getPublicAppOrigin(internalRequest, "javascript:alert(1)"),
   "http://localhost:3000",

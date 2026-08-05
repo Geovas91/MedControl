@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { buildAuthRedirect, getGoogleOAuthErrorMessage, getPostAuthRedirect, getSafeLocalPath } from "@/lib/auth/redirects";
 import { syncAuthUserProfile } from "@/lib/auth/profile";
 import { getPublicAppOrigin } from "@/lib/auth/public-origin";
+import { getRuntimePublicSiteUrl } from "@/lib/server/public-site-url";
 
 function loginRedirect(origin: string, next: string, error: string) {
   return NextResponse.redirect(new URL(buildAuthRedirect("/login", { next, error }), origin));
@@ -12,7 +13,7 @@ function loginRedirect(origin: string, next: string, error: string) {
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
-  const publicOrigin = getPublicAppOrigin(request);
+  const publicOrigin = getPublicAppOrigin(request, getRuntimePublicSiteUrl());
   const code = requestUrl.searchParams.get("code");
   const next = getSafeLocalPath(requestUrl.searchParams.get("next"), "");
   const oauthError = requestUrl.searchParams.get("error");
