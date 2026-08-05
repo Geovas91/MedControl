@@ -41,6 +41,54 @@ test("protected routes redirect to login without a session", async ({ page }) =>
   await expect(page).toHaveURL(/\/login/);
 });
 
+test("patient routes remain protected at 390 px", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const route of ["/dashboard/patients", "/dashboard/patients/new", "/dashboard/patients/10000000-0000-4000-8000-000000000001"]) {
+    await page.goto(route);
+    await expect(page).toHaveURL(/\/login/);
+    const widths = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
+    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth);
+  }
+});
+
+test("patient module renders list, search, detail tabs and mobile creation form", async ({ page }) => {
+  test.skip(!process.env.E2E_PATIENT_EMAIL || !process.env.E2E_PATIENT_PASSWORD, "Local fictional patient credentials are required.");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(process.env.E2E_PATIENT_EMAIL!);
+  await page.getByLabel("Contraseña", { exact: true }).fill(process.env.E2E_PATIENT_PASSWORD!);
+  await page.getByRole("button", { name: "Iniciar sesión" }).click();
+  await expect(page).toHaveURL(/\/dashboard/);
+  await page.goto("/dashboard/patients?q=PAC-");
+  await expect(page.getByRole("heading", { name: "Pacientes" })).toBeVisible();
+  await expect(page.getByText(/resultados de/i)).toBeVisible();
+  const fillRequiredPatient=async(name:string,phone:string)=>{
+    await page.getByLabel("Nombres *").fill(name);
+    await page.getByLabel("Primer apellido *").fill("Prueba móvil");
+    await page.getByLabel("Fecha de nacimiento *").fill("1992-06-15");
+    await page.getByLabel("Teléfono *",{exact:true}).first().fill(phone);
+    await page.getByLabel("Nombre *",{exact:true}).fill("Contacto ficticio");
+    await page.getByLabel("Parentesco *").fill("Familiar");
+    await page.getByLabel("Teléfono *",{exact:true}).last().fill("+525599999999");
+  };
+  await page.goto("/dashboard/patients/new");
+  await expect(page.getByLabel("Nombres *")).toBeVisible();
+  await expect(page.getByRole("button", { name:"Guardar y completar historia clínica" })).toBeVisible();
+  await expect(page.getByRole("button", { name:"Guardar y hacerlo después" })).toBeVisible();
+  const widths=await page.evaluate(()=>({scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth}));
+  expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth);
+  await fillRequiredPatient(`Paciente ${Date.now()}`,"+525511111111");
+  await page.getByRole("button",{name:"Guardar y hacerlo después"}).click();
+  await expect(page).toHaveURL(/tab=resumen&created=1/);
+  await expect(page.getByText("Paciente y expediente creados correctamente.")).toBeVisible();
+  await expect(page.getByRole("link", { name:"Historia clínica inicial" })).toBeVisible();
+  await page.goto("/dashboard/patients/new");
+  await fillRequiredPatient(`Paciente ahora ${Date.now()}`,"+525522222222");
+  await page.getByRole("button",{name:"Guardar y completar historia clínica"}).click();
+  await expect(page).toHaveURL(/tab=historia&created=1/);
+  await expect(page.getByRole("heading",{name:"Identificación clínica"})).toBeVisible();
+});
+
 test("Google OAuth button renders on login and signup", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();

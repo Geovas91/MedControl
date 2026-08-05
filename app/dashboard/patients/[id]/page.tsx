@@ -1,443 +1,50 @@
 import Link from "next/link";
-import {
-  ArrowLeft,
-  CalendarDays,
-  CalendarPlus,
-  CirclePlus,
-  ClipboardList,
-  CreditCard,
-  Eye,
-  FileSignature,
-  Mail,
-  Pencil,
-  Phone
-} from "lucide-react";
-import { notFound, redirect } from "next/navigation";
+import { Activity, AlertTriangle, ArrowLeft, CalendarDays, CheckCircle2, ClipboardList, FileText, HeartPulse, Mail, Phone, UserRoundPen } from "lucide-react";
+import { notFound,redirect } from "next/navigation";
+import { InitialHistoryForm } from "@/components/patients/initial-history-form";
+import { VitalSignsForm } from "@/components/patients/vital-signs-form";
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
-import { canCreateAppointments } from "@/lib/appointments/create";
-import { canEditAppointments } from "@/lib/appointments/edit";
-import { canCreateClinicalPayments } from "@/lib/payments/create";
-import { canCreateClinicalNote, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
-import { hasPatientCreatedMessage } from "@/lib/patients/create";
-import { canEditPatients, hasPatientUpdatedMessage } from "@/lib/patients/edit";
-import {
-  calculatePatientAge,
-  formatPatientCurrency,
-  formatPatientDateOnly,
-  formatPatientTimestamp,
-  getAppointmentStatusLabel,
-  getConsentStatusLabel,
-  getMedicalNoteStatusLabel,
-  getPatientSexLabel,
-  getPaymentStatusLabel
-} from "@/lib/patients/detail";
-import { getPatientStatusLabel, type PatientStatus } from "@/lib/patients/query";
-import {
-  getPatientDetailForActiveTenant,
-  type PatientDetailAppointment
-} from "@/lib/server/patient-detail";
-import { getClinicalRecordForActiveTenant } from "@/lib/server/clinical-record";
-import type { Database } from "@/types/database";
+import { canViewClinicalRecord } from "@/lib/clinical-record/permissions";
+import { calculatePatientAge,formatPatientDateOnly,formatPatientTimestamp,getPatientSexLabel } from "@/lib/patients/detail";
+import { getPatientStatusLabel } from "@/lib/patients/query";
+import { getPatientClinicalBundle } from "@/lib/server/patient-clinical";
+import { getPatientDetailForActiveTenant } from "@/lib/server/patient-detail";
 
-export const dynamic = "force-dynamic";
+export const dynamic="force-dynamic";
+type Query={tab?:string;created?:string;updated?:string;history_saved?:string;vital_created?:string};
+const tabs=[['resumen','Resumen'],['datos','Datos personales'],['antecedentes','Antecedentes'],['historia','Historia clínica inicial'],['signos-vitales','Signos vitales'],['consultas','Consultas'],['documentos','Documentos'],['consentimientos','Consentimientos'],['auditoria','Auditoría']] as const;
+const clinicalTabs=new Set(['antecedentes','historia','signos-vitales','auditoria']);
+function text(value:unknown){return typeof value==='string'&&value.trim()?value:'Sin registro'}
+function booleanText(value:unknown){return value===true?'Sí':value===false?'No':'Sin registro'}
+function Block({title,value}:{title:string;value:unknown}){return <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3"><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</dt><dd className="mt-1 whitespace-pre-wrap text-sm text-ink">{text(value)}</dd></div>}
+function ReadOnlyGroup({title,values}:{title:string;values:Array<[string,unknown]>}){return <section className="clinical-surface p-4 sm:p-5"><h3 className="font-bold text-ink">{title}</h3><dl className="mt-4 grid gap-3 md:grid-cols-2">{values.map(([label,value])=><Block key={label} title={label} value={value}/>)}</dl></section>}
 
-type Enums = Database["public"]["Enums"];
+export default async function PatientPage({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<Query>}){
+ const {id}=await params;const query=await searchParams;const result=await getPatientDetailForActiveTenant(id);
+ if(result.state==='invalid_id'||result.state==='not_found')notFound();if(result.state==='unauthenticated')redirect('/login');
+ if(result.state!=='ready')return <section className="surface-card p-5"><h1 className="text-xl font-bold">Paciente no disponible</h1><p className="mt-2 text-sm text-slate-600">No fue posible cargar el registro dentro de la clínica activa.</p></section>;
+ const {data}=result;const patient=data.patient;const canClinical=canViewClinicalRecord(data.tenant.membership.role);const clinical=canClinical?await getPatientClinicalBundle(id):null;
+ const bundle=clinical?.state==='ready'?clinical.data:null;let tab=tabs.some(([key])=>key===query.tab)?query.tab!:'resumen';if(clinicalTabs.has(tab)&&!canClinical)tab='resumen';
+ const allergies=bundle?.alerts.filter(a=>a.alert_type==='allergy')??[];const conditions=bundle?.alerts.filter(a=>a.alert_type==='active_condition')??[];
+ const message=query.created==='1'?'Paciente y expediente creados correctamente.':query.updated==='1'?'Datos administrativos actualizados.':query.history_saved==='1'?'Historia clínica guardada.':query.vital_created==='1'?'Signos vitales registrados.':null;
+ const tabHref=(key:string)=>`/dashboard/patients/${id}?tab=${key}`;
+ return <>
+  <Link href="/dashboard/patients" className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-clinic"><ArrowLeft className="h-4 w-4"/>Volver a pacientes</Link>
+  {message?<p role="status" className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="h-4 w-4"/>{message}</p>:null}
+  <header className="glass-panel p-4 sm:p-6"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><div className="flex flex-wrap items-center gap-2"><Badge variant={patient.status==='active'?'green':'slate'}>{getPatientStatusLabel(patient.status)}</Badge><span className="font-mono text-sm text-slate-500">{patient.internal_identifier}</span></div><h1 className="mt-3 text-2xl font-bold text-ink sm:text-3xl">{patient.full_name}</h1><div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600"><span>{calculatePatientAge(patient.date_of_birth,data.localDate)??'Edad sin registro'}{patient.date_of_birth?' años':''}</span><span className="inline-flex items-center gap-1"><Phone className="h-4 w-4"/>{patient.phone??'Sin teléfono'}</span><span className="inline-flex items-center gap-1"><Mail className="h-4 w-4"/>{patient.email??'Sin correo'}</span></div></div><ButtonLink href={`/dashboard/patients/${id}/edit`} variant="secondary"><UserRoundPen className="h-4 w-4"/>Editar datos</ButtonLink></div>
+   {canClinical?<div className="mt-5 grid gap-3 md:grid-cols-2">{allergies.length?<div className="rounded-lg border border-rose-200 bg-rose-50 p-3"><p className="flex items-center gap-2 text-sm font-bold text-rose-800"><AlertTriangle className="h-4 w-4"/>Alergias</p><p className="mt-1 text-sm text-rose-700">{allergies.map(a=>a.name).join(', ')}</p></div>:<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">Alergias: sin alertas activas registradas</div>}{conditions.length?<div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="text-sm font-bold text-amber-800">Enfermedades activas</p><p className="mt-1 text-sm text-amber-700">{conditions.map(a=>a.name).join(', ')}</p></div>:<div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">Enfermedades activas: sin alertas registradas</div>}</div>:null}
+  </header>
+  <nav aria-label="Secciones del paciente" className="mt-5 flex gap-2 overflow-x-auto pb-2">{tabs.map(([key,label])=>{const locked=clinicalTabs.has(key)&&!canClinical;return locked?<span key={key} title="Requiere un rol clínico" className="whitespace-nowrap rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">{label}</span>:<Link key={key} href={tabHref(key)} aria-current={tab===key?'page':undefined} className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold ${tab===key?'bg-clinic text-white':'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'}`}>{label}</Link>})}</nav>
 
-function patientStatusVariant(status: PatientStatus) {
-  if (status === "active") {
-    return "green" as const;
-  }
-
-  if (status === "follow_up") {
-    return "amber" as const;
-  }
-
-  return "slate" as const;
-}
-
-function relatedStatusVariant(
-  status:
-    | Enums["appointment_status"]
-    | Enums["payment_status"]
-    | Enums["medical_note_status"]
-    | Enums["consent_status"]
-) {
-  if (status === "completed" || status === "paid" || status === "finalized" || status === "signed") {
-    return "green" as const;
-  }
-
-  if (status === "waiting" || status === "pending" || status === "draft") {
-    return "amber" as const;
-  }
-
-  if (status === "scheduled" || status === "confirmed") {
-    return "teal" as const;
-  }
-
-  return "slate" as const;
-}
-
-function EmptySection({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-500">{children}</p>;
-}
-
-function PatientDetailUnavailable({ title, description }: { title: string; description: string }) {
-  return (
-    <>
-      <Link
-        href="/dashboard/patients"
-        className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-clinic"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Volver a pacientes
-      </Link>
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-        <h1 className="text-xl font-bold text-ink">{title}</h1>
-        <p className="mt-2 text-sm text-slate-600">{description}</p>
-      </section>
-    </>
-  );
-}
-
-function AppointmentList({
-  appointments,
-  timeZone,
-  emptyLabel,
-  canEdit
-}: {
-  appointments: PatientDetailAppointment[];
-  timeZone: string;
-  emptyLabel: string;
-  canEdit: boolean;
-}) {
-  if (appointments.length === 0) {
-    return <EmptySection>{emptyLabel}</EmptySection>;
-  }
-
-  return (
-    <div className="grid gap-3">
-      {appointments.map((appointment) => (
-        <article key={appointment.id} className="rounded-md border border-slate-200 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <Link
-                href={`/dashboard/appointments/${appointment.id}`}
-                className="font-semibold text-ink hover:text-clinic hover:underline"
-              >
-                {appointment.title}
-              </Link>
-              <p className="mt-1 text-sm text-slate-500">
-                {formatPatientTimestamp(appointment.starts_at, timeZone)}
-                {appointment.appointment_type ? ` · ${appointment.appointment_type}` : ""}
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                Médico: {appointment.doctorName ?? "Sin registro"}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Badge variant={relatedStatusVariant(appointment.status)}>
-                {getAppointmentStatusLabel(appointment.status)}
-              </Badge>
-              <Link
-                href={`/dashboard/appointments/${appointment.id}`}
-                className="inline-flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-clinic hover:underline"
-              >
-                <Eye className="h-4 w-4" />
-                Ver
-              </Link>
-              {canEdit ? (
-                <Link href={`/dashboard/appointments/${appointment.id}/edit`} className="inline-flex items-center gap-1 text-sm font-semibold text-clinic hover:underline">
-                  <Pencil className="h-4 w-4" />
-                  Editar
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
-export default async function PatientDetailPage({
-  params,
-  searchParams
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ created?: string | string[]; updated?: string | string[] }>;
-}) {
-  const { id } = await params;
-  const query = await searchParams;
-  const result = await getPatientDetailForActiveTenant(id);
-
-  if (result.state === "invalid_id" || result.state === "not_found") {
-    notFound();
-  }
-
-  if (result.state === "unauthenticated") {
-    redirect("/login");
-  }
-
-  if (result.state === "no_active_membership") {
-    return (
-      <PatientDetailUnavailable
-        title="Sin clínica activa"
-        description="Tu cuenta no tiene una membresía activa para consultar este paciente."
-      />
-    );
-  }
-
-  if (result.state === "error") {
-    return (
-      <PatientDetailUnavailable
-        title="No fue posible cargar el paciente"
-        description="La información clínica no está disponible temporalmente. Intenta nuevamente más tarde."
-      />
-    );
-  }
-
-  const { data } = result;
-  const { patient } = data;
-  const timeZone = data.tenant.clinic.timezone;
-  const age = calculatePatientAge(patient.date_of_birth, data.localDate);
-  const wasUpdated = hasPatientUpdatedMessage(query.updated);
-  const wasCreated = !wasUpdated && hasPatientCreatedMessage(query.created);
-  const clinicalResult = canViewClinicalRecord(data.tenant.membership.role)
-    ? await getClinicalRecordForActiveTenant(id, {})
-    : null;
-  const clinicalData = clinicalResult?.state === "ready" ? clinicalResult.data : null;
-
-  return (
-    <>
-      <Link
-        href="/dashboard/patients"
-        className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-clinic"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Volver a pacientes
-      </Link>
-
-      {wasUpdated || wasCreated ? (
-        <p role="status" className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-          {wasUpdated ? "El paciente se actualizó correctamente." : "El paciente se creó correctamente."}
-        </p>
-      ) : null}
-
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <Badge variant={patientStatusVariant(patient.status)}>{getPatientStatusLabel(patient.status)}</Badge>
-            <h1 className="mt-4 text-2xl font-bold text-ink sm:text-3xl">{patient.full_name}</h1>
-            <p className="mt-2 text-slate-500">
-              {age === null ? "Edad sin registro" : `${age} años`} · {getPatientSexLabel(patient.sex)}
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            {canEditPatients(data.tenant.membership.role) ? (
-              <ButtonLink href={`/dashboard/patients/${patient.id}/edit`} variant="secondary" className="shrink-0">
-                <Pencil className="h-4 w-4" />
-                Editar paciente
-              </ButtonLink>
-            ) : null}
-            {canCreateAppointments(data.tenant.membership.role) ? (
-              <ButtonLink href={`/dashboard/appointments/new?patient=${patient.id}`} className="shrink-0">
-                <CalendarPlus className="h-4 w-4" />
-                Agendar cita
-              </ButtonLink>
-            ) : null}
-          </div>
-        </div>
-
-        <dl className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="min-w-0 rounded-md bg-slate-50 p-4">
-            <dt className="text-sm font-semibold text-slate-500">Teléfono</dt>
-            <dd className="mt-2 flex items-center gap-2 text-sm text-ink">
-              <Phone className="h-4 w-4 shrink-0 text-clinic" />
-              <span className="break-all">{patient.phone ?? "Sin registro"}</span>
-            </dd>
-          </div>
-          <div className="min-w-0 rounded-md bg-slate-50 p-4">
-            <dt className="text-sm font-semibold text-slate-500">Correo</dt>
-            <dd className="mt-2 flex items-center gap-2 text-sm text-ink">
-              <Mail className="h-4 w-4 shrink-0 text-clinic" />
-              <span className="break-all">{patient.email ?? "Sin registro"}</span>
-            </dd>
-          </div>
-          <div className="rounded-md bg-slate-50 p-4">
-            <dt className="text-sm font-semibold text-slate-500">Fecha de nacimiento</dt>
-            <dd className="mt-2 text-sm text-ink">{formatPatientDateOnly(patient.date_of_birth)}</dd>
-          </div>
-          <div className="rounded-md bg-slate-50 p-4">
-            <dt className="text-sm font-semibold text-slate-500">Fecha de alta</dt>
-            <dd className="mt-2 text-sm text-ink">{formatPatientTimestamp(patient.created_at, timeZone)}</dd>
-          </div>
-        </dl>
-
-        <div className="mt-8">
-          <h2 className="font-bold text-ink">Antecedentes relevantes</h2>
-          <p className="mt-3 rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-            {patient.relevant_history ?? "Sin registro"}
-          </p>
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-clinic" />
-          <h2 className="text-lg font-bold text-ink">Citas</h2>
-        </div>
-        <div className="mt-5 grid gap-6 xl:grid-cols-2">
-          <div>
-            <h3 className="mb-3 font-semibold text-ink">Próximas citas</h3>
-            <AppointmentList
-              appointments={data.upcomingAppointments}
-              timeZone={timeZone}
-              emptyLabel="No hay próximas citas registradas."
-              canEdit={canEditAppointments(data.tenant.membership.role)}
-            />
-          </div>
-          <div>
-            <h3 className="mb-3 font-semibold text-ink">Citas recientes</h3>
-            <AppointmentList
-              appointments={data.recentAppointments}
-              timeZone={timeZone}
-              emptyLabel="No hay citas anteriores registradas."
-              canEdit={false}
-            />
-          </div>
-        </div>
-      </section>
-
-      {clinicalData ? (
-        <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="h-5 w-5 text-clinic" />
-              <h2 className="text-lg font-bold text-ink">Expediente clínico</h2>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link href={`/dashboard/patients/${patient.id}/clinical-record`} className="text-sm font-semibold text-clinic hover:underline">Abrir expediente</Link>
-              {canCreateClinicalNote(data.tenant.membership.role) ? <ButtonLink href={`/dashboard/patients/${patient.id}/notes/new`} className="h-10 px-3"><CirclePlus className="h-4 w-4" />Nueva nota</ButtonLink> : null}
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Notas</p><p className="mt-1 text-2xl font-bold text-ink">{clinicalData.totalNotes}</p></div>
-            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Última nota</p><p className="mt-1 text-sm font-semibold text-ink">{clinicalData.notes[0] ? formatPatientTimestamp(clinicalData.notes[0].created_at, timeZone) : "Sin registro"}</p></div>
-            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Consentimientos</p><p className="mt-1 text-2xl font-bold text-ink">{clinicalData.consents.length}</p></div>
-            <div className="rounded-md bg-slate-50 p-4"><p className="text-sm text-slate-500">Firmas registradas</p><p className="mt-1 text-2xl font-bold text-ink">{clinicalData.signatureCount}</p></div>
-          </div>
-        </section>
-      ) : null}
-
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-clinic" />
-              <h2 className="text-lg font-bold text-ink">Pagos recientes</h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href={`/dashboard/payments?patient=${patient.id}`} className="text-sm font-semibold text-clinic hover:underline">
-                Ver todos los pagos
-              </Link>
-              {canCreateClinicalPayments(data.tenant.membership.role) ? (
-                <ButtonLink href={`/dashboard/payments/new?patient=${patient.id}`} className="h-10 px-3">
-                  <CirclePlus className="h-4 w-4" />
-                  Registrar pago
-                </ButtonLink>
-              ) : null}
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {data.payments.length === 0 ? (
-              <EmptySection>No hay pagos registrados para este paciente.</EmptySection>
-            ) : (
-              data.payments.map((payment) => (
-                <article key={payment.id} className="rounded-md border border-slate-200 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="font-semibold text-ink">{payment.concept ?? "Sin concepto"}</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {formatPatientCurrency(payment.amount, payment.currency)} ·{" "}
-                        {formatPatientTimestamp(payment.paid_at ?? payment.created_at, timeZone)}
-                      </p>
-                    </div>
-                    <Badge variant={relatedStatusVariant(payment.status)}>
-                      {getPaymentStatusLabel(payment.status)}
-                    </Badge>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-clinic" />
-            <h2 className="text-lg font-bold text-ink">Notas médicas recientes</h2>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {data.medicalNotes.length === 0 ? (
-              <EmptySection>No hay notas médicas registradas para este paciente.</EmptySection>
-            ) : (
-              data.medicalNotes.map((note) => (
-                <article key={note.id} className="rounded-md border border-slate-200 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="font-semibold text-ink">{note.specialty ?? "Especialidad sin registro"}</p>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {formatPatientTimestamp(note.finalized_at ?? note.created_at, timeZone)}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
-                        {note.clinical_impression ?? "Sin impresión clínica"}
-                      </p>
-                    </div>
-                    <Badge variant={relatedStatusVariant(note.status)}>
-                      {getMedicalNoteStatusLabel(note.status)}
-                    </Badge>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
-      </div>
-
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
-        <div className="flex items-center gap-2">
-          <FileSignature className="h-5 w-5 text-clinic" />
-          <h2 className="text-lg font-bold text-ink">Consentimientos</h2>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
-          {data.consents.length === 0 ? (
-            <div className="md:col-span-2">
-              <EmptySection>No hay consentimientos registrados para este paciente.</EmptySection>
-            </div>
-          ) : (
-            data.consents.map((consent) => (
-              <article key={consent.id} className="rounded-md border border-slate-200 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="font-semibold text-ink">{consent.consent_type}</p>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {consent.signed_at
-                        ? `Firmado: ${formatPatientTimestamp(consent.signed_at, timeZone)}`
-                        : consent.expires_at
-                          ? `Vence: ${formatPatientTimestamp(consent.expires_at, timeZone)}`
-                          : `Creado: ${formatPatientTimestamp(consent.created_at, timeZone)}`}
-                    </p>
-                  </div>
-                  <Badge variant={relatedStatusVariant(consent.status)}>
-                    {getConsentStatusLabel(consent.status)}
-                  </Badge>
-                </div>
-              </article>
-            ))
-          )}
-        </div>
-      </section>
-    </>
-  );
+  <main className="mt-4 grid gap-4">
+   {tab==='resumen'?<><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><section className="surface-card p-4"><CalendarDays className="h-5 w-5 text-clinic"/><p className="mt-2 text-sm text-slate-500">Próximas citas</p><p className="text-2xl font-bold">{data.upcomingAppointments.length}</p></section><section className="surface-card p-4"><ClipboardList className="h-5 w-5 text-clinic"/><p className="mt-2 text-sm text-slate-500">Historia inicial</p><p className="text-lg font-bold">{bundle?{draft:'Borrador',pending:'Pendiente',completed:'Completada'}[bundle.history.status]:'Restringida'}</p></section><section className="surface-card p-4"><HeartPulse className="h-5 w-5 text-clinic"/><p className="mt-2 text-sm text-slate-500">Mediciones</p><p className="text-2xl font-bold">{bundle?.vitals.length??'—'}</p></section><section className="surface-card p-4"><FileText className="h-5 w-5 text-clinic"/><p className="mt-2 text-sm text-slate-500">Notas recientes</p><p className="text-2xl font-bold">{canClinical?data.medicalNotes.length:'—'}</p></section></div><section className="surface-card p-4 sm:p-5"><h2 className="font-bold">Próximas citas</h2><div className="mt-3 grid gap-3">{data.upcomingAppointments.length?data.upcomingAppointments.map(a=><Link key={a.id} href={`/dashboard/appointments/${a.id}`} className="rounded-lg border border-slate-200 p-3 hover:bg-slate-50"><p className="font-semibold">{a.title}</p><p className="text-sm text-slate-500">{formatPatientTimestamp(a.starts_at,data.tenant.clinic.timezone)}</p></Link>):<p className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">No hay próximas citas.</p>}</div></section></>:null}
+   {tab==='datos'?<ReadOnlyGroup title="Datos personales y administrativos" values={[["Nombres",patient.first_names],["Primer apellido",patient.paternal_surname],["Segundo apellido",patient.maternal_surname],["Fecha de nacimiento",formatPatientDateOnly(patient.date_of_birth)],["Sexo al nacimiento",getPatientSexLabel(patient.sex)],["Género",patient.gender_identity],["Teléfono",patient.phone],["Correo",patient.email],["Dirección",patient.address],["Estado civil",patient.marital_status],["Ocupación",patient.occupation],["Escolaridad",patient.education_level],["Contacto de emergencia",patient.emergency_contact_name],["Parentesco",patient.emergency_contact_relationship],["Teléfono de emergencia",patient.emergency_contact_phone],["Identificador interno",patient.internal_identifier]]}/>:null}
+   {tab==='antecedentes'&&bundle?<><ReadOnlyGroup title="Heredofamiliares" values={[["Diabetes",booleanText(bundle.family.diabetes)],["Hipertensión",booleanText(bundle.family.hypertension)],["Cardiovasculares",booleanText(bundle.family.cardiovascular_disease)],["Cáncer",booleanText(bundle.family.cancer)],["Neurológicos",booleanText(bundle.family.neurological_disease)],["Psiquiátricos",booleanText(bundle.family.psychiatric_disorders)],["Hereditarios",booleanText(bundle.family.hereditary_diseases)],["Detalles",bundle.family.details]]}/><ReadOnlyGroup title="Personales patológicos" values={[["Enfermedades crónicas",bundle.pathological.chronic_diseases],["Cirugías",bundle.pathological.surgeries],["Hospitalizaciones",bundle.pathological.hospitalizations],["Traumatismos",bundle.pathological.injuries],["Transfusiones",bundle.pathological.transfusions],["Infecciones",bundle.pathological.relevant_infections],["Discapacidad",bundle.pathological.disability],["Salud mental",bundle.pathological.mental_health_history],["Otros",bundle.pathological.other_history]]}/><ReadOnlyGroup title="Personales no patológicos" values={[["Alimentación",bundle.nonPathological.diet],["Actividad física",bundle.nonPathological.physical_activity],["Tabaquismo",bundle.nonPathological.tobacco_use],["Alcohol",bundle.nonPathological.alcohol_use],["Sustancias",bundle.nonPathological.substance_use],["Sueño",bundle.nonPathological.sleep],["Higiene",bundle.nonPathological.hygiene],["Vivienda",bundle.nonPathological.housing],["Vacunación",bundle.nonPathological.vaccination],["Otros",bundle.nonPathological.other_history]]}/><div><ButtonLink href={tabHref('historia')}>Editar antecedentes</ButtonLink></div></>:null}
+   {tab==='historia'&&bundle?<InitialHistoryForm patientId={id} bundle={bundle}/>:null}
+   {tab==='signos-vitales'&&bundle?<><VitalSignsForm patientId={id}/><section className="surface-card overflow-hidden"><div className="border-b border-slate-200 p-4"><h2 className="font-bold">Historial de mediciones</h2></div><div className="grid gap-3 p-4">{bundle.vitals.length?bundle.vitals.map(v=><article key={v.id} className="rounded-lg border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold">{formatPatientTimestamp(v.measured_at,data.tenant.clinic.timezone)}</p>{v.bmi?<Badge variant="slate">IMC {v.bmi}</Badge>:null}</div><dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4"><Block title="Peso" value={v.weight_kg?`${v.weight_kg} kg`:null}/><Block title="Estatura" value={v.height_cm?`${v.height_cm} cm`:null}/><Block title="Presión" value={v.systolic_mmhg&&v.diastolic_mmhg?`${v.systolic_mmhg}/${v.diastolic_mmhg} mmHg`:null}/><Block title="Temperatura" value={v.temperature_c?`${v.temperature_c} °C`:null}/><Block title="FC" value={v.heart_rate_bpm}/><Block title="FR" value={v.respiratory_rate_bpm}/><Block title="SpO₂" value={v.oxygen_saturation_percent?`${v.oxygen_saturation_percent} %`:null}/><Block title="Glucosa" value={v.capillary_glucose_mg_dl}/></dl>{v.notes?<p className="mt-3 text-sm text-slate-600">{v.notes}</p>:null}</article>):<p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">No hay signos vitales registrados. No se crean mediciones vacías.</p>}</div></section></>:null}
+   {['consultas','documentos','consentimientos','auditoria'].includes(tab)?<section className="surface-card p-8 text-center"><Activity className="mx-auto h-8 w-8 text-slate-400"/><h2 className="mt-3 text-lg font-bold">Próximamente</h2><p className="mt-2 text-sm text-slate-500">Esta sección se integrará en una fase posterior sin crear información ficticia.</p>{tab==='consultas'?<ButtonLink href={`/dashboard/patients/${id}/clinical-record`} className="mt-4">Ver expediente actual</ButtonLink>:null}{tab==='consentimientos'?<ButtonLink href={`/dashboard/patients/${id}/consents`} className="mt-4">Ver consentimientos actuales</ButtonLink>:null}</section>:null}
+   {canClinical&&!bundle?<section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">El expediente clínico no pudo cargarse. No se muestran datos parciales.</section>:null}
+  </main>
+ </>;
 }

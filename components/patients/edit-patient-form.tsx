@@ -1,198 +1,45 @@
 "use client";
 
 import { useActionState } from "react";
-import { UserRoundPen } from "lucide-react";
 import { updatePatientAction } from "@/app/dashboard/patients/[id]/edit/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import { ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
-import {
-  getPatientSexOptionLabel,
-  patientSexValues,
-  type PatientFieldErrors,
-  type PatientFormField,
-  type PatientFormState,
-  type PatientFormValues
-} from "@/lib/patients/create";
-import { getPatientStatusLabel, patientStatuses } from "@/lib/patients/query";
+import { getPatientSexOptionLabel, patientSexValues, type PatientFormField, type PatientFormState, type PatientFormValues } from "@/lib/patients/create";
 import type { PatientDoctorOption } from "@/lib/server/patient-form-options";
 
-type EditPatientFormProps = {
-  patientId: string;
-  initialValues: PatientFormValues;
-  doctors: PatientDoctorOption[];
-  clinicToday: string;
-};
-
+type Props = { patientId: string; initialValues: PatientFormValues; doctors: PatientDoctorOption[]; clinicToday: string };
 const initialState: PatientFormState = {};
 
-function fieldErrorId(field: PatientFormField) {
-  return `${field}-error`;
-}
-
-function FieldError({ field, errors }: { field: PatientFormField; errors: PatientFieldErrors | undefined }) {
-  const message = errors?.[field];
-
-  return message ? (
-    <span id={fieldErrorId(field)} className="text-xs font-medium text-rose-700">{message}</span>
-  ) : null;
-}
-
-export function EditPatientForm({ patientId, initialValues, doctors, clinicToday }: EditPatientFormProps) {
-  const boundAction = updatePatientAction.bind(null, patientId);
-  const [state, formAction] = useActionState(boundAction, initialState);
-  const values = state.values ?? initialValues;
-
-  return (
-    <form action={formAction} className="surface-card grid gap-6 p-4 sm:p-6">
-      <div className="flex items-start gap-3">
-        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-teal-50 text-clinic">
-          <UserRoundPen className="h-5 w-5" />
-        </div>
-        <div>
-          <h2 className="font-bold text-ink">Datos del paciente</h2>
-          <p className="mt-1 text-sm text-slate-500">Actualiza únicamente la información necesaria.</p>
-          <p className="mt-1 text-xs text-slate-500">Los campos con * son obligatorios.</p>
-        </div>
-      </div>
-
-      {state.error ? (
-        <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-          {state.error}
-        </p>
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Nombre completo *" htmlFor="full_name">
-          <Input
-            id="full_name"
-            name="full_name"
-            defaultValue={values.fullName}
-            minLength={2}
-            maxLength={120}
-            autoComplete="name"
-            required
-            aria-invalid={Boolean(state.fieldErrors?.fullName)}
-            aria-describedby={state.fieldErrors?.fullName ? fieldErrorId("fullName") : undefined}
-          />
-          <FieldError field="fullName" errors={state.fieldErrors} />
-        </Field>
-
-        <Field label="Estado *" htmlFor="status">
-          <Select
-            id="status"
-            name="status"
-            defaultValue={values.status}
-            required
-            aria-invalid={Boolean(state.fieldErrors?.status)}
-            aria-describedby={state.fieldErrors?.status ? fieldErrorId("status") : undefined}
-          >
-            {patientStatuses.map((status) => (
-              <option key={status} value={status}>{getPatientStatusLabel(status)}</option>
-            ))}
-          </Select>
-          <FieldError field="status" errors={state.fieldErrors} />
-        </Field>
-
-        <Field label="Correo" htmlFor="email">
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            defaultValue={values.email}
-            maxLength={254}
-            autoComplete="email"
-            placeholder="paciente@example.com"
-            aria-invalid={Boolean(state.fieldErrors?.email)}
-            aria-describedby={state.fieldErrors?.email ? fieldErrorId("email") : undefined}
-          />
-          <FieldError field="email" errors={state.fieldErrors} />
-        </Field>
-
-        <Field label="Teléfono" htmlFor="phone">
-          <Input
-            id="phone"
-            name="phone"
-            type="tel"
-            defaultValue={values.phone}
-            maxLength={32}
-            autoComplete="tel"
-            placeholder="+52 55 0000 0000"
-            aria-invalid={Boolean(state.fieldErrors?.phone)}
-            aria-describedby={state.fieldErrors?.phone ? fieldErrorId("phone") : undefined}
-          />
-          <FieldError field="phone" errors={state.fieldErrors} />
-        </Field>
-
-        <Field label="Fecha de nacimiento" htmlFor="date_of_birth">
-          <Input
-            id="date_of_birth"
-            name="date_of_birth"
-            type="date"
-            defaultValue={values.dateOfBirth}
-            max={clinicToday}
-            aria-invalid={Boolean(state.fieldErrors?.dateOfBirth)}
-            aria-describedby={state.fieldErrors?.dateOfBirth ? fieldErrorId("dateOfBirth") : undefined}
-          />
-          <FieldError field="dateOfBirth" errors={state.fieldErrors} />
-        </Field>
-
-        <Field label="Sexo" htmlFor="sex">
-          <Select
-            id="sex"
-            name="sex"
-            defaultValue={values.sex}
-            aria-invalid={Boolean(state.fieldErrors?.sex)}
-            aria-describedby={state.fieldErrors?.sex ? fieldErrorId("sex") : undefined}
-          >
-            {patientSexValues.map((sex) => (
-              <option key={sex} value={sex}>{getPatientSexOptionLabel(sex)}</option>
-            ))}
-          </Select>
-          <FieldError field="sex" errors={state.fieldErrors} />
-        </Field>
-
-        <Field label="Médico principal" htmlFor="primary_doctor_id">
-          <Select
-            id="primary_doctor_id"
-            name="primary_doctor_id"
-            defaultValue={values.primaryDoctorId}
-            aria-invalid={Boolean(state.fieldErrors?.primaryDoctorId)}
-            aria-describedby={state.fieldErrors?.primaryDoctorId ? fieldErrorId("primaryDoctorId") : undefined}
-          >
-            <option value="">Sin médico principal</option>
-            {doctors.map((doctor) => <option key={doctor.id} value={doctor.id}>{doctor.name}</option>)}
-          </Select>
-          <FieldError field="primaryDoctorId" errors={state.fieldErrors} />
-        </Field>
-      </div>
-
-      <Field label="Antecedentes relevantes" htmlFor="relevant_history">
-        <Textarea
-          id="relevant_history"
-          name="relevant_history"
-          defaultValue={values.relevantHistory}
-          maxLength={2000}
-          rows={6}
-          placeholder="Información clínica breve y necesaria"
-          aria-invalid={Boolean(state.fieldErrors?.relevantHistory)}
-          aria-describedby={state.fieldErrors?.relevantHistory ? fieldErrorId("relevantHistory") : undefined}
-        />
-        <FieldError field="relevantHistory" errors={state.fieldErrors} />
-      </Field>
-
-      <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-800">
-        Los antecedentes son información clínica protegida. Evita incluir datos que no sean necesarios para la atención.
-      </p>
-
-      <div className="flex flex-col-reverse gap-3 sm:ml-auto sm:w-auto sm:flex-row">
-        <ButtonLink href={`/dashboard/patients/${patientId}`} variant="secondary" className="sm:w-40">
-          Cancelar
-        </ButtonLink>
-        <div className="w-full sm:w-52">
-          <AuthSubmitButton idleLabel="Guardar cambios" pendingLabel="Guardando..." />
-        </div>
-      </div>
-    </form>
-  );
+export function EditPatientForm({ patientId, initialValues, doctors, clinicToday }: Props) {
+  const [state, formAction] = useActionState(updatePatientAction.bind(null, patientId), initialState);
+  const v = state.values ?? initialValues;
+  const error = (field: PatientFormField) => state.fieldErrors?.[field] ? <span className="text-xs text-rose-700">{state.fieldErrors[field]}</span> : null;
+  return <form action={formAction} className="glass-panel grid gap-6 p-4 sm:p-6">
+    <input type="hidden" name="flow_intent" value="later" />
+    <div><h2 className="text-lg font-bold text-ink">Datos personales y administrativos</h2><p className="mt-1 text-sm text-slate-500">Los campos clínicos se actualizan desde la historia inicial.</p></div>
+    {state.error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{state.error}</p> : null}
+    <div className="grid gap-4 md:grid-cols-2">
+      <Field label="Nombres *" htmlFor="first_names"><Input id="first_names" name="first_names" defaultValue={v.firstNames} required />{error("firstNames")}</Field>
+      <Field label="Primer apellido *" htmlFor="paternal_surname"><Input id="paternal_surname" name="paternal_surname" defaultValue={v.paternalSurname} required />{error("paternalSurname")}</Field>
+      <Field label="Segundo apellido" htmlFor="maternal_surname"><Input id="maternal_surname" name="maternal_surname" defaultValue={v.maternalSurname} />{error("maternalSurname")}</Field>
+      <Field label="Fecha de nacimiento *" htmlFor="date_of_birth"><Input id="date_of_birth" name="date_of_birth" type="date" defaultValue={v.dateOfBirth} max={clinicToday} required />{error("dateOfBirth")}</Field>
+      <Field label="Sexo al nacimiento *" htmlFor="sex"><Select id="sex" name="sex" defaultValue={v.sex}>{patientSexValues.map(x=><option key={x} value={x}>{getPatientSexOptionLabel(x)}</option>)}</Select>{error("sex")}</Field>
+      <Field label="Género" htmlFor="gender_identity"><Input id="gender_identity" name="gender_identity" defaultValue={v.genderIdentity} />{error("genderIdentity")}</Field>
+      <Field label="Estado" htmlFor="status"><Select id="status" name="status" defaultValue={v.status}><option value="active">Activo</option><option value="inactive">Inactivo</option><option value="follow_up">Seguimiento</option></Select>{error("status")}</Field>
+      <Field label="Profesional responsable" htmlFor="primary_doctor_id"><Select id="primary_doctor_id" name="primary_doctor_id" defaultValue={v.primaryDoctorId}><option value="">Por asignar</option>{doctors.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</Select>{error("primaryDoctorId")}</Field>
+      <Field label="Teléfono *" htmlFor="phone"><Input id="phone" name="phone" type="tel" defaultValue={v.phone} required />{error("phone")}</Field>
+      <Field label="Correo" htmlFor="email"><Input id="email" name="email" type="email" defaultValue={v.email} />{error("email")}</Field>
+      <div className="md:col-span-2"><Field label="Dirección" htmlFor="address"><Textarea id="address" name="address" defaultValue={v.address} rows={3} />{error("address")}</Field></div>
+      <Field label="Estado civil" htmlFor="marital_status"><Input id="marital_status" name="marital_status" defaultValue={v.maritalStatus} />{error("maritalStatus")}</Field>
+      <Field label="Ocupación" htmlFor="occupation"><Input id="occupation" name="occupation" defaultValue={v.occupation} />{error("occupation")}</Field>
+      <Field label="Escolaridad" htmlFor="education_level"><Input id="education_level" name="education_level" defaultValue={v.educationLevel} />{error("educationLevel")}</Field>
+    </div>
+    <fieldset className="grid gap-4 rounded-xl border border-slate-200 p-4"><legend className="px-2 font-semibold">Contacto de emergencia</legend><div className="grid gap-4 md:grid-cols-3">
+      <Field label="Nombre *" htmlFor="emergency_contact_name"><Input id="emergency_contact_name" name="emergency_contact_name" defaultValue={v.emergencyContactName} required />{error("emergencyContactName")}</Field>
+      <Field label="Parentesco *" htmlFor="emergency_contact_relationship"><Input id="emergency_contact_relationship" name="emergency_contact_relationship" defaultValue={v.emergencyContactRelationship} required />{error("emergencyContactRelationship")}</Field>
+      <Field label="Teléfono *" htmlFor="emergency_contact_phone"><Input id="emergency_contact_phone" name="emergency_contact_phone" type="tel" defaultValue={v.emergencyContactPhone} required />{error("emergencyContactPhone")}</Field>
+    </div></fieldset>
+    <div className="flex flex-col-reverse gap-3 sm:ml-auto sm:flex-row"><ButtonLink href={`/dashboard/patients/${patientId}`} variant="secondary">Cancelar</ButtonLink><div className="sm:w-52"><AuthSubmitButton idleLabel="Guardar cambios" pendingLabel="Guardando..." /></div></div>
+  </form>;
 }

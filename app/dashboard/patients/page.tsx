@@ -95,7 +95,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
             <Input
               name="q"
               defaultValue={query.search}
-              placeholder="Nombre, teléfono o email"
+              placeholder="Nombre, teléfono, correo o identificador"
               className="w-full pl-10"
             />
           </span>
@@ -165,7 +165,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-ink">{patient.full_name}</p>
-                  <p className="text-sm text-slate-500">{patient.sex || "Sexo sin registro"}</p>
+                  <p className="font-mono text-xs text-slate-500">{patient.internal_identifier}</p>
                 </div>
               </div>
               <div className="min-w-0 grid gap-1 text-sm text-slate-600">

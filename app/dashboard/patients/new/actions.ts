@@ -35,5 +35,8 @@ export async function createPatientAction(
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/patients");
   revalidatePath("/dashboard/appointments/new");
-  redirect(`/dashboard/patients/${result.patientId}?created=1`);
+  if (result.flowIntent === "complete_history") {
+    redirect(`/dashboard/patients/${result.patientId}?tab=historia&created=1`);
+  }
+  redirect(`/dashboard/patients/${result.patientId}?tab=resumen&created=1`);
 }
