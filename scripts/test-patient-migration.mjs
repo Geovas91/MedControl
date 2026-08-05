@@ -11,7 +11,12 @@ for(const table of ["clinical_records","initial_clinical_histories","clinical_al
   assert.match(sql,new RegExp(`alter table public\\.${table} enable row level security`,"i"),`${table} debe habilitar RLS`);
 }
 assert.match(sql,/clinical_records_one_active_per_patient_idx[\s\S]+where archived_at is null and status = 'active'/i);
-assert.match(sql,/foreign key \(clinic_id, clinical_record_id\)[\s\S]+references public\.clinical_records\(clinic_id, id\)/i);
+assert.match(sql,/clinical_records_clinic_id_id_patient_id_unique unique \(clinic_id, id, patient_id\)/i);
+for(const constraint of ["initial_histories_record_patient_fk","clinical_alerts_record_patient_fk","vital_signs_record_patient_fk"]){
+  assert.match(sql,new RegExp(`${constraint} foreign key \\(clinic_id, clinical_record_id, patient_id\\)\\s+references public\\.clinical_records\\(clinic_id, id, patient_id\\) on delete restrict`,"i"),`${constraint} debe vincular expediente y paciente de la misma clínica`);
+}
+assert.doesNotMatch(sql,/foreign key \(clinic_id, clinical_record_id\)\s+references public\.clinical_records\(clinic_id, id\)/i,"No deben conservarse FKs parciales al expediente");
+assert.match(sql,/initial_histories_completion_check check \(\s*\(status = 'completed' and completed_at is not null\)\s*or \(status <> 'completed' and completed_at is null\)/i);
 assert.match(sql,/create or replace function public\.create_patient_with_record[\s\S]+security definer set search_path = public, pg_temp/i);
 assert.match(sql,/create or replace function public\.save_initial_clinical_history[\s\S]+security definer set search_path = public, pg_temp/i);
 assert.match(sql,/bmi numeric\(5,2\) generated always as/i);

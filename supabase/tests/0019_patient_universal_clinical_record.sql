@@ -22,6 +22,7 @@ select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001'
 select * from public.create_patient_with_record('20000000-0000-4000-8000-000000000001','Ana','López',p_date_of_birth=>'1990-05-10',p_phone=>'+525500000001');
 insert into patient_test_ids select 'history_a',h.id from public.initial_clinical_histories h where h.clinic_id='20000000-0000-4000-8000-000000000001';
 insert into patient_test_ids select 'record_a',r.id from public.clinical_records r where r.clinic_id='20000000-0000-4000-8000-000000000001';
+insert into patient_test_ids select 'patient_a',p.id from public.patients p where p.clinic_id='20000000-0000-4000-8000-000000000001' and p.first_names='Ana';
 select public.save_initial_clinical_history('20000000-0000-4000-8000-000000000001',
   (select id from public.patients where first_names='Ana'),'draft',p_chief_complaint=>'Consulta preventiva');
 insert into public.vital_sign_measurements(clinic_id,clinical_record_id,patient_id,measured_at,weight_kg,height_cm,recorded_by)
@@ -44,6 +45,41 @@ do $$ begin
   perform public.create_patient_with_record('20000000-0000-4000-8000-000000000001','Ana','López',p_date_of_birth=>'1990-05-10',p_phone=>'+525500000001');
   raise exception 'Duplicate patient was accepted';
  exception when unique_violation then null; end;
+end $$;
+
+-- A record and patient that both belong to the same clinic must still belong to each other.
+select * from public.create_patient_with_record('20000000-0000-4000-8000-000000000001','Beatriz','Santos',p_date_of_birth=>'1992-06-15',p_phone=>'+525500000004');
+insert into patient_test_ids select 'patient_same_clinic_b',p.id from public.patients p
+where p.clinic_id='20000000-0000-4000-8000-000000000001' and p.first_names='Beatriz';
+
+do $$ declare v_record_a uuid; v_patient_b uuid; begin
+ select value into strict v_record_a from patient_test_ids where key='record_a';
+ select value into strict v_patient_b from patient_test_ids where key='patient_same_clinic_b';
+ begin
+  insert into public.initial_clinical_histories(clinic_id,clinical_record_id,patient_id,archived_at)
+  values('20000000-0000-4000-8000-000000000001',v_record_a,v_patient_b,now());
+  raise exception 'History accepted a record belonging to another patient in the same clinic';
+ exception when foreign_key_violation then null; end;
+ begin
+  insert into public.clinical_alerts(clinic_id,clinical_record_id,patient_id,alert_type,name)
+  values('20000000-0000-4000-8000-000000000001',v_record_a,v_patient_b,'allergy','Mismatch test');
+  raise exception 'Alert accepted a record belonging to another patient in the same clinic';
+ exception when foreign_key_violation then null; end;
+ begin
+  insert into public.vital_sign_measurements(clinic_id,clinical_record_id,patient_id,temperature_c,recorded_by)
+  values('20000000-0000-4000-8000-000000000001',v_record_a,v_patient_b,37,'10000000-0000-4000-8000-000000000001');
+  raise exception 'Vital signs accepted a record belonging to another patient in the same clinic';
+ exception when foreign_key_violation then null; end;
+ begin
+ update public.initial_clinical_histories set completed_at=now()
+  where id=(select value from patient_test_ids where key='history_a');
+  raise exception 'Non-completed history accepted completed_at';
+ exception when check_violation then null; end;
+ begin
+  update public.initial_clinical_histories set status='completed',completed_at=null
+  where id=(select value from patient_test_ids where key='history_a');
+  raise exception 'Completed history accepted a null completed_at';
+ exception when check_violation then null; end;
 end $$;
 
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',true);

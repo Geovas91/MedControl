@@ -54,7 +54,7 @@ create table public.clinical_records (
   archived_at timestamptz,
   constraint clinical_records_clinic_patient_fk foreign key (clinic_id, patient_id)
     references public.patients(clinic_id, id) on delete restrict,
-  constraint clinical_records_clinic_id_id_unique unique (clinic_id, id)
+  constraint clinical_records_clinic_id_id_patient_id_unique unique (clinic_id, id, patient_id)
 );
 
 create unique index clinical_records_one_active_per_patient_idx
@@ -74,12 +74,11 @@ create table public.initial_clinical_histories (
   updated_by uuid references auth.users(id),
   updated_at timestamptz not null default now(),
   archived_at timestamptz,
-  constraint initial_histories_record_fk foreign key (clinic_id, clinical_record_id)
-    references public.clinical_records(clinic_id, id) on delete restrict,
-  constraint initial_histories_patient_fk foreign key (clinic_id, patient_id)
-    references public.patients(clinic_id, id) on delete restrict,
+  constraint initial_histories_record_patient_fk foreign key (clinic_id, clinical_record_id, patient_id)
+    references public.clinical_records(clinic_id, id, patient_id) on delete restrict,
   constraint initial_histories_completion_check check (
-    (status = 'completed' and completed_at is not null) or status <> 'completed'
+    (status = 'completed' and completed_at is not null)
+    or (status <> 'completed' and completed_at is null)
   ),
   constraint initial_histories_clinic_id_id_unique unique (clinic_id, id)
 );
@@ -124,10 +123,8 @@ create table public.clinical_alerts (
   updated_by uuid references auth.users(id),
   updated_at timestamptz not null default now(),
   archived_at timestamptz,
-  constraint clinical_alerts_record_fk foreign key (clinic_id, clinical_record_id)
-    references public.clinical_records(clinic_id, id) on delete restrict,
-  constraint clinical_alerts_patient_fk foreign key (clinic_id, patient_id)
-    references public.patients(clinic_id, id) on delete restrict
+  constraint clinical_alerts_record_patient_fk foreign key (clinic_id, clinical_record_id, patient_id)
+    references public.clinical_records(clinic_id, id, patient_id) on delete restrict
 );
 
 create index clinical_alerts_active_record_idx
@@ -236,10 +233,8 @@ create table public.vital_sign_measurements (
   voided_at timestamptz,
   voided_by uuid references auth.users(id),
   void_reason text,
-  constraint vital_signs_record_fk foreign key (clinic_id, clinical_record_id)
-    references public.clinical_records(clinic_id, id) on delete restrict,
-  constraint vital_signs_patient_fk foreign key (clinic_id, patient_id)
-    references public.patients(clinic_id, id) on delete restrict,
+  constraint vital_signs_record_patient_fk foreign key (clinic_id, clinical_record_id, patient_id)
+    references public.clinical_records(clinic_id, id, patient_id) on delete restrict,
   constraint vital_signs_has_measurement check (num_nonnulls(weight_kg, height_cm, temperature_c, systolic_mmhg,
     diastolic_mmhg, heart_rate_bpm, respiratory_rate_bpm, oxygen_saturation_percent,
     capillary_glucose_mg_dl, pain_scale) > 0),
