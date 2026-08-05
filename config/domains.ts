@@ -1,4 +1,5 @@
 import { brandConfig } from "@/config/brand";
+import { normalizePublicOrigin } from "@/lib/auth/public-origin";
 
 const localAppUrl = "http://localhost:3000";
 
@@ -15,18 +16,7 @@ function getAppEnvironment(): AppEnvironment {
 }
 
 function normalizeAppUrl(value: string | undefined) {
-  const candidate = value?.trim();
-
-  if (!candidate) {
-    return null;
-  }
-
-  try {
-    const url = new URL(candidate);
-    return url.origin;
-  } catch {
-    return null;
-  }
+  return normalizePublicOrigin(value);
 }
 
 export const domainConfig = {
@@ -40,6 +30,12 @@ export const domainConfig = {
 } as const;
 
 export function getCanonicalAppUrl() {
+  const publicSiteUrl = normalizeAppUrl(process.env.NEXT_PUBLIC_SITE_URL);
+
+  if (publicSiteUrl) {
+    return publicSiteUrl;
+  }
+
   const explicitBaseUrl = normalizeAppUrl(process.env.APP_BASE_URL);
 
   if (explicitBaseUrl) {

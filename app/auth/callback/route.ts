@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
 import { buildAuthRedirect, getGoogleOAuthErrorMessage, getPostAuthRedirect, getSafeLocalPath } from "@/lib/auth/redirects";
 import { syncAuthUserProfile } from "@/lib/auth/profile";
+import { getPublicAppOrigin } from "@/lib/auth/public-origin";
 
 function loginRedirect(origin: string, next: string, error: string) {
   return NextResponse.redirect(new URL(buildAuthRedirect("/login", { next, error }), origin));
@@ -11,6 +12,7 @@ function loginRedirect(origin: string, next: string, error: string) {
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
+  const publicOrigin = getPublicAppOrigin(request);
   const code = requestUrl.searchParams.get("code");
   const next = getSafeLocalPath(requestUrl.searchParams.get("next"), "");
   const oauthError = requestUrl.searchParams.get("error");
@@ -23,7 +25,7 @@ export async function GET(request: NextRequest) {
     });
 
     return loginRedirect(
-      requestUrl.origin,
+      publicOrigin,
       next,
       getGoogleOAuthErrorMessage(oauthError, requestUrl.searchParams.get("error_description"))
     );
@@ -35,7 +37,7 @@ export async function GET(request: NextRequest) {
       status: "invalid_callback"
     });
 
-    return loginRedirect(requestUrl.origin, next, "El callback de autenticación no es válido o ya expiró.");
+    return loginRedirect(publicOrigin, next, "El callback de autenticación no es válido o ya expiró.");
   }
 
   const configError = getSupabaseConfigError();
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest) {
       status: "degraded"
     });
 
-    return loginRedirect(requestUrl.origin, next, configError);
+    return loginRedirect(publicOrigin, next, configError);
   }
 
   const supabase = await createClient();
@@ -57,7 +59,7 @@ export async function GET(request: NextRequest) {
       status: "exchange_failed"
     });
 
-    return loginRedirect(requestUrl.origin, next, "No fue posible validar el acceso. Solicita un enlace nuevo o intenta nuevamente.");
+    return loginRedirect(publicOrigin, next, "No fue posible validar el acceso. Solicita un enlace nuevo o intenta nuevamente.");
   }
 
   const user = data.user ?? data.session?.user;
@@ -66,7 +68,7 @@ export async function GET(request: NextRequest) {
       component: "auth",
       status: "invalid_session"
     });
-    return loginRedirect(requestUrl.origin, next, "No fue posible completar la sesión de usuario.");
+    return loginRedirect(publicOrigin, next, "No fue posible completar la sesión de usuario.");
   }
 
   const { profile, error: profileError } = await syncAuthUserProfile(supabase, user);
@@ -76,7 +78,7 @@ export async function GET(request: NextRequest) {
       status: "profile_sync_failed",
       error_code: profileError?.code
     });
-    return loginRedirect(requestUrl.origin, next, "No fue posible preparar tu perfil. Intenta nuevamente.");
+    return loginRedirect(publicOrigin, next, "No fue posible preparar tu perfil. Intenta nuevamente.");
   }
 
   const { data: membership, error: membershipError } = await supabase
@@ -101,5 +103,5 @@ export async function GET(request: NextRequest) {
     hasClinic: Boolean(membership) && !membershipError
   });
 
-  return NextResponse.redirect(new URL(destination, requestUrl.origin));
+  return NextResponse.redirect(new URL(destination, publicOrigin));
 }

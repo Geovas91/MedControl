@@ -62,6 +62,17 @@ test("auth callback handles an OAuth provider error", async ({ page }) => {
   await expect(page.getByText(/acceso con Google fue cancelado/i)).toBeVisible();
 });
 
+test("auth callback honors the configured public site origin", async ({ request }) => {
+  test.skip(!process.env.NEXT_PUBLIC_SITE_URL, "NEXT_PUBLIC_SITE_URL is required for this proxy-origin regression test.");
+  const response = await request.get("/auth/callback?error=access_denied", { maxRedirects: 0 });
+  expect([302, 303, 307, 308]).toContain(response.status());
+
+  const location = response.headers().location;
+  expect(location).toBeTruthy();
+  expect(new URL(location).origin).toBe(new URL(process.env.NEXT_PUBLIC_SITE_URL!).origin);
+  expect(new URL(location).hostname).not.toBe("localhost");
+});
+
 test("invalid invitation is generic and does not disclose identity details", async ({ page }) => {
   await page.goto("/invite/token-invalido");
   await expect(page.locator("main")).toBeVisible();
