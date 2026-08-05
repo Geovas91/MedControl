@@ -6,6 +6,15 @@ import {
   getSafeLocalPath
 } from "../lib/auth/redirects.ts";
 import { getAuthProfileValues } from "../lib/auth/profile.ts";
+import { getPublicAppOrigin, normalizePublicOrigin } from "../lib/auth/public-origin.ts";
+
+function originRequest(origin: string, headers: Record<string, string> = {}) {
+  const requestHeaders = new Headers(headers);
+  return {
+    headers: requestHeaders,
+    nextUrl: { origin }
+  };
+}
 
 assert.equal(getSafeLocalPath("/dashboard/settings"), "/dashboard/settings");
 assert.equal(getSafeLocalPath("/invite/abc_123", ""), "/invite/abc_123");
@@ -49,5 +58,39 @@ assert.deepEqual(
   ),
   { id: "user-1", email: "new@example.com", full_name: "Nombre guardado" }
 );
+
+assert.equal(normalizePublicOrigin("https://staging.clinicontrol.mx/"), "https://staging.clinicontrol.mx");
+assert.equal(normalizePublicOrigin("javascript:alert(1)"), null);
+assert.equal(normalizePublicOrigin("data:text/plain,test"), null);
+assert.equal(normalizePublicOrigin("/relative"), null);
+assert.equal(normalizePublicOrigin("not a URL"), null);
+
+const internalRequest = originRequest("http://localhost:3000", {
+  "x-forwarded-host": "attacker.example",
+  "x-forwarded-proto": "https",
+  host: "localhost:3000"
+});
+const savedSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+process.env.NEXT_PUBLIC_SITE_URL = "https://staging.clinicontrol.mx/";
+assert.equal(getPublicAppOrigin(internalRequest), "https://staging.clinicontrol.mx");
+if (savedSiteUrl === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+else process.env.NEXT_PUBLIC_SITE_URL = savedSiteUrl;
+assert.equal(
+  getPublicAppOrigin(internalRequest, "javascript:alert(1)"),
+  "http://localhost:3000",
+  "A configured but invalid site URL must not be replaced by manipulated headers."
+);
+
+const proxiedRequest = originRequest("http://localhost:3000", {
+  "x-forwarded-host": "staging.clinicontrol.mx",
+  "x-forwarded-proto": "https",
+  host: "localhost:3000"
+});
+assert.equal(getPublicAppOrigin(proxiedRequest, ""), "https://staging.clinicontrol.mx");
+
+const publicOrigin = getPublicAppOrigin(proxiedRequest, "https://staging.clinicontrol.mx");
+assert.equal(new URL("/dashboard", publicOrigin).origin, "https://staging.clinicontrol.mx");
+assert.equal(new URL("/login?error=oauth", publicOrigin).origin, "https://staging.clinicontrol.mx");
+assert.equal(new URL("/onboarding", publicOrigin).hostname === "localhost", false);
 
 console.log("Google OAuth redirect checks passed.");
