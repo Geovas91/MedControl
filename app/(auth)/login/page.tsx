@@ -3,6 +3,7 @@ import { Stethoscope } from "lucide-react";
 import { signInAction } from "@/app/(auth)/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import { GoogleOAuthButton } from "@/components/auth/google-oauth-button";
+import { PasswordField } from "@/components/ui/password-field";
 import { Field, Input } from "@/components/ui/input";
 import { getSafeLocalPath } from "@/lib/auth/redirects";
 
@@ -44,16 +45,14 @@ export default async function LoginPage({ searchParams }: AuthPageProps) {
           <Field label="Email" htmlFor="email">
             <Input id="email" name="email" type="email" autoComplete="email" placeholder="doctor@clinic.com" required />
           </Field>
-          <Field label="Contraseña" htmlFor="password">
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              placeholder="Contraseña"
-              required
-            />
-          </Field>
+          <PasswordField
+            id="password"
+            label="Contraseña"
+            name="password"
+            autoComplete="current-password"
+            placeholder="Contraseña"
+            required
+          />
           <AuthSubmitButton idleLabel="Iniciar sesión" pendingLabel="Iniciando sesión..." />
         </form>
         <p className="mt-4 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-500">

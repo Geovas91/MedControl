@@ -62,7 +62,7 @@ export function GoogleOAuthButton({ next }: { next?: string }) {
       {error ? <p id="google-oauth-error" role="alert" className="mt-3 rounded-md bg-rose-50 p-3 text-sm leading-6 text-rose-700">{error}</p> : null}
       <div className="my-5 flex items-center gap-3" aria-hidden="true">
         <span className="h-px flex-1 bg-slate-200" />
-        <span className="text-xs font-medium uppercase tracking-wide text-slate-400">o continúa con correo</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-600">o continúa con correo</span>
         <span className="h-px flex-1 bg-slate-200" />
       </div>
     </div>

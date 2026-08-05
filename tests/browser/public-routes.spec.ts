@@ -49,6 +49,34 @@ test("Google OAuth button renders on login and signup", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Continuar con Google" })).toBeVisible();
 });
 
+test("password visibility controls preserve auth field behavior", async ({ page }) => {
+  const fields = [
+    { route: "/login", label: "Contraseña", autocomplete: "current-password", minLength: null },
+    { route: "/signup", label: "Contraseña", autocomplete: "new-password", minLength: "6" },
+    { route: "/reset-password", label: "Nueva contraseña", autocomplete: "new-password", minLength: "8" },
+    { route: "/reset-password", label: "Confirmar contraseña", autocomplete: "new-password", minLength: "8" }
+  ];
+
+  for (const field of fields) {
+    await page.goto(field.route);
+    const input = page.getByLabel(field.label, { exact: true });
+    const toggle = page.getByRole("button", { name: `Mostrar ${field.label.toLocaleLowerCase("es-MX")}` });
+
+    await expect(input).toHaveAttribute("type", "password");
+    await expect(input).toHaveAttribute("autocomplete", field.autocomplete);
+    if (field.minLength) await expect(input).toHaveAttribute("minlength", field.minLength);
+    await input.fill("Clave-segura-123");
+
+    await toggle.click();
+    await expect(input).toHaveAttribute("type", "text");
+    await expect(input).toHaveValue("Clave-segura-123");
+    await expect(page.getByRole("button", { name: `Ocultar ${field.label.toLocaleLowerCase("es-MX")}` })).toHaveAttribute("aria-pressed", "true");
+
+    await page.getByRole("button", { name: `Ocultar ${field.label.toLocaleLowerCase("es-MX")}` }).click();
+    await expect(input).toHaveAttribute("type", "password");
+  }
+});
+
 test("auth callback without code returns a safe login error", async ({ page }) => {
   await page.goto("/auth/callback?next=https://evil.example/steal");
   await expect(page).toHaveURL(/\/login\?error=/);
