@@ -15,9 +15,6 @@ import {
   type PatientDoctorOption
 } from "@/lib/server/patient-form-options";
 import { createClient } from "@/lib/supabase/server";
-import type { Database } from "@/types/database";
-
-type PatientInsert = Database["public"]["Tables"]["patients"]["Insert"];
 
 export type { PatientDoctorOption } from "@/lib/server/patient-form-options";
 
@@ -34,7 +31,7 @@ export type PatientCreationOptionsResult =
   | { state: "error"; data: null };
 
 export type CreatePatientResult =
-  | { state: "success"; patientId: string }
+  | { state: "success"; patientId: string; historyId: string; flowIntent: "complete_history" | "later" }
   | { state: "unauthenticated" }
   | { state: "no_active_membership" }
   | { state: "forbidden" }
@@ -131,112 +128,43 @@ export async function createPatientForActiveTenant(values: PatientFormValues): P
   const clinicId = context.tenant.clinic.id;
   const supabase = await createClient();
 
-  if (input.primaryDoctorId) {
-    const doctorResult = await supabase
-      .from("doctor_public_profiles")
-      .select("profile_id")
-      .eq("clinic_id", clinicId)
-      .eq("profile_id", input.primaryDoctorId)
-      .limit(1)
-      .maybeSingle();
+  const rpcResult = await (supabase as any).rpc("create_patient_with_record", {
+    p_clinic_id: clinicId,
+    p_first_names: input.firstNames,
+    p_paternal_surname: input.paternalSurname,
+    p_maternal_surname: input.maternalSurname,
+    p_date_of_birth: input.dateOfBirth,
+    p_sex: input.sex,
+    p_gender_identity: input.genderIdentity,
+    p_phone: input.phone,
+    p_email: input.email,
+    p_address: input.address,
+    p_marital_status: input.maritalStatus,
+    p_occupation: input.occupation,
+    p_education_level: input.educationLevel,
+    p_status: input.status,
+    p_emergency_contact_name: input.emergencyContactName,
+    p_emergency_contact_relationship: input.emergencyContactRelationship,
+    p_emergency_contact_phone: input.emergencyContactPhone,
+    p_primary_doctor_id: input.primaryDoctorId
+  });
+  const created = rpcResult.data?.[0] as { patient_id: string; initial_history_id: string } | undefined;
 
-    if (doctorResult.error) {
-      logger.error("Patient primary doctor validation failed", {
-        component: "create_patient",
-        status: "doctor_validation_error",
-        code: doctorResult.error.code
-      });
-      return {
-        state: "error",
-        error: "No fue posible validar el médico seleccionado. Intenta nuevamente.",
-        values
-      };
-    }
-
-    if (!doctorResult.data) {
-      return {
-        state: "validation_error",
-        error: "Revisa el médico principal seleccionado.",
-        fieldErrors: { primaryDoctorId: "El médico no pertenece a la clínica activa." },
-        values
-      };
-    }
-  }
-
-  for (const [column, value] of [
-    ["email", input.email],
-    ["phone", input.phone]
-  ] as const) {
-    if (!value) {
-      continue;
-    }
-
-    const duplicateResult = await supabase
-      .from("patients")
-      .select("id")
-      .eq("clinic_id", clinicId)
-      .eq(column, value)
-      .limit(1)
-      .maybeSingle();
-
-    if (duplicateResult.error) {
-      logger.error("Patient duplicate check failed", {
-        component: "create_patient",
-        status: "duplicate_query_error",
-        code: duplicateResult.error.code
-      });
-      return {
-        state: "error",
-        error: "No fue posible verificar posibles duplicados. Intenta nuevamente.",
-        values
-      };
-    }
-
-    if (duplicateResult.data) {
-      return {
-        state: "duplicate",
-        error: "Ya existe un paciente con datos de contacto similares.",
-        fieldErrors: {
-          [column === "email" ? "email" : "phone"]: "Revisa este dato de contacto."
-        },
-        values
-      };
-    }
-  }
-
-  const insertValues = {
-    clinic_id: clinicId,
-    primary_doctor_id: input.primaryDoctorId,
-    full_name: input.fullName,
-    date_of_birth: input.dateOfBirth,
-    sex: input.sex,
-    phone: input.phone,
-    email: input.email,
-    relevant_history: input.relevantHistory,
-    status: input.status
-  } satisfies PatientInsert;
-  // The hand-maintained Database type lacks generated relationship metadata, so this table infers insert as never.
-  const insertResult = (await supabase
-    .from("patients")
-    .insert(insertValues as never)
-    .select("id")
-    .single()) as unknown as {
-    data: { id: string } | null;
-    error: { code: string } | null;
-  };
-
-  if (insertResult.error || !insertResult.data) {
+  if (rpcResult.error || !created) {
     logger.error("Patient insert failed", {
       component: "create_patient",
-      status: "insert_error",
-      code: insertResult.error?.code ?? "missing_result"
+      status: "atomic_rpc_error",
+      code: rpcResult.error?.code ?? "missing_result"
     });
+    if (rpcResult.error?.code === "23505") {
+      return { state: "duplicate", error: "Ya existe un paciente con el mismo nombre, fecha de nacimiento y contacto.", values };
+    }
     return {
       state: "error",
-      error: "No fue posible crear el paciente. Intenta nuevamente.",
+      error: "No fue posible crear el paciente y su expediente. No se guardó información parcial.",
       values
     };
   }
 
-  return { state: "success", patientId: insertResult.data.id };
+  return { state: "success", patientId: created.patient_id, historyId: created.initial_history_id, flowIntent: input.flowIntent };
 }

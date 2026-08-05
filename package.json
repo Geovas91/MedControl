@@ -12,6 +12,8 @@
     "audit:ui": "node scripts/audit-ui.mjs",
     "check:supabase": "node scripts/check-supabase-config.mjs",
     "test:auth-oauth": "node --experimental-strip-types scripts/test-auth-oauth.ts",
+    "test:unit": "node --experimental-strip-types --test tests/unit/*.test.ts",
+    "test:patients:migration": "node scripts/test-patient-migration.mjs",
     "test:invitation-email": "node --experimental-strip-types scripts/test-invitation-email.ts",
     "test:browser": "playwright test",
     "test:pwa": "node scripts/test-pwa-production.mjs",

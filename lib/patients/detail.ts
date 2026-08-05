@@ -101,6 +101,7 @@ export function getPatientSexLabel(value: string | null) {
   const labels: Record<string, string> = {
     female: "Femenino",
     male: "Masculino",
+    intersex: "Intersexual",
     unspecified: "Sin especificar"
   };
 
