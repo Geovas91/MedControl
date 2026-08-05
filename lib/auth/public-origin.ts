@@ -41,7 +41,7 @@ function normalizeHeaderOrigin(protocol: string | null, host: string | null) {
 
 export function getPublicAppOrigin(
   request: PublicOriginRequest,
-  configuredSiteUrl: string | undefined = process.env.NEXT_PUBLIC_SITE_URL
+  configuredSiteUrl?: string
 ) {
   const configuredOrigin = normalizePublicOrigin(configuredSiteUrl);
   if (configuredOrigin) return configuredOrigin;
