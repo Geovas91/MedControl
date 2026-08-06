@@ -48,7 +48,7 @@ export type AppointmentCreationOptionsResult =
   | { state: "error"; data: null };
 
 export type CreateAppointmentResult =
-  | { state: "success"; appointmentId: string; date: string; patientId: string }
+  | { state: "success"; appointmentId: string; date: string; patientId: string; operationKey: string; appointmentVersion: string }
   | { state: "unauthenticated" }
   | { state: "no_active_membership" }
   | { state: "forbidden" }
@@ -276,7 +276,7 @@ export async function createAppointmentForActiveTenant(
   const endsAt = calculateAppointmentEnd(startsAt, input.duration);
   const conflictResult = await supabase
     .from("appointments")
-    .select("id")
+    .select("id, updated_at")
     .eq("clinic_id", clinicId)
     .eq("doctor_id", input.doctorId)
     .neq("status", "cancelled")
@@ -325,7 +325,7 @@ export async function createAppointmentForActiveTenant(
     .insert(insertValues as never)
     .select("id")
     .single()) as unknown as {
-    data: { id: string } | null;
+    data: { id: string; updated_at: string } | null;
     error: { code: string } | null;
   };
 
@@ -346,6 +346,8 @@ export async function createAppointmentForActiveTenant(
     state: "success",
     appointmentId: insertResult.data.id,
     date: input.date,
-    patientId: input.patientId
+    patientId: input.patientId,
+    operationKey: `${insertResult.data.id}:created:${insertResult.data.updated_at}`,
+    appointmentVersion: insertResult.data.updated_at
   };
 }

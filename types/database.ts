@@ -629,6 +629,12 @@ export type Database = {
           accepted_at: Timestamp | null;
           declined_at: Timestamp | null;
           failed_reason: string | null;
+          sequence: number;
+          provider_message_id: string | null;
+          last_attempted_at: Timestamp | null;
+          last_method: "REQUEST" | "CANCEL" | null;
+          last_idempotency_key: string | null;
+          delivery_status: "not_sent" | "pending" | "sent" | "failed" | "delivery_unknown" | "missing_recipient" | "disabled";
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -646,6 +652,12 @@ export type Database = {
           accepted_at?: Timestamp | null;
           declined_at?: Timestamp | null;
           failed_reason?: string | null;
+          sequence?: number;
+          provider_message_id?: string | null;
+          last_attempted_at?: Timestamp | null;
+          last_method?: "REQUEST" | "CANCEL" | null;
+          last_idempotency_key?: string | null;
+          delivery_status?: "not_sent" | "pending" | "sent" | "failed" | "delivery_unknown" | "missing_recipient" | "disabled";
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };

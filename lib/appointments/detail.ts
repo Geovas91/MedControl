@@ -8,6 +8,7 @@ export type AppointmentDetailSearchParams = {
   created?: RawDetailQueryValue;
   updated?: RawDetailQueryValue;
   status_updated?: RawDetailQueryValue;
+  calendar_email?: RawDetailQueryValue;
 };
 
 export type AppointmentDetailDateTime = {
@@ -99,6 +100,19 @@ export function getAppointmentDetailMessage(searchParams: AppointmentDetailSearc
   if (searchParams.updated === "1") return "La cita se actualizó correctamente.";
   if (searchParams.created === "1") return "La cita se creó correctamente.";
   return null;
+}
+
+export function getAppointmentCalendarEmailMessage(searchParams: AppointmentDetailSearchParams) {
+  const value = Array.isArray(searchParams.calendar_email) ? searchParams.calendar_email[0] : searchParams.calendar_email;
+  const messages = {
+    sent: { tone: "success" as const, text: "La invitación de calendario se envió al correo del paciente." },
+    missing_recipient: { tone: "warning" as const, text: "La cita se guardó, pero el paciente no tiene un correo válido para recibir la invitación." },
+    failed: { tone: "warning" as const, text: "La cita se guardó, pero no fue posible enviar la invitación de calendario." },
+    delivery_unknown: { tone: "warning" as const, text: "La cita se guardó. El proveedor no confirmó el envío; no se realizó un reintento automático para evitar duplicados." },
+    disabled: { tone: "warning" as const, text: "La cita se guardó, pero el envío de correo está deshabilitado o incompleto en este entorno." },
+    duplicate: { tone: "neutral" as const, text: "Esta operación ya había sido procesada y no se envió una invitación duplicada." }
+  };
+  return value && Object.hasOwn(messages, value) ? messages[value as keyof typeof messages] : null;
 }
 
 export function getAppointmentDetailAgendaHref(localDate: string | null) {

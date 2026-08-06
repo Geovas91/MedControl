@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { parseAppointmentStatusFormData } from "@/lib/appointments/status";
 import { updateAppointmentStatusForActiveTenant } from "@/lib/server/update-appointment-status";
+import { deliverAppointmentCalendarEmail } from "@/lib/server/appointment-calendar-email";
+import { getStatusCalendarOperation } from "@/lib/calendar/invitation";
 
 export type AppointmentStatusActionState = {
   error?: string;
@@ -27,6 +29,16 @@ export async function updateAppointmentStatusAction(
 
   if (result.state !== "success") return { error: result.error };
 
+  const calendarOperation = getStatusCalendarOperation(result.outcome);
+  const calendarEmail = calendarOperation
+    ? await deliverAppointmentCalendarEmail({
+        appointmentId,
+        ...calendarOperation,
+        operationKey: result.operationKey,
+        appointmentVersion: result.appointmentVersion
+      })
+    : null;
+
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/appointments");
   revalidatePath(`/dashboard/appointments/${appointmentId}`);
@@ -36,5 +48,7 @@ export async function updateAppointmentStatusAction(
     revalidatePath(`/dashboard/appointments?date=${encodeURIComponent(result.localDate)}`);
   }
 
-  redirect(`/dashboard/appointments/${appointmentId}?status_updated=${result.outcome}`);
+  const query = new URLSearchParams({ status_updated: result.outcome });
+  if (calendarEmail) query.set("calendar_email", calendarEmail);
+  redirect(`/dashboard/appointments/${appointmentId}?${query.toString()}`);
 }
