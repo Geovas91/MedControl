@@ -11,6 +11,7 @@ import {
   type AppointmentStatusFormInput,
   type AppointmentStatusOutcome
 } from "@/lib/appointments/status";
+import { buildAppointmentCalendarOperation } from "@/lib/calendar/invitation";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -28,6 +29,8 @@ export type UpdateAppointmentStatusResult =
       outcome: AppointmentStatusOutcome;
       patientId: string;
       localDate: string | null;
+      operationKey: string;
+      appointmentVersion: string;
     }
   | { state: "invalid_id" }
   | { state: "unauthenticated" }
@@ -171,9 +174,9 @@ export async function updateAppointmentStatusForActiveTenant(
     .eq("id", appointmentId)
     .eq("clinic_id", clinicId)
     .eq("status", input.expectedCurrentStatus)
-    .select("id, patient_id, starts_at, status")
+    .select("id, patient_id, starts_at, status, updated_at")
     .maybeSingle()) as unknown as {
-    data: Pick<AppointmentRow, "id" | "patient_id" | "starts_at" | "status"> | null;
+    data: Pick<AppointmentRow, "id" | "patient_id" | "starts_at" | "status" | "updated_at"> | null;
     error: { code: string } | null;
   };
 
@@ -199,10 +202,17 @@ export async function updateAppointmentStatusForActiveTenant(
     context.tenant.clinic.timezone
   ).localDate;
 
+  const calendarOperation = buildAppointmentCalendarOperation(
+    appointmentId,
+    "status",
+    updateResult.data.updated_at
+  );
+
   return {
     state: "success",
     outcome,
     patientId: updateResult.data.patient_id,
-    localDate
+    localDate,
+    ...calendarOperation
   };
 }

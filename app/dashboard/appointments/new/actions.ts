@@ -7,6 +7,7 @@ import {
   type AppointmentFormState
 } from "@/lib/appointments/create";
 import { createAppointmentForActiveTenant } from "@/lib/server/create-appointment";
+import { deliverAppointmentCalendarEmail } from "@/lib/server/appointment-calendar-email";
 
 export async function createAppointmentAction(
   _previousState: AppointmentFormState,
@@ -42,9 +43,17 @@ export async function createAppointmentAction(
     };
   }
 
+  const calendarEmail = await deliverAppointmentCalendarEmail({
+    appointmentId: result.appointmentId,
+    method: "REQUEST",
+    reason: "created",
+    operationKey: result.operationKey,
+    appointmentVersion: result.appointmentVersion
+  });
+
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/appointments");
   revalidatePath(`/dashboard/patients/${result.patientId}`);
   revalidatePath(`/dashboard/appointments/${result.appointmentId}`);
-  redirect(`/dashboard/appointments/${result.appointmentId}?created=1`);
+  redirect(`/dashboard/appointments/${result.appointmentId}?created=1&calendar_email=${calendarEmail}`);
 }

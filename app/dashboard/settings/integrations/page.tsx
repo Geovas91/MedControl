@@ -19,7 +19,20 @@ const syncDirectionLabels: Record<string, string> = {
 };
 
 export default function IntegrationsPage() {
-  const sampleIcs = generateAppointmentIcs(calendarSafeAppointments[0]);
+  const sampleAppointment = calendarSafeAppointments[0];
+  const sampleIcs = generateAppointmentIcs({
+    method: "REQUEST",
+    uid: `${sampleAppointment.id}@calendar.clinicontrol.mx`,
+    sequence: 0,
+    startsAt: sampleAppointment.startsAt,
+    endsAt: sampleAppointment.endsAt,
+    clinicName: "CliniControl Demo",
+    doctorName: sampleAppointment.doctor,
+    organizerEmail: "calendario@example.com",
+    attendeeEmail: "paciente@example.com",
+    location: sampleAppointment.location,
+    timestamp: "2026-06-01T12:00:00.000Z"
+  });
 
   return (
     <>
@@ -32,7 +45,8 @@ export default function IntegrationsPage() {
         <div className="flex gap-2">
           <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
-            Próximamente: OAuth real, sincronización de calendario, email, WhatsApp y SMS todavía no están implementados.
+            Google Calendar OAuth, sincronización directa, WhatsApp y SMS todavía no están implementados. Las
+            invitaciones de citas por email funcionan únicamente cuando Resend y la migración correspondiente están configurados.
             No agregues credenciales de producción ni datos reales de pacientes. Los tokens de calendario deberán
             almacenarse cifrados antes de producción.
           </p>

@@ -6,6 +6,12 @@ export type SendEmailInput = {
   html: string;
   text: string;
   replyTo?: string;
+  attachments?: Array<{
+    content: string;
+    filename: string;
+    contentType: string;
+  }>;
+  idempotencyKey?: string;
 };
 
 export type SendEmailResult =
