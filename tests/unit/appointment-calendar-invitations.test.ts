@@ -174,6 +174,7 @@ test("migration contains atomic locking and both uniqueness barriers", () => {
   assert.match(migration, /pg_advisory_xact_lock/);
   assert.match(migration, /appointment_invites_appointment_email_unique_idx/);
   assert.match(migration, /appointment_invites_email_idempotency_key_unique_idx/);
+  assert.match(migration, /grant select, insert, update on table public\.appointment_invites to authenticated/i);
   assert.match(migration, /last_idempotency_key = v_key/);
   assert.match(migration, /sequence = i\.sequence \+ 1/);
 });

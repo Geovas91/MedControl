@@ -52,6 +52,10 @@ create index appointment_invites_email_delivery_status_idx
   on public.appointment_invites(clinic_id, delivery_status, last_attempted_at desc)
   where channel = 'email';
 
+-- The RPC is SECURITY INVOKER so the caller must retain the table privileges
+-- required for its row-level-security protected read, insert and update path.
+grant select, insert, update on table public.appointment_invites to authenticated;
+
 create or replace function public.prepare_appointment_email_invite(
   p_appointment_id uuid,
   p_method text,
