@@ -1,6 +1,13 @@
 import type { AppointmentIcsMethod } from "./ics";
 
 export type CalendarOperationReason = "created" | "rescheduled" | "cancelled" | "restored";
+export type CalendarDeliveryPreflight = "ready" | "missing_recipient" | "disabled";
+
+export function getCalendarDeliveryPreflight(input: { recipientValid: boolean; providerReady: boolean }): CalendarDeliveryPreflight {
+  if (!input.recipientValid) return "missing_recipient";
+  if (!input.providerReady) return "disabled";
+  return "ready";
+}
 
 export function hasAppointmentCalendarRelevantChange(
   original: { doctorId: string | null; startsAt: string; endsAt: string; location: string | null },

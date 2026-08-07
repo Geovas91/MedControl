@@ -1,6 +1,7 @@
 import "server-only";
 
 import { generateAppointmentIcs, type AppointmentIcsMethod } from "@/lib/calendar/ics";
+import { getCalendarDeliveryPreflight } from "@/lib/calendar/invitation";
 import { getInvitationDeliveryStatus } from "@/lib/email/delivery-status";
 import { getInvitationEmailConfiguration } from "@/lib/email/provider";
 import { sendWithResend } from "@/lib/email/resend-provider";
@@ -119,6 +120,32 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
   const clinicData = clinicResult.data as { email: string | null } | null;
   const doctorData = doctorResult.data as { display_name: string } | null;
 
+  const patientEmail = typeof patientData?.email === "string" ? patientData.email.trim().toLowerCase() : "";
+  const configuration = getInvitationEmailConfiguration();
+  const preflight = getCalendarDeliveryPreflight({
+    recipientValid: compatibleEmail.test(patientEmail),
+    providerReady: configuration.state === "ready"
+  });
+  if (preflight !== "ready") return preflight;
+  if (configuration.state !== "ready") return "disabled";
+
+  const clinicEmail = typeof clinicData?.email === "string" ? clinicData.email.trim() : "";
+  const organizerEmail = (compatibleEmail.test(clinicEmail) ? clinicEmail : null)
+    ?? configuration.replyTo
+    ?? extractFromEmail(configuration.from);
+  if (!organizerEmail) return "failed";
+
+  const doctorName = typeof doctorData?.display_name === "string" ? doctorData.display_name : null;
+  const template = buildAppointmentInvitationEmail({
+    kind: mapKind(input.method, input.reason),
+    clinicName: context.tenant.clinic.name,
+    doctorName,
+    startsAt: appointment.starts_at,
+    timeZone: context.tenant.clinic.timezone,
+    location: appointment.location,
+    meetingUrl: appointment.meeting_url
+  });
+
   const prepare = await (supabase as unknown as AppointmentDeliveryClient).rpc("prepare_appointment_email_invite", {
     p_appointment_id: appointment.id,
     p_method: input.method,
@@ -137,14 +164,14 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
   if (!prepared.should_send) return "duplicate";
   const invite = prepared;
 
-  async function persistOutcome(outcome: Exclude<AppointmentCalendarDeliveryOutcome, "duplicate">, messageId?: string, errorCode?: string) {
-    const inviteStatus = outcome === "sent" ? "sent" : outcome === "missing_recipient" || outcome === "disabled" ? "not_sent" : "failed";
+  async function persistOutcome(outcome: "sent" | "failed" | "delivery_unknown", messageId?: string, errorCode?: string) {
+    const inviteStatus = outcome === "sent" ? "sent" : "failed";
     const { error } = await supabase
       .from("appointment_invites")
       .update({
         status: inviteStatus,
         delivery_status: outcome,
-        provider: outcome === "missing_recipient" || outcome === "disabled" ? null : "resend",
+        provider: "resend",
         provider_message_id: messageId ?? null,
         sent_at: outcome === "sent" ? new Date().toISOString() : null,
         failed_reason: errorCode ?? null
@@ -169,37 +196,6 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
       .eq("clinic_id", clinicId);
   }
 
-  const patientEmail = typeof patientData?.email === "string" ? patientData.email.trim().toLowerCase() : "";
-  if (!compatibleEmail.test(patientEmail)) {
-    await persistOutcome("missing_recipient", undefined, "missing_recipient");
-    return "missing_recipient";
-  }
-
-  const configuration = getInvitationEmailConfiguration();
-  if (configuration.state !== "ready") {
-    await persistOutcome("disabled", undefined, "email_disabled");
-    return "disabled";
-  }
-
-  const clinicEmail = typeof clinicData?.email === "string" ? clinicData.email.trim() : "";
-  const organizerEmail = (compatibleEmail.test(clinicEmail) ? clinicEmail : null)
-    ?? configuration.replyTo
-    ?? extractFromEmail(configuration.from);
-  if (!organizerEmail) {
-    await persistOutcome("failed", undefined, "invalid_organizer");
-    return "failed";
-  }
-
-  const doctorName = typeof doctorData?.display_name === "string" ? doctorData.display_name : null;
-  const template = buildAppointmentInvitationEmail({
-    kind: mapKind(input.method, input.reason),
-    clinicName: context.tenant.clinic.name,
-    doctorName,
-    startsAt: appointment.starts_at,
-    timeZone: context.tenant.clinic.timezone,
-    location: appointment.location,
-    meetingUrl: appointment.meeting_url
-  });
   const ics = generateAppointmentIcs({
     method: input.method,
     uid: invite.ics_uid,

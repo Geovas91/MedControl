@@ -36,10 +36,11 @@ Se reutiliza Resend. El wrapper admite adjuntos y envía una idempotency key for
 ICS usa UTC, CRLF, folding de 75 octetos, UID estable, secuencia monotónica, organizador, asistente y contenido
 administrativo mínimo. No incluye título de la cita, diagnóstico, notas, tratamiento, pagos ni consentimientos.
 
-Las plantillas HTML y texto formatean la fecha con `clinics.timezone`. Si el paciente no tiene correo válido se guarda
-`missing_recipient`. Errores confirmados quedan como `failed`; timeout como `delivery_unknown`; configuración ausente
-como `disabled`. No existe retry automático porque un timeout puede terminar en entrega y repetirlo duplicaría el
-evento.
+Las plantillas HTML y texto formatean la fecha con `clinics.timezone`. Destinatario ausente (`missing_recipient`) y
+configuración incompleta (`disabled`) se resuelven antes de preparar la fila: no consumen la clave de idempotencia, no
+reservan ni incrementan `sequence` y pueden reintentarse con la misma operación cuando se corrija la precondición.
+Errores confirmados quedan como `failed`; timeout como `delivery_unknown`. No existe retry automático para estados ya
+consumidos porque un timeout puede terminar en entrega y repetirlo duplicaría el evento.
 
 ## Variables de entorno
 

@@ -21,7 +21,7 @@ alter table public.appointment_invites
     check (last_method is null or last_method in ('REQUEST', 'CANCEL')),
   drop constraint if exists appointment_invites_delivery_status_check,
   add constraint appointment_invites_delivery_status_check
-    check (delivery_status in ('not_sent', 'pending', 'sent', 'failed', 'delivery_unknown', 'missing_recipient', 'disabled')),
+    check (delivery_status in ('not_sent', 'pending', 'sent', 'failed', 'delivery_unknown')),
   drop constraint if exists appointment_invites_provider_message_id_length_check,
   add constraint appointment_invites_provider_message_id_length_check
     check (provider_message_id is null or char_length(provider_message_id) <= 255),

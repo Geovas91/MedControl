@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  getCalendarDeliveryPreflight,
   getStatusCalendarOperation,
   hasAppointmentCalendarRelevantChange,
   prepareCalendarInvitationState
@@ -23,6 +24,23 @@ const baseIcs = {
   meetingUrl: "https://example.com/meeting",
   timestamp: "2029-12-01T12:00:00.000Z"
 } as const;
+
+type SimulatedInviteState = { sequence: number; operationKey: string; deliveryStatus: "sent" | "delivery_unknown" };
+
+function simulateDelivery(
+  existing: SimulatedInviteState | null,
+  input: { operationKey: string; recipientValid: boolean; providerReady: boolean; result?: "sent" | "delivery_unknown" }
+) {
+  const preflight = getCalendarDeliveryPreflight(input);
+  if (preflight !== "ready") return { outcome: preflight, state: existing };
+
+  const prepared = prepareCalendarInvitationState(existing, input.operationKey);
+  if (!prepared.shouldSend) return { outcome: "duplicate" as const, state: existing };
+  return {
+    outcome: input.result ?? "sent",
+    state: { sequence: prepared.sequence, operationKey: prepared.operationKey, deliveryStatus: input.result ?? "sent" }
+  };
+}
 
 test("REQUEST ICS uses stable identity, sequence, UTC, CRLF and folded lines", () => {
   const ics = generateAppointmentIcs({ ...baseIcs, method: "REQUEST" });
@@ -95,6 +113,51 @@ test("idempotency keeps duplicate sequence and advances only for a new operation
   assert.deepEqual(changed, { sequence: 1, operationKey: "appointment:rescheduled", shouldSend: true });
 });
 
+test("creating without email can retry successfully after adding email", () => {
+  const missing = simulateDelivery(null, { operationKey: "appointment:created", recipientValid: false, providerReady: true });
+  assert.deepEqual(missing, { outcome: "missing_recipient", state: null });
+  const retry = simulateDelivery(missing.state, { operationKey: "appointment:created", recipientValid: true, providerReady: true });
+  assert.equal(retry.outcome, "sent");
+  assert.equal(retry.state?.sequence, 0);
+});
+
+test("disabled provider can retry successfully after it is enabled", () => {
+  const disabled = simulateDelivery(null, { operationKey: "appointment:created", recipientValid: true, providerReady: false });
+  assert.deepEqual(disabled, { outcome: "disabled", state: null });
+  const retry = simulateDelivery(disabled.state, { operationKey: "appointment:created", recipientValid: true, providerReady: true });
+  assert.equal(retry.outcome, "sent");
+  assert.equal(retry.state?.sequence, 0);
+});
+
+test("repeating an already sent operation returns duplicate", () => {
+  const sent = simulateDelivery(null, { operationKey: "appointment:created", recipientValid: true, providerReady: true });
+  const repeated = simulateDelivery(sent.state, { operationKey: "appointment:created", recipientValid: true, providerReady: true });
+  assert.equal(repeated.outcome, "duplicate");
+  assert.deepEqual(repeated.state, sent.state);
+});
+
+test("delivery_unknown is consumed and is not resent automatically", () => {
+  const unknown = simulateDelivery(null, {
+    operationKey: "appointment:created",
+    recipientValid: true,
+    providerReady: true,
+    result: "delivery_unknown"
+  });
+  const repeated = simulateDelivery(unknown.state, { operationKey: "appointment:created", recipientValid: true, providerReady: true });
+  assert.equal(repeated.outcome, "duplicate");
+  assert.equal(repeated.state?.deliveryStatus, "delivery_unknown");
+});
+
+test("preflight retries do not allocate or increment sequence before a real delivery", () => {
+  let state: SimulatedInviteState | null = null;
+  state = simulateDelivery(state, { operationKey: "appointment:created", recipientValid: false, providerReady: true }).state;
+  assert.equal(state, null);
+  state = simulateDelivery(state, { operationKey: "appointment:created", recipientValid: true, providerReady: false }).state;
+  assert.equal(state, null);
+  state = simulateDelivery(state, { operationKey: "appointment:created", recipientValid: true, providerReady: true }).state;
+  assert.equal(state?.sequence, 0);
+});
+
 test("only calendar-relevant edits and cancel/restore status changes trigger delivery", () => {
   const original = { doctorId: "doctor-1", startsAt: baseIcs.startsAt, endsAt: baseIcs.endsAt, location: "A" };
   assert.equal(hasAppointmentCalendarRelevantChange(original, { ...original }), false);
@@ -113,4 +176,10 @@ test("migration contains atomic locking and both uniqueness barriers", () => {
   assert.match(migration, /appointment_invites_email_idempotency_key_unique_idx/);
   assert.match(migration, /last_idempotency_key = v_key/);
   assert.match(migration, /sequence = i\.sequence \+ 1/);
+});
+
+test("service performs recipient and provider preflight before reserving idempotency", () => {
+  const service = readFileSync(new URL("../../lib/server/appointment-calendar-email.ts", import.meta.url), "utf8");
+  assert.ok(service.indexOf("getCalendarDeliveryPreflight") < service.indexOf("prepare_appointment_email_invite"));
+  assert.ok(service.indexOf('if (preflight !== "ready") return preflight') < service.indexOf(".rpc(\"prepare_appointment_email_invite\""));
 });

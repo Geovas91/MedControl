@@ -634,7 +634,7 @@ export type Database = {
           last_attempted_at: Timestamp | null;
           last_method: "REQUEST" | "CANCEL" | null;
           last_idempotency_key: string | null;
-          delivery_status: "not_sent" | "pending" | "sent" | "failed" | "delivery_unknown" | "missing_recipient" | "disabled";
+          delivery_status: "not_sent" | "pending" | "sent" | "failed" | "delivery_unknown";
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -657,7 +657,7 @@ export type Database = {
           last_attempted_at?: Timestamp | null;
           last_method?: "REQUEST" | "CANCEL" | null;
           last_idempotency_key?: string | null;
-          delivery_status?: "not_sent" | "pending" | "sent" | "failed" | "delivery_unknown" | "missing_recipient" | "disabled";
+          delivery_status?: "not_sent" | "pending" | "sent" | "failed" | "delivery_unknown";
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
