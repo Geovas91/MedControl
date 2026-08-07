@@ -11,6 +11,7 @@ import {
   type AppointmentStatusFormInput,
   type AppointmentStatusOutcome
 } from "@/lib/appointments/status";
+import { buildAppointmentCalendarOperation } from "@/lib/calendar/invitation";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -201,12 +202,17 @@ export async function updateAppointmentStatusForActiveTenant(
     context.tenant.clinic.timezone
   ).localDate;
 
+  const calendarOperation = buildAppointmentCalendarOperation(
+    appointmentId,
+    "status",
+    updateResult.data.updated_at
+  );
+
   return {
     state: "success",
     outcome,
     patientId: updateResult.data.patient_id,
     localDate,
-    operationKey: `${appointmentId}:status:${updateResult.data.updated_at}`,
-    appointmentVersion: updateResult.data.updated_at
+    ...calendarOperation
   };
 }

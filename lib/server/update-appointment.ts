@@ -14,7 +14,7 @@ import {
   type AppointmentFormValues
 } from "@/lib/appointments/create";
 import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
-import { hasAppointmentCalendarRelevantChange } from "@/lib/calendar/invitation";
+import { buildAppointmentCalendarOperation, hasAppointmentCalendarRelevantChange } from "@/lib/calendar/invitation";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -381,6 +381,12 @@ export async function updateAppointmentForActiveTenant(
     return { state: "error", error: "No fue posible actualizar la cita. Intenta nuevamente.", values };
   }
 
+  const calendarOperation = buildAppointmentCalendarOperation(
+    appointmentId,
+    "updated",
+    updateResult.data.updated_at
+  );
+
   return {
     state: "success",
     date: input.date,
@@ -388,7 +394,6 @@ export async function updateAppointmentForActiveTenant(
     patientId: updateResult.data.patient_id,
     oldPatientId: original.patient_id,
     calendarChanged: original.status !== "cancelled" && calendarChanged,
-    operationKey: `${appointmentId}:updated:${updateResult.data.updated_at}`,
-    appointmentVersion: updateResult.data.updated_at
+    ...calendarOperation
   };
 }

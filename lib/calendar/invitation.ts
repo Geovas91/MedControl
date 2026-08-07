@@ -1,7 +1,23 @@
 import type { AppointmentIcsMethod } from "./ics";
 
 export type CalendarOperationReason = "created" | "rescheduled" | "cancelled" | "restored";
+export type CalendarOperationKind = "created" | "updated" | "status";
 export type CalendarDeliveryPreflight = "ready" | "missing_recipient" | "disabled";
+
+export function buildAppointmentCalendarOperation(
+  appointmentId: string,
+  kind: CalendarOperationKind,
+  appointmentVersion: string
+) {
+  return {
+    operationKey: `${appointmentId}:${kind}:${appointmentVersion}`,
+    appointmentVersion
+  };
+}
+
+export function isCurrentAppointmentVersion(currentVersion: string, expectedVersion: string) {
+  return currentVersion === expectedVersion;
+}
 
 export function getCalendarDeliveryPreflight(input: { recipientValid: boolean; providerReady: boolean }): CalendarDeliveryPreflight {
   if (!input.recipientValid) return "missing_recipient";

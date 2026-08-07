@@ -9,6 +9,7 @@ import {
   type AppointmentFormValues
 } from "@/lib/appointments/create";
 import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
+import { buildAppointmentCalendarOperation } from "@/lib/calendar/invitation";
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
@@ -323,7 +324,7 @@ export async function createAppointmentForActiveTenant(
   const insertResult = (await supabase
     .from("appointments")
     .insert(insertValues as never)
-    .select("id")
+    .select("id, updated_at")
     .single()) as unknown as {
     data: { id: string; updated_at: string } | null;
     error: { code: string } | null;
@@ -342,12 +343,17 @@ export async function createAppointmentForActiveTenant(
     };
   }
 
+  const calendarOperation = buildAppointmentCalendarOperation(
+    insertResult.data.id,
+    "created",
+    insertResult.data.updated_at
+  );
+
   return {
     state: "success",
     appointmentId: insertResult.data.id,
     date: input.date,
     patientId: input.patientId,
-    operationKey: `${insertResult.data.id}:created:${insertResult.data.updated_at}`,
-    appointmentVersion: insertResult.data.updated_at
+    ...calendarOperation
   };
 }

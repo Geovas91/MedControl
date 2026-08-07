@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  buildAppointmentCalendarOperation,
   getCalendarDeliveryPreflight,
   getStatusCalendarOperation,
   hasAppointmentCalendarRelevantChange,
+  isCurrentAppointmentVersion,
   prepareCalendarInvitationState
 } from "../../lib/calendar/invitation.ts";
 import { escapeIcsText, foldIcsLine, generateAppointmentIcs } from "../../lib/calendar/ics.ts";
@@ -40,6 +42,17 @@ function simulateDelivery(
     outcome: input.result ?? "sent",
     state: { sequence: prepared.sequence, operationKey: prepared.operationKey, deliveryStatus: input.result ?? "sent" }
   };
+}
+
+function simulateVersionedDelivery(
+  currentVersion: string,
+  existing: SimulatedInviteState | null,
+  input: { appointmentVersion: string; operationKey: string; recipientValid: boolean; providerReady: boolean }
+) {
+  if (!isCurrentAppointmentVersion(currentVersion, input.appointmentVersion)) {
+    return { outcome: "duplicate" as const, state: existing };
+  }
+  return simulateDelivery(existing, input);
 }
 
 test("REQUEST ICS uses stable identity, sequence, UTC, CRLF and folded lines", () => {
@@ -113,6 +126,38 @@ test("idempotency keeps duplicate sequence and advances only for a new operation
   assert.deepEqual(changed, { sequence: 1, operationKey: "appointment:rescheduled", shouldSend: true });
 });
 
+test("a newly created appointment uses its database version and reaches calendar preparation", () => {
+  const insertedAppointment = {
+    id: "11111111-1111-4111-8111-111111111111",
+    updated_at: "2030-01-01T15:00:00.123456+00:00"
+  };
+  const operation = buildAppointmentCalendarOperation(
+    insertedAppointment.id,
+    "created",
+    insertedAppointment.updated_at
+  );
+
+  assert.equal(operation.appointmentVersion, insertedAppointment.updated_at);
+  assert.notEqual(operation.appointmentVersion, "");
+  assert.doesNotMatch(operation.operationKey, /undefined/);
+  const delivery = simulateVersionedDelivery(insertedAppointment.updated_at, null, {
+    appointmentVersion: operation.appointmentVersion,
+    operationKey: operation.operationKey,
+    recipientValid: true,
+    providerReady: true
+  });
+  assert.equal(delivery.outcome, "sent");
+
+  const concurrentVersion = "2030-01-01T15:00:01.000000+00:00";
+  const staleDelivery = simulateVersionedDelivery(concurrentVersion, null, {
+    appointmentVersion: operation.appointmentVersion,
+    operationKey: operation.operationKey,
+    recipientValid: true,
+    providerReady: true
+  });
+  assert.equal(staleDelivery.outcome, "duplicate");
+});
+
 test("creating without email can retry successfully after adding email", () => {
   const missing = simulateDelivery(null, { operationKey: "appointment:created", recipientValid: false, providerReady: true });
   assert.deepEqual(missing, { outcome: "missing_recipient", state: null });
@@ -183,4 +228,14 @@ test("service performs recipient and provider preflight before reserving idempot
   const service = readFileSync(new URL("../../lib/server/appointment-calendar-email.ts", import.meta.url), "utf8");
   assert.ok(service.indexOf("getCalendarDeliveryPreflight") < service.indexOf("prepare_appointment_email_invite"));
   assert.ok(service.indexOf('if (preflight !== "ready") return preflight') < service.indexOf(".rpc(\"prepare_appointment_email_invite\""));
+});
+
+test("create, update and status mutations return PostgreSQL updated_at for calendar operations", () => {
+  const createService = readFileSync(new URL("../../lib/server/create-appointment.ts", import.meta.url), "utf8");
+  const updateService = readFileSync(new URL("../../lib/server/update-appointment.ts", import.meta.url), "utf8");
+  const statusService = readFileSync(new URL("../../lib/server/update-appointment-status.ts", import.meta.url), "utf8");
+
+  assert.match(createService, /\.insert\([\s\S]+?\.select\("id, updated_at"\)\s*\.single\(\)/);
+  assert.match(updateService, /\.update\([\s\S]+?\.select\("id, patient_id, updated_at"\)\s*\.maybeSingle\(\)/);
+  assert.match(statusService, /\.update\([\s\S]+?\.select\("id, patient_id, starts_at, status, updated_at"\)\s*\.maybeSingle\(\)/);
 });

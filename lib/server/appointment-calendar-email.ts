@@ -1,7 +1,7 @@
 import "server-only";
 
 import { generateAppointmentIcs, type AppointmentIcsMethod } from "@/lib/calendar/ics";
-import { getCalendarDeliveryPreflight } from "@/lib/calendar/invitation";
+import { getCalendarDeliveryPreflight, isCurrentAppointmentVersion } from "@/lib/calendar/invitation";
 import { getInvitationDeliveryStatus } from "@/lib/email/delivery-status";
 import { getInvitationEmailConfiguration } from "@/lib/email/provider";
 import { sendWithResend } from "@/lib/email/resend-provider";
@@ -98,7 +98,7 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
     updated_at: string;
   };
 
-  if (appointment.updated_at !== input.appointmentVersion) return "duplicate";
+  if (!isCurrentAppointmentVersion(appointment.updated_at, input.appointmentVersion)) return "duplicate";
   if ((input.method === "CANCEL") !== (appointment.status === "cancelled")) return "failed";
 
   const [patientResult, clinicResult, doctorResult] = await Promise.all([
