@@ -55,13 +55,25 @@ consumidos porque un timeout puede terminar en entrega y repetirlo duplicaría e
 
 No se requieren credenciales de Google Calendar para adjuntos `.ics`.
 
-## Validación local y riesgos pendientes fuera del repositorio
+## Validación local y staging
 
 - La migración 0020 fue aplicada mediante un reset completo 0001–0020 en Supabase local aislado. Las pruebas SQL
   verifican UID, secuencia, idempotencia, estados consumidos, roles, tenant, constraints y el fallo explícito ante
   duplicados históricos. La configuración local temporal no forma parte del repositorio.
-- Aplicar 0020 en staging únicamente mediante un operador autorizado después de aprobar el PR.
-- Verificar SPF, DKIM y dominio de Resend.
-- Probar entrega real únicamente con cuentas ficticias/autorizadas en Gmail, Outlook y Apple Calendar.
-- Confirmar que reprogramar reemplaza el evento y cancelar lo retira usando el mismo UID.
-- Mantener `EMAIL_REQUIRED=false` hasta completar la validación de staging.
+- La migración 0020 fue aplicada correctamente en staging.
+- Resend usa `mail.clinicontrol.mx` como dominio verificado y `EMAIL_REQUIRED=false` permanece configurado.
+- Gmail/Google Calendar fue validado end-to-end: creación, reprogramación sobre el mismo evento, cancelación,
+  restauración y ausencia de duplicados visibles.
+- Outlook fue validado funcionalmente con datos ficticios/autorizados.
+- Apple Calendar continúa pendiente por falta de una cuenta disponible. No se presenta como compatibilidad validada;
+  esta ausencia de cobertura manual no invalida los resultados obtenidos en Gmail y Outlook.
+
+## Hallazgos de revisión final pendientes
+
+- La migración concede `SELECT`, `INSERT` y `UPDATE` de tabla a `authenticated` para una RPC `SECURITY INVOKER`.
+  Las policies limitan por `clinic_id`, pero las FKs actuales de `appointment_invites` no vinculan de forma compuesta
+  `clinic_id` con `appointment_id` y `patient_id`. Antes de sacar el PR de draft se debe impedir que una escritura
+  directa pueda mezclar identificadores de otra clínica o bloquear su fila única de email.
+- La edición de citas permite cambiar `patient_id`, pero el flujo de calendario no trata ese cambio como una operación
+  de destinatario: no cancela el evento del paciente anterior ni solicita el evento para el nuevo. Debe definirse y
+  probarse ese ciclo antes de habilitar el flujo como listo para merge.

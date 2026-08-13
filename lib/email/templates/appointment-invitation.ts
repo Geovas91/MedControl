@@ -60,9 +60,9 @@ export function buildAppointmentInvitationEmail(input: {
     input.location ? `Ubicación: ${input.location}` : null,
     input.meetingUrl ? `Enlace: ${input.meetingUrl}` : null
   ].filter((value): value is string => Boolean(value));
-  const text = `${selected.heading}\n\n${selected.intro}\n\n${input.clinicName}\n${details.join("\n")}\n\nSe adjunta un archivo de calendario compatible con Google Calendar, Outlook y Apple Calendar.\n\nCliniControl`;
+  const text = `${selected.heading}\n\n${selected.intro}\n\n${input.clinicName}\n${details.join("\n")}\n\nSe adjunta un archivo de calendario en formato iCalendar (.ics).\n\nCliniControl`;
   const htmlDetails = details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join("");
-  const html = `<!doctype html><html lang="es"><body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#172033"><main style="max-width:560px;margin:24px auto;background:#ffffff;padding:32px;border:1px solid #e2e8f0"><h1 style="margin:0 0 16px;font-size:24px">${escapeHtml(selected.heading)}</h1><p>${escapeHtml(selected.intro)}</p><p><strong>${escapeHtml(input.clinicName)}</strong></p><ul>${htmlDetails}</ul><p>Se adjunta un archivo de calendario compatible con Google Calendar, Outlook y Apple Calendar.</p><p style="color:#64748b">CliniControl</p></main></body></html>`;
+  const html = `<!doctype html><html lang="es"><body style="margin:0;background:#f8fafc;font-family:Arial,sans-serif;color:#172033"><main style="max-width:560px;margin:24px auto;background:#ffffff;padding:32px;border:1px solid #e2e8f0"><h1 style="margin:0 0 16px;font-size:24px">${escapeHtml(selected.heading)}</h1><p>${escapeHtml(selected.intro)}</p><p><strong>${escapeHtml(input.clinicName)}</strong></p><ul>${htmlDetails}</ul><p>Se adjunta un archivo de calendario en formato iCalendar (.ics).</p><p style="color:#64748b">CliniControl</p></main></body></html>`;
 
   return {
     subject: `${selected.subject} - ${input.clinicName}`,
