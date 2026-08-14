@@ -134,7 +134,7 @@ export function getConsentStatusLabel(status: Enums["consent_status"]) {
     pending: "Pendiente",
     signed: "Firmado",
     expired: "Expirado",
-    revoked: "Revocado"
+    cancelled: "Cancelado"
   };
 
   return labels[status];

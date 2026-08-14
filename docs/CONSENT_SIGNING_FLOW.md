@@ -13,11 +13,18 @@ with historical data but is not read or written by the new flow.
 
 ## Authenticated workflow
 
-An authorized clinical role creates a pending consent and may generate, regenerate,
-or revoke a seven-day signing link from its detail page. The raw URL is returned
+An authorized clinical role creates a pending consent through a protected RPC.
+The RPC derives the patient's active universal record and audits creation in the
+same transaction. The role may generate, regenerate, or revoke a seven-day
+signing link from the detail page. The raw URL is returned
 once to that authorized browser and is never logged, persisted in the UI, sent by
 email, or sent by WhatsApp. Regeneration replaces the hash; revocation clears it
 and keeps the consent pending.
+
+A pending consent may be cancelled through a separate RPC. Cancellation preserves
+the document, invalidates the active link, records actor/date/optional reason and
+prevents future signing. A signed consent cannot be cancelled or returned to a
+pending state.
 
 ## Public workflow
 
@@ -37,9 +44,15 @@ acceptance in CliniControl and is not represented as a certified electronic sign
 expiration and revocation, validates a real PNG (magic bytes, IHDR dimensions no
 larger than 1600 by 800, and a 250 KB binary limit), inserts the
 signature, marks the consent signed, records `signed_at`, and marks the token used
-in one transaction. The row lookup and lock happen before base64 decoding, so an
+in one transaction. It also records a minimal `consent_signed` audit event. The
+row lookup and lock happen before base64 decoding, so an
 invalid, used, revoked, or expired link never triggers expensive image processing.
-A second concurrent request cannot create a second signature.
+A second concurrent request cannot create a second signature; both row locking and
+the unique `consent_signatures(consent_id)` constraint enforce this invariant.
+
+An expired link no longer changes the legal document status to `expired`. It is
+simply unavailable and an authorized user may issue a replacement while the
+document remains pending.
 
 There is no new test runner in this repository. Manual testing after migration is
 still required for a valid link, expiration, revocation, concurrent submission,

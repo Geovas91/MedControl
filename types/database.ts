@@ -508,6 +508,7 @@ export type Database = {
           id: string;
           clinic_id: string;
           patient_id: string;
+          clinical_record_id: string;
           created_by: string | null;
           consent_type: string;
           consent_version: string;
@@ -522,6 +523,10 @@ export type Database = {
           expires_at: Timestamp | null;
           signed_at: Timestamp | null;
           revoked_at: Timestamp | null;
+          cancelled_at: Timestamp | null;
+          cancelled_by: string | null;
+          cancellation_reason: string | null;
+          updated_by: string | null;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -529,6 +534,7 @@ export type Database = {
           id?: string;
           clinic_id: string;
           patient_id: string;
+          clinical_record_id: string;
           created_by?: string | null;
           consent_type: string;
           consent_version: string;
@@ -543,6 +549,10 @@ export type Database = {
           expires_at?: Timestamp | null;
           signed_at?: Timestamp | null;
           revoked_at?: Timestamp | null;
+          cancelled_at?: Timestamp | null;
+          cancelled_by?: string | null;
+          cancellation_reason?: string | null;
+          updated_by?: string | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -551,6 +561,7 @@ export type Database = {
       consent_signatures: {
         Row: {
           id: string;
+          clinic_id: string;
           consent_id: string;
           patient_id: string;
           signer_full_name: string;
@@ -565,6 +576,7 @@ export type Database = {
         };
         Insert: {
           id?: string;
+          clinic_id: string;
           consent_id: string;
           patient_id: string;
           signer_full_name: string;
@@ -806,6 +818,35 @@ export type Database = {
         Args: { p_token_hash: string; p_signer_name: string; p_signature_png: string; p_accepted_privacy: boolean; p_accepted_sensitive_data: boolean };
         Returns: string;
       };
+      create_consent_for_current_user: {
+        Args: {
+          p_clinic_id: string;
+          p_patient_id: string;
+          p_consent_type: string;
+          p_consent_version: string;
+          p_consent_text: string;
+          p_template_id?: string | null;
+        };
+        Returns: string;
+      };
+      issue_consent_signing_link_for_current_user: {
+        Args: {
+          p_clinic_id: string;
+          p_patient_id: string;
+          p_consent_id: string;
+          p_token_hash: string;
+          p_expires_at: Timestamp;
+        };
+        Returns: boolean;
+      };
+      revoke_consent_signing_link_for_current_user: {
+        Args: { p_clinic_id: string; p_patient_id: string; p_consent_id: string };
+        Returns: boolean;
+      };
+      cancel_consent_for_current_user: {
+        Args: { p_clinic_id: string; p_patient_id: string; p_consent_id: string; p_reason?: string | null };
+        Returns: string;
+      };
       count_clinic_doctors_for_current_user: {
         Args: { target_clinic_id: string };
         Returns: number;
@@ -937,7 +978,7 @@ export type Database = {
       reminder_status: "not_scheduled" | "scheduled" | "sent" | "failed";
       payment_status: "pending" | "paid" | "cancelled" | "refunded";
       medical_note_status: "draft" | "finalized" | "archived";
-      consent_status: "pending" | "signed" | "expired" | "revoked";
+      consent_status: "pending" | "signed" | "expired" | "cancelled";
       calendar_integration_status: "connected" | "disconnected" | "expired" | "failed";
       clinical_history_status: "draft" | "pending" | "completed";
       clinical_alert_type: "allergy" | "active_condition" | "current_medication";

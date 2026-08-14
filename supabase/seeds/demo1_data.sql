@@ -23,6 +23,20 @@ declare
     '21000000-0000-4000-8000-000000000011'::uuid,
     '21000000-0000-4000-8000-000000000012'::uuid
   ];
+  record_ids constant uuid[] := array[
+    '2b000000-0000-4000-8000-000000000001'::uuid,
+    '2b000000-0000-4000-8000-000000000002'::uuid,
+    '2b000000-0000-4000-8000-000000000003'::uuid,
+    '2b000000-0000-4000-8000-000000000004'::uuid,
+    '2b000000-0000-4000-8000-000000000005'::uuid,
+    '2b000000-0000-4000-8000-000000000006'::uuid,
+    '2b000000-0000-4000-8000-000000000007'::uuid,
+    '2b000000-0000-4000-8000-000000000008'::uuid,
+    '2b000000-0000-4000-8000-000000000009'::uuid,
+    '2b000000-0000-4000-8000-000000000010'::uuid,
+    '2b000000-0000-4000-8000-000000000011'::uuid,
+    '2b000000-0000-4000-8000-000000000012'::uuid
+  ];
   appointment_ids constant uuid[] := array[
     '22000000-0000-4000-8000-000000000001'::uuid,
     '22000000-0000-4000-8000-000000000002'::uuid,
@@ -185,6 +199,15 @@ begin
 
   if (select count(*) from public.patients where clinic_id = demo_clinic_id and id = any(patient_ids)) <> 12 then
     raise exception 'One or more deterministic patient UUIDs are owned outside demo1.';
+  end if;
+
+  insert into public.clinical_records(id, clinic_id, patient_id, status, created_by)
+  select record_ids[item.ordinality], demo_clinic_id, item.patient_id, 'active', demo_user_id
+  from unnest(patient_ids) with ordinality as item(patient_id, ordinality)
+  on conflict (id) do nothing;
+
+  if (select count(*) from public.clinical_records where clinic_id = demo_clinic_id and id = any(record_ids)) <> 12 then
+    raise exception 'One or more deterministic clinical record UUIDs are owned outside demo1.';
   end if;
 
   insert into public.appointments as existing_appointment (
@@ -426,6 +449,7 @@ begin
     id,
     clinic_id,
     patient_id,
+    clinical_record_id,
     created_by,
     consent_type,
     consent_version,
@@ -440,26 +464,30 @@ begin
     seeded.id,
     demo_clinic_id,
     seeded.patient_id,
+    (select record.id from public.clinical_records as record
+      where record.clinic_id = demo_clinic_id and record.patient_id = seeded.patient_id
+        and record.status = 'active' and record.archived_at is null),
     demo_user_id,
     seeded.consent_type,
     'demo-v1',
     'Consentimiento completamente ficticio para demostración. No constituye texto legal ni autorización real.',
     seeded.signing_token,
-    seeded.status::public.consent_status,
+    (case when seeded.status = 'signed' then 'pending' else seeded.status end)::public.consent_status,
     seeded.expires_at,
-    seeded.signed_at,
+    case when seeded.status = 'signed' then null else seeded.signed_at end,
     seeded.revoked_at
   from (
     values
       (consent_ids[1], patient_ids[1], 'Consentimiento demo firmado', 'demo1-fictional-consent-01-not-secret', 'signed', (current_date + 300)::timestamptz, ((current_date - 14) + time '10:05')::timestamptz, null::timestamptz),
       (consent_ids[2], patient_ids[8], 'Consentimiento demo pendiente', 'demo1-fictional-consent-02-not-secret', 'pending', (current_date + 30)::timestamptz, null::timestamptz, null::timestamptz),
-      (consent_ids[3], patient_ids[2], 'Consentimiento demo expirado', 'demo1-fictional-consent-03-not-secret', 'expired', (current_date - 1)::timestamptz, null::timestamptz, null::timestamptz),
-      (consent_ids[4], patient_ids[3], 'Consentimiento demo revocado', 'demo1-fictional-consent-04-not-secret', 'revoked', (current_date + 100)::timestamptz, ((current_date - 7) + time '13:05')::timestamptz, ((current_date - 2) + time '08:00')::timestamptz)
+      (consent_ids[3], patient_ids[2], 'Consentimiento demo con enlace vencido', 'demo1-fictional-consent-03-not-secret', 'pending', (current_date - 1)::timestamptz, null::timestamptz, null::timestamptz),
+      (consent_ids[4], patient_ids[3], 'Consentimiento demo firmado legacy', 'demo1-fictional-consent-04-not-secret', 'signed', (current_date + 100)::timestamptz, ((current_date - 7) + time '13:05')::timestamptz, ((current_date - 2) + time '08:00')::timestamptz)
   ) as seeded(id, patient_id, consent_type, signing_token, status, expires_at, signed_at, revoked_at)
   on conflict (id) do update
   set
     clinic_id = excluded.clinic_id,
     patient_id = excluded.patient_id,
+    clinical_record_id = excluded.clinical_record_id,
     created_by = excluded.created_by,
     consent_type = excluded.consent_type,
     consent_version = excluded.consent_version,
@@ -469,7 +497,8 @@ begin
     expires_at = excluded.expires_at,
     signed_at = excluded.signed_at,
     revoked_at = excluded.revoked_at
-  where existing_consent.clinic_id = demo_clinic_id;
+  where existing_consent.clinic_id = demo_clinic_id
+    and existing_consent.status = 'pending';
 
   if (select count(*) from public.consents where clinic_id = demo_clinic_id and id = any(consent_ids)) <> 4 then
     raise exception 'One or more deterministic consent UUIDs are owned outside demo1.';
@@ -490,6 +519,7 @@ begin
 
   insert into public.consent_signatures (
     id,
+    clinic_id,
     consent_id,
     patient_id,
     signer_full_name,
@@ -504,6 +534,7 @@ begin
   values
     (
       signature_ids[1],
+      demo_clinic_id,
       consent_ids[1],
       patient_ids[1],
       'Firmante Demo 01',
@@ -517,6 +548,7 @@ begin
     ),
     (
       signature_ids[2],
+      demo_clinic_id,
       consent_ids[4],
       patient_ids[3],
       'Firmante Demo 03',
@@ -528,18 +560,20 @@ begin
       'CliniControl fictional seed',
       null
     )
-  on conflict (id) do update
-  set
-    consent_id = excluded.consent_id,
-    patient_id = excluded.patient_id,
-    signer_full_name = excluded.signer_full_name,
-    signature_data = excluded.signature_data,
-    accepted_privacy_notice = excluded.accepted_privacy_notice,
-    accepted_sensitive_data_processing = excluded.accepted_sensitive_data_processing,
-    signed_at = excluded.signed_at,
-    ip_metadata = excluded.ip_metadata,
-    user_agent = excluded.user_agent,
-    document_hash = excluded.document_hash;
+  on conflict (id) do nothing;
+
+  update public.consents as consent
+  set status = 'signed',
+      signed_at = seeded.signed_at,
+      signing_token_used_at = seeded.signed_at
+  from (
+    values
+      (consent_ids[1], ((current_date - 14) + time '10:05')::timestamptz),
+      (consent_ids[4], ((current_date - 7) + time '13:05')::timestamptz)
+  ) as seeded(id, signed_at)
+  where consent.id = seeded.id
+    and consent.clinic_id = demo_clinic_id
+    and consent.status = 'pending';
 
   if (
     select count(*)
