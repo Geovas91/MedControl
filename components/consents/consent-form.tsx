@@ -53,10 +53,15 @@ export function ConsentForm() {
             <Copy className="h-4 w-4" />
             Copiar enlace de firma
           </Button>
-          <Button type="button">
-            <QrCode className="h-4 w-4" />
-            Generar QR
-          </Button>
+          <div className="flex flex-col items-start gap-1">
+            <Button type="button" disabled aria-describedby="qr-availability-message">
+              <QrCode className="h-4 w-4" />
+              Generar QR
+            </Button>
+            <p id="qr-availability-message" className="text-xs text-slate-500">
+              QR disponible en una próxima actualización
+            </p>
+          </div>
         </div>
       </section>
 
