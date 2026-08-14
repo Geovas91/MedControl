@@ -107,6 +107,34 @@ begin
     raise exception 'Reset blocked: demo1 does not exist with the expected UUID and tenant_type demo.';
   end if;
 
+  -- This helper is intentionally incapable of deleting immutable clinical
+  -- evidence. Rebuild the complete local database when the demo has advanced
+  -- to a signed, cancelled, or finalized state.
+  if exists (
+    select 1
+    from public.consent_signatures
+    where consent_id = any(consent_ids)
+      or patient_id = any(patient_ids)
+  ) or exists (
+    select 1
+    from public.consents
+    where (id = any(consent_ids) or patient_id = any(patient_ids))
+      and status in ('signed', 'cancelled')
+  ) or exists (
+    select 1
+    from public.medical_notes
+    where (
+      id = any(note_ids)
+      or patient_id = any(patient_ids)
+      or appointment_id = any(appointment_ids)
+      or template_id = any(template_ids)
+    )
+      and status = 'finalized'
+  ) then
+    raise exception using
+      message = 'Reset blocked: demo1 contains immutable clinical evidence. Use a full local Supabase reset to regenerate the demo dataset.';
+  end if;
+
   if exists (
     select 1 from public.appointments
     where patient_id = any(patient_ids) and not (id = any(appointment_ids))
@@ -202,14 +230,6 @@ delete from public.doctor_public_profiles
 where clinic_id = '10000000-0000-4000-8000-000000000001'
   and id = '29000000-0000-4000-8000-000000000001';
 
--- Migration 0022 makes final signatures immutable for application traffic. This
--- owner-only maintenance script removes only the deterministic fictional rows
--- validated above, so disable the mutation guard for this narrow delete and
--- restore it immediately. The surrounding transaction restores the trigger if
--- any statement fails.
-alter table public.consent_signatures
-  disable trigger consent_signatures_prevent_mutation;
-
 delete from public.consent_signatures
 where id in (
     '27000000-0000-4000-8000-000000000001',
@@ -227,9 +247,6 @@ where id in (
       )
   );
 
-alter table public.consent_signatures
-  enable trigger consent_signatures_prevent_mutation;
-
 delete from public.consents
 where clinic_id = '10000000-0000-4000-8000-000000000001'
   and id in (
@@ -238,10 +255,6 @@ where clinic_id = '10000000-0000-4000-8000-000000000001'
     '26000000-0000-4000-8000-000000000003',
     '26000000-0000-4000-8000-000000000004'
   );
-
--- The same maintenance boundary is required for deterministic finalized notes.
-alter table public.medical_notes
-  disable trigger medical_notes_protect_finalization;
 
 delete from public.medical_notes
 where clinic_id = '10000000-0000-4000-8000-000000000001'
@@ -252,9 +265,6 @@ where clinic_id = '10000000-0000-4000-8000-000000000001'
     '25000000-0000-4000-8000-000000000004',
     '25000000-0000-4000-8000-000000000005'
   );
-
-alter table public.medical_notes
-  enable trigger medical_notes_protect_finalization;
 
 delete from public.medical_note_templates
 where clinic_id = '10000000-0000-4000-8000-000000000001'
