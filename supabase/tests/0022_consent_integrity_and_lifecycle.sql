@@ -202,6 +202,27 @@ do $$ begin
     );
     raise exception 'Assistant created a consent';
   exception when insufficient_privilege then null; end;
+  begin
+    perform public.issue_consent_signing_link_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+      (select value from consent_test_ids where key = 'doctor'), repeat('d', 64), now() + interval '7 days'
+    );
+    raise exception 'Assistant issued a consent signing link';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.revoke_consent_signing_link_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+      (select value from consent_test_ids where key = 'doctor')
+    );
+    raise exception 'Assistant revoked a consent signing link';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.cancel_consent_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+      (select value from consent_test_ids where key = 'doctor'), null
+    );
+    raise exception 'Assistant cancelled a consent';
+  exception when insufficient_privilege then null; end;
 end $$;
 
 select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000005', true);
@@ -213,6 +234,27 @@ do $$ begin
       'Outsider', 'v1', 'Debe rechazarse.', null
     );
     raise exception 'Outsider created a consent';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.issue_consent_signing_link_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+      (select value from consent_test_ids where key = 'doctor'), repeat('e', 64), now() + interval '7 days'
+    );
+    raise exception 'Outsider issued a consent signing link';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.revoke_consent_signing_link_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+      (select value from consent_test_ids where key = 'doctor')
+    );
+    raise exception 'Outsider revoked a consent signing link';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.cancel_consent_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+      (select value from consent_test_ids where key = 'doctor'), null
+    );
+    raise exception 'Outsider cancelled a consent';
   exception when insufficient_privilege then null; end;
 end $$;
 
@@ -273,6 +315,38 @@ declare
   v_doctor uuid := (select value from consent_test_ids where key = 'doctor');
   v_cancel uuid := (select value from consent_test_ids where key = 'cancel');
 begin
+  begin
+    perform public.issue_consent_signing_link_for_current_user(
+      '22000000-0000-4000-8000-000000000002', '33000000-0000-4000-8000-000000000005',
+      v_doctor, repeat('c', 64), now() + interval '7 days'
+    );
+    raise exception 'Doctor issued a signing link through another clinic';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.revoke_consent_signing_link_for_current_user(
+      '22000000-0000-4000-8000-000000000002', '33000000-0000-4000-8000-000000000005', v_doctor
+    );
+    raise exception 'Doctor revoked a signing link through another clinic';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.cancel_consent_for_current_user(
+      '22000000-0000-4000-8000-000000000002', '33000000-0000-4000-8000-000000000005',
+      v_doctor, 'Cross tenant'
+    );
+    raise exception 'Doctor cancelled a consent through another clinic';
+  exception when insufficient_privilege then null; end;
+  if public.issue_consent_signing_link_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005',
+    v_doctor, repeat('c', 64), now() + interval '7 days'
+  ) then raise exception 'Doctor issued a link with a foreign patient ID'; end if;
+  if public.revoke_consent_signing_link_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005', v_doctor
+  ) then raise exception 'Doctor revoked a link with a foreign patient ID'; end if;
+  if public.cancel_consent_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005',
+    v_doctor, 'Foreign patient'
+  ) <> 'unavailable' then raise exception 'Doctor resolved a consent with a foreign patient ID'; end if;
+
   if not public.issue_consent_signing_link_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
     v_doctor, repeat('a', 64), now() + interval '7 days'
@@ -292,11 +366,61 @@ begin
 end
 $$;
 
+-- New writes are blocked without entitlement, while revoking an already-issued
+-- public link remains available as a safety operation.
+reset role;
+update public.clinic_subscriptions
+set status = 'past_due'
+where clinic_id = '22000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000003', true);
+do $$
+declare
+  v_doctor uuid := (select value from consent_test_ids where key = 'doctor');
+begin
+  begin
+    perform public.create_consent_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000001',
+      'Blocked entitlement', 'v1', 'Debe rechazarse.', null
+    );
+    raise exception 'Past-due clinic created a consent';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.issue_consent_signing_link_for_current_user(
+      '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+      v_doctor, repeat('f', 64), now() + interval '7 days'
+    );
+    raise exception 'Past-due clinic issued a signing link';
+  exception when insufficient_privilege then null; end;
+  if not public.revoke_consent_signing_link_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003', v_doctor
+  ) then raise exception 'Past-due clinic could not revoke an existing public link'; end if;
+end
+$$;
+
+reset role;
+update public.clinic_subscriptions
+set status = 'active'
+where clinic_id = '22000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000003', true);
+do $$
+begin
+  if not public.issue_consent_signing_link_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+    (select value from consent_test_ids where key = 'doctor'), repeat('a', 64), now() + interval '7 days'
+  ) then raise exception 'Doctor could not reissue the revoked signing link'; end if;
+end
+$$;
+
 set local role anon;
 do $$
 declare
   v_png text := 'data:image/png;base64,' || encode(decode('89504e470d0a1a0a0000000d494844520000000100000001', 'hex'), 'base64');
 begin
+  if public.sign_public_consent(repeat('a', 64), '   ', v_png, true, true) <> 'invalid' then
+    raise exception 'Whitespace-only signer name was accepted';
+  end if;
   if public.sign_public_consent(repeat('b', 64), 'Paciente Cancelado', v_png, true, true) <> 'invalid' then
     raise exception 'Cancelled consent accepted a public signature';
   end if;
@@ -374,6 +498,13 @@ begin
     values ('22000000-0000-4000-8000-000000000001', v_doctor, '33000000-0000-4000-8000-000000000003', 'Segunda firma');
     raise exception 'Second final signature was inserted';
   exception when unique_violation or check_violation then null; end;
+
+  begin update public.consents set status = 'pending', cancelled_at = null, cancelled_by = null, cancellation_reason = null where id = v_cancel;
+    raise exception 'Cancelled consent returned to pending'; exception when check_violation then null; end;
+  begin update public.consents set status = 'signed', signed_at = now(), cancelled_at = null, cancelled_by = null, cancellation_reason = null where id = v_cancel;
+    raise exception 'Cancelled consent changed to signed'; exception when check_violation then null; end;
+  begin update public.consents set consent_text = 'Alterado' where id = v_cancel;
+    raise exception 'Cancelled consent changed protected content'; exception when check_violation then null; end;
 end
 $$;
 

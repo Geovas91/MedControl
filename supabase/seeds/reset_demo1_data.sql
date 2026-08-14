@@ -21,6 +21,20 @@ declare
     '21000000-0000-4000-8000-000000000011'::uuid,
     '21000000-0000-4000-8000-000000000012'::uuid
   ];
+  record_ids constant uuid[] := array[
+    '2b000000-0000-4000-8000-000000000001'::uuid,
+    '2b000000-0000-4000-8000-000000000002'::uuid,
+    '2b000000-0000-4000-8000-000000000003'::uuid,
+    '2b000000-0000-4000-8000-000000000004'::uuid,
+    '2b000000-0000-4000-8000-000000000005'::uuid,
+    '2b000000-0000-4000-8000-000000000006'::uuid,
+    '2b000000-0000-4000-8000-000000000007'::uuid,
+    '2b000000-0000-4000-8000-000000000008'::uuid,
+    '2b000000-0000-4000-8000-000000000009'::uuid,
+    '2b000000-0000-4000-8000-000000000010'::uuid,
+    '2b000000-0000-4000-8000-000000000011'::uuid,
+    '2b000000-0000-4000-8000-000000000012'::uuid
+  ];
   appointment_ids constant uuid[] := array[
     '22000000-0000-4000-8000-000000000001'::uuid,
     '22000000-0000-4000-8000-000000000002'::uuid,
@@ -101,6 +115,21 @@ begin
   end if;
 
   if exists (
+    select 1 from public.clinical_records
+    where patient_id = any(patient_ids) and not (id = any(record_ids))
+  ) then
+    raise exception 'Reset blocked: unmanaged clinical records reference demo1 seed patients.';
+  end if;
+
+  if exists (
+    select 1 from public.clinical_records
+    where id = any(record_ids)
+      and (clinic_id <> demo_clinic_id or not (patient_id = any(patient_ids)))
+  ) then
+    raise exception 'Reset blocked: deterministic clinical record UUIDs are owned outside demo1.';
+  end if;
+
+  if exists (
     select 1 from public.payments
     where (patient_id = any(patient_ids) or appointment_id = any(appointment_ids))
       and not (id = any(payment_ids))
@@ -173,6 +202,14 @@ delete from public.doctor_public_profiles
 where clinic_id = '10000000-0000-4000-8000-000000000001'
   and id = '29000000-0000-4000-8000-000000000001';
 
+-- Migration 0022 makes final signatures immutable for application traffic. This
+-- owner-only maintenance script removes only the deterministic fictional rows
+-- validated above, so disable the mutation guard for this narrow delete and
+-- restore it immediately. The surrounding transaction restores the trigger if
+-- any statement fails.
+alter table public.consent_signatures
+  disable trigger consent_signatures_prevent_mutation;
+
 delete from public.consent_signatures
 where id in (
     '27000000-0000-4000-8000-000000000001',
@@ -190,6 +227,9 @@ where id in (
       )
   );
 
+alter table public.consent_signatures
+  enable trigger consent_signatures_prevent_mutation;
+
 delete from public.consents
 where clinic_id = '10000000-0000-4000-8000-000000000001'
   and id in (
@@ -198,6 +238,10 @@ where clinic_id = '10000000-0000-4000-8000-000000000001'
     '26000000-0000-4000-8000-000000000003',
     '26000000-0000-4000-8000-000000000004'
   );
+
+-- The same maintenance boundary is required for deterministic finalized notes.
+alter table public.medical_notes
+  disable trigger medical_notes_protect_finalization;
 
 delete from public.medical_notes
 where clinic_id = '10000000-0000-4000-8000-000000000001'
@@ -208,6 +252,9 @@ where clinic_id = '10000000-0000-4000-8000-000000000001'
     '25000000-0000-4000-8000-000000000004',
     '25000000-0000-4000-8000-000000000005'
   );
+
+alter table public.medical_notes
+  enable trigger medical_notes_protect_finalization;
 
 delete from public.medical_note_templates
 where clinic_id = '10000000-0000-4000-8000-000000000001'
@@ -254,6 +301,23 @@ where clinic_id = '10000000-0000-4000-8000-000000000001'
     '22000000-0000-4000-8000-000000000016',
     '22000000-0000-4000-8000-000000000017',
     '22000000-0000-4000-8000-000000000018'
+  );
+
+delete from public.clinical_records
+where clinic_id = '10000000-0000-4000-8000-000000000001'
+  and id in (
+    '2b000000-0000-4000-8000-000000000001',
+    '2b000000-0000-4000-8000-000000000002',
+    '2b000000-0000-4000-8000-000000000003',
+    '2b000000-0000-4000-8000-000000000004',
+    '2b000000-0000-4000-8000-000000000005',
+    '2b000000-0000-4000-8000-000000000006',
+    '2b000000-0000-4000-8000-000000000007',
+    '2b000000-0000-4000-8000-000000000008',
+    '2b000000-0000-4000-8000-000000000009',
+    '2b000000-0000-4000-8000-000000000010',
+    '2b000000-0000-4000-8000-000000000011',
+    '2b000000-0000-4000-8000-000000000012'
   );
 
 delete from public.patients

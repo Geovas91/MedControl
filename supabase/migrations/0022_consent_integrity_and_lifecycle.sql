@@ -527,12 +527,13 @@ set search_path = public, pg_temp
 as $$
 declare
   target public.consents%rowtype;
+  normalized_signer_name text := trim(coalesce(p_signer_name, ''));
   encoded_signature text;
   decoded_signature bytea;
   signature_width bigint;
   signature_height bigint;
 begin
-  if p_signer_name is null or length(p_signer_name) < 2 or length(p_signer_name) > 160
+  if length(normalized_signer_name) < 2 or length(normalized_signer_name) > 160
     or p_accepted_privacy is not true or p_accepted_sensitive_data is not true
     or p_signature_png is null or octet_length(p_signature_png) > 341358
     or left(p_signature_png, 22) <> 'data:image/png;base64,' then
@@ -587,7 +588,7 @@ begin
     clinic_id, consent_id, patient_id, signer_full_name, signature_data,
     accepted_privacy_notice, accepted_sensitive_data_processing
   ) values (
-    target.clinic_id, target.id, target.patient_id, trim(p_signer_name), p_signature_png,
+    target.clinic_id, target.id, target.patient_id, normalized_signer_name, p_signature_png,
     true, true
   );
 
