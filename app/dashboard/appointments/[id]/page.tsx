@@ -20,6 +20,7 @@ import {
   formatAppointmentDetailDateTime,
   getAppointmentDetailAgendaHref,
   getAppointmentDetailMessage,
+  getAppointmentCalendarEmailMessage,
   getAppointmentDetailStatusVariant,
   getSafeAppointmentMeetingUrl,
   type AppointmentDetailSearchParams
@@ -108,6 +109,7 @@ export default async function AppointmentDetailPage({
   const dateTime = formatAppointmentDetailDateTime(appointment.starts_at, appointment.ends_at, timeZone);
   const agendaHref = getAppointmentDetailAgendaHref(dateTime.localDate);
   const successMessage = getAppointmentDetailMessage(query);
+  const calendarEmailMessage = getAppointmentCalendarEmailMessage(query);
   const meetingUrl = getSafeAppointmentMeetingUrl(appointment.meeting_url);
   const statusActions = getAvailableAppointmentStatusActions({
     currentStatus: appointment.status,
@@ -133,6 +135,21 @@ export default async function AppointmentDetailPage({
           className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"
         >
           {successMessage}
+        </p>
+      ) : null}
+
+      {calendarEmailMessage ? (
+        <p
+          role="status"
+          className={`mb-5 rounded-md border p-3 text-sm ${
+            calendarEmailMessage.tone === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : calendarEmailMessage.tone === "warning"
+                ? "border-amber-200 bg-amber-50 text-amber-800"
+                : "border-slate-200 bg-slate-50 text-slate-700"
+          }`}
+        >
+          {calendarEmailMessage.text}
         </p>
       ) : null}
 

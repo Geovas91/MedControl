@@ -7,6 +7,7 @@ import {
   type AppointmentFormState
 } from "@/lib/appointments/create";
 import { updateAppointmentForActiveTenant } from "@/lib/server/update-appointment";
+import { deliverAppointmentCalendarEmail } from "@/lib/server/appointment-calendar-email";
 
 export async function updateAppointmentAction(
   appointmentId: string,
@@ -32,6 +33,16 @@ export async function updateAppointmentAction(
     };
   }
 
+  const calendarEmail = result.calendarChanged
+    ? await deliverAppointmentCalendarEmail({
+        appointmentId,
+        method: "REQUEST",
+        reason: "rescheduled",
+        operationKey: result.operationKey,
+        appointmentVersion: result.appointmentVersion
+      })
+    : null;
+
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/appointments");
   revalidatePath(`/dashboard/appointments?date=${encodeURIComponent(result.oldDate)}`);
@@ -39,5 +50,7 @@ export async function updateAppointmentAction(
   revalidatePath(`/dashboard/appointments/${appointmentId}`);
   revalidatePath(`/dashboard/patients/${result.oldPatientId}`);
   revalidatePath(`/dashboard/patients/${result.patientId}`);
-  redirect(`/dashboard/appointments/${appointmentId}?updated=1`);
+  const query = new URLSearchParams({ updated: "1" });
+  if (calendarEmail) query.set("calendar_email", calendarEmail);
+  redirect(`/dashboard/appointments/${appointmentId}?${query.toString()}`);
 }

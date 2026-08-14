@@ -14,6 +14,11 @@ import {
   type AppointmentFormValues
 } from "@/lib/appointments/create";
 import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
+import {
+  buildAppointmentCalendarOperation,
+  canKeepAppointmentCalendarRecipient,
+  hasAppointmentCalendarRelevantChange
+} from "@/lib/calendar/invitation";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -57,7 +62,7 @@ export type AppointmentEditResult =
   | { state: "error"; data: null };
 
 export type UpdateAppointmentResult =
-  | { state: "success"; date: string; oldDate: string; patientId: string; oldPatientId: string }
+  | { state: "success"; date: string; oldDate: string; patientId: string; oldPatientId: string; calendarChanged: boolean; operationKey: string; appointmentVersion: string }
   | { state: "invalid_id" }
   | { state: "unauthenticated" }
   | { state: "no_active_membership" }
@@ -232,6 +237,14 @@ export async function updateAppointmentForActiveTenant(
   }
 
   const original = appointmentResult.data as EditableAppointment;
+  if (!canKeepAppointmentCalendarRecipient(original.patient_id, input.patientId)) {
+    return {
+      state: "validation_error",
+      error: "No es posible cambiar el paciente de una cita existente.",
+      fieldErrors: { patientId: "Crea una cita nueva para el paciente correcto." },
+      values
+    };
+  }
   const [patientResult, doctorResult] = await Promise.all([
     supabase
       .from("patients")
@@ -304,6 +317,10 @@ export async function updateAppointmentForActiveTenant(
 
   const scheduleChanged =
     Date.parse(startsAt) !== Date.parse(original.starts_at) || Date.parse(endsAt) !== Date.parse(original.ends_at);
+  const calendarChanged = hasAppointmentCalendarRelevantChange(
+    { doctorId: original.doctor_id, startsAt: original.starts_at, endsAt: original.ends_at, location: original.location },
+    { doctorId: input.doctorId, startsAt, endsAt, location: input.location ?? null }
+  );
 
   if (original.status === "completed" && scheduleChanged) {
     return {
@@ -361,9 +378,9 @@ export async function updateAppointmentForActiveTenant(
     .update(buildAppointmentUpdate(input, startsAt, endsAt) as never)
     .eq("id", appointmentId)
     .eq("clinic_id", clinicId)
-    .select("id, patient_id")
+    .select("id, patient_id, updated_at")
     .maybeSingle()) as unknown as {
-    data: { id: string; patient_id: string } | null;
+    data: { id: string; patient_id: string; updated_at: string } | null;
     error: { code: string } | null;
   };
 
@@ -376,11 +393,19 @@ export async function updateAppointmentForActiveTenant(
     return { state: "error", error: "No fue posible actualizar la cita. Intenta nuevamente.", values };
   }
 
+  const calendarOperation = buildAppointmentCalendarOperation(
+    appointmentId,
+    "updated",
+    updateResult.data.updated_at
+  );
+
   return {
     state: "success",
     date: input.date,
     oldDate: oldValues.date,
     patientId: updateResult.data.patient_id,
-    oldPatientId: original.patient_id
+    oldPatientId: original.patient_id,
+    calendarChanged: original.status !== "cancelled" && calendarChanged,
+    ...calendarOperation
   };
 }

@@ -82,10 +82,14 @@ export function EditAppointmentForm({
       <fieldset disabled={!canSubmit} className="grid gap-6 disabled:opacity-70">
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Paciente *" htmlFor="patient_id">
-            <Select id="patient_id" name="patient_id" defaultValue={values.patientId} required aria-invalid={Boolean(state.fieldErrors?.patientId)} aria-describedby={state.fieldErrors?.patientId ? fieldErrorId("patientId") : undefined}>
+            <input type="hidden" name="patient_id" value={initialValues.patientId} />
+            <Select id="patient_id" value={initialValues.patientId} disabled aria-describedby="patient_id_help">
               <option value="">Selecciona un paciente</option>
               {patients.map((patient) => <option key={patient.id} value={patient.id}>{patientLabel(patient)}</option>)}
             </Select>
+            <span id="patient_id_help" className="text-xs text-slate-500">
+              Para cambiar de paciente, cancela esta cita y crea una nueva.
+            </span>
             <FieldError field="patientId" errors={state.fieldErrors} />
           </Field>
 

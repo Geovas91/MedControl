@@ -9,7 +9,9 @@ valida al cargar y nuevamente en la Server Action.
 La cita se resuelve mediante `getActiveTenantContext`. Cita, paciente, profesional, conflictos y actualización se
 filtran por el `clinic_id` activo usando el cliente SSR autenticado. El formulario nunca proporciona el tenant.
 
-Solo se actualizan `patient_id`, `doctor_id`, `title`, `appointment_type`, `location`, `starts_at` y `ends_at`.
+Solo se actualizan `doctor_id`, `title`, `appointment_type`, `location`, `starts_at` y `ends_at`. El `patient_id` de
+una cita existente es inmutable: para corregir el paciente se debe cancelar la cita y crear otra. El servidor aplica
+esta regla aunque se manipule el formulario.
 `status` se administra exclusivamente desde las acciones del detalle. Se preservan `meeting_url`, `notes`,
 invitaciones, recordatorios, IDs y recursos relacionados.
 
