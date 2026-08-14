@@ -52,10 +52,13 @@ declare
   v_repeat record;
   v_next record;
   v_uid text;
+  v_version timestamptz;
 begin
+  select updated_at into strict v_version from public.appointments
+  where id = '40000000-0000-4000-8000-000000000020';
   select * into strict v_first
   from public.prepare_appointment_email_invite(
-    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:0:REQUEST'
+    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:0:REQUEST', v_version
   );
   if not v_first.should_send or v_first.sequence <> 0 then
     raise exception 'First real delivery did not start at sequence 0';
@@ -64,7 +67,7 @@ begin
 
   select * into strict v_repeat
   from public.prepare_appointment_email_invite(
-    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:0:REQUEST'
+    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:0:REQUEST', v_version
   );
   if v_repeat.should_send or v_repeat.sequence <> 0 or v_repeat.ics_uid <> v_uid then
     raise exception 'Repeated idempotency key was not a stable duplicate';
@@ -72,46 +75,40 @@ begin
 
   select * into strict v_next
   from public.prepare_appointment_email_invite(
-    '40000000-0000-4000-8000-000000000020', 'CANCEL', 'appointment-a:1:CANCEL'
+    '40000000-0000-4000-8000-000000000020', 'CANCEL', 'appointment-a:1:CANCEL', v_version
   );
   if not v_next.should_send or v_next.sequence <> 1 or v_next.ics_uid <> v_uid then
     raise exception 'New operation did not increment sequence exactly once with stable UID';
   end if;
 
-  update public.appointment_invites
-  set status = 'sent', delivery_status = 'sent'
-  where id = v_next.invite_id;
+  if not public.record_appointment_email_invite_result(
+    v_next.invite_id, v_next.sequence, 'appointment-a:1:CANCEL', 'sent', 'message-cancel', null
+  ) then raise exception 'Authorized result RPC did not persist'; end if;
+  select updated_at into strict v_version from public.appointments
+  where id = '40000000-0000-4000-8000-000000000020';
   select * into strict v_repeat
   from public.prepare_appointment_email_invite(
-    '40000000-0000-4000-8000-000000000020', 'CANCEL', 'appointment-a:1:CANCEL'
+    '40000000-0000-4000-8000-000000000020', 'CANCEL', 'appointment-a:1:CANCEL', v_version
   );
   if v_repeat.should_send or v_repeat.sequence <> 1 then
     raise exception 'Sent operation was not kept consumed';
   end if;
-  if (select delivery_status from public.appointment_invites where id = v_next.invite_id) <> 'sent' then
-    raise exception 'Duplicate retry modified sent delivery state';
-  end if;
 
   select * into strict v_next
   from public.prepare_appointment_email_invite(
-    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:2:REQUEST'
+    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:2:REQUEST', v_version
   );
-  update public.appointment_invites
-  set status = 'failed', delivery_status = 'delivery_unknown'
-  where id = v_next.invite_id;
+  if not public.record_appointment_email_invite_result(
+    v_next.invite_id, v_next.sequence, 'appointment-a:2:REQUEST', 'delivery_unknown', null, 'timeout'
+  ) then raise exception 'Authorized unknown result RPC did not persist'; end if;
+  select updated_at into strict v_version from public.appointments
+  where id = '40000000-0000-4000-8000-000000000020';
   select * into strict v_repeat
   from public.prepare_appointment_email_invite(
-    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:2:REQUEST'
+    '40000000-0000-4000-8000-000000000020', 'REQUEST', 'appointment-a:2:REQUEST', v_version
   );
   if v_repeat.should_send or v_repeat.sequence <> 2 then
     raise exception 'delivery_unknown operation was not kept consumed';
-  end if;
-  if (select delivery_status from public.appointment_invites where id = v_next.invite_id) <> 'delivery_unknown' then
-    raise exception 'Duplicate retry modified delivery_unknown state';
-  end if;
-
-  if (select count(*) from public.appointment_invites where appointment_id = '40000000-0000-4000-8000-000000000020' and channel = 'email') <> 1 then
-    raise exception 'More than one email invite exists for the appointment';
   end if;
 end
 $$;
@@ -122,7 +119,7 @@ do $$
 begin
   begin
     perform public.prepare_appointment_email_invite(
-      '40000000-0000-4000-8000-000000000020', 'REQUEST', 'assistant-attempt'
+      '40000000-0000-4000-8000-000000000020', 'REQUEST', 'assistant-attempt', now()
     );
     raise exception 'Assistant prepared an invitation';
   exception
@@ -138,7 +135,7 @@ do $$
 begin
   begin
     perform public.prepare_appointment_email_invite(
-      '40000000-0000-4000-8000-000000000021', 'REQUEST', 'cross-clinic-attempt'
+      '40000000-0000-4000-8000-000000000021', 'REQUEST', 'cross-clinic-attempt', now()
     );
     raise exception 'Cross-clinic invitation was prepared';
   exception
@@ -154,12 +151,36 @@ do $$
 begin
   begin
     perform public.prepare_appointment_email_invite(
-      '40000000-0000-4000-8000-000000000020', 'REQUEST', 'outsider-attempt'
+      '40000000-0000-4000-8000-000000000020', 'REQUEST', 'outsider-attempt', now()
     );
     raise exception 'Outsider prepared an invitation';
   exception
     when others then
       if sqlerrm <> 'Appointment is unavailable.' then raise; end if;
+  end;
+end
+$$;
+
+-- Even an authorized doctor has no direct table write privilege; operational
+-- writes must pass through the validated RPCs.
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000020', true);
+do $$
+begin
+  begin
+    insert into public.appointment_invites(clinic_id, appointment_id, patient_id, channel)
+    values (
+      '20000000-0000-4000-8000-000000000020',
+      '40000000-0000-4000-8000-000000000020',
+      '30000000-0000-4000-8000-000000000021',
+      'sms'
+    );
+    raise exception 'Authenticated role wrote appointment_invites directly';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.appointment_invites set patient_id = '30000000-0000-4000-8000-000000000021';
+    raise exception 'Authenticated role updated appointment_invites directly';
+  exception when insufficient_privilege then null;
   end;
 end
 $$;
@@ -172,7 +193,7 @@ do $$
 begin
   begin
     perform public.prepare_appointment_email_invite(
-      '40000000-0000-4000-8000-000000000020', 'REQUEST', 'anonymous-attempt'
+      '40000000-0000-4000-8000-000000000020', 'REQUEST', 'anonymous-attempt', now()
     );
     raise exception 'Anonymous role executed the invitation RPC';
   exception when insufficient_privilege then null;
@@ -181,31 +202,71 @@ end
 $$;
 reset role;
 
+-- The composite FK rejects every cross-tenant permutation even for a table
+-- owner, independently of API privileges and RLS.
+do $$
+begin
+  begin
+    insert into public.appointment_invites(clinic_id, appointment_id, patient_id, channel)
+    values (
+      '20000000-0000-4000-8000-000000000020',
+      '40000000-0000-4000-8000-000000000021',
+      '30000000-0000-4000-8000-000000000021',
+      'sms'
+    );
+    raise exception 'Appointment from another clinic was accepted';
+  exception when foreign_key_violation then null;
+  end;
+  begin
+    insert into public.appointment_invites(clinic_id, appointment_id, patient_id, channel)
+    values (
+      '20000000-0000-4000-8000-000000000020',
+      '40000000-0000-4000-8000-000000000020',
+      '30000000-0000-4000-8000-000000000021',
+      'sms'
+    );
+    raise exception 'Patient from another clinic was accepted';
+  exception when foreign_key_violation then null;
+  end;
+  begin
+    insert into public.appointment_invites(clinic_id, appointment_id, patient_id, channel)
+    values (
+      '20000000-0000-4000-8000-000000000021',
+      '40000000-0000-4000-8000-000000000020',
+      '30000000-0000-4000-8000-000000000020',
+      'sms'
+    );
+    raise exception 'Cross-tenant clinic relationship was accepted';
+  exception when foreign_key_violation then null;
+  end;
+end
+$$;
+
 -- Only REQUEST and CANCEL are accepted, and keys must be 1..255 characters.
 do $$
 begin
   perform set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000020', true);
   set local role authenticated;
   begin
-    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', 'PUBLISH', 'invalid-method');
+    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', 'PUBLISH', 'invalid-method', now());
     raise exception 'Invalid method was accepted';
   exception when others then
     if sqlerrm <> 'Invalid calendar invitation method.' then raise; end if;
   end;
   begin
-    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', null, 'invalid-null-method');
+    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', null, 'invalid-null-method', now());
     raise exception 'Null method was accepted';
   exception when others then
     if sqlerrm <> 'Invalid calendar invitation method.' then raise; end if;
   end;
   begin
-    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', 'REQUEST', '');
+    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', 'REQUEST', '', now());
     raise exception 'Empty idempotency key was accepted';
   exception when others then
     if sqlerrm <> 'Invalid calendar invitation idempotency key.' then raise; end if;
   end;
   begin
-    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', 'REQUEST', repeat('x', 256));
+    perform public.prepare_appointment_email_invite('40000000-0000-4000-8000-000000000020', 'REQUEST', repeat('x', 256), now());
     raise exception 'Oversized idempotency key was accepted';
   exception when others then
     if sqlerrm <> 'Invalid calendar invitation idempotency key.' then raise; end if;

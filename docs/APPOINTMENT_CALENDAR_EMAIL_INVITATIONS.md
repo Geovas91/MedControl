@@ -30,6 +30,24 @@ having count(*) > 1;
 
 No se ejecuta esta migración desde la aplicación ni desde CI.
 
+## Migración correctiva 0021
+
+`0021_secure_appointment_calendar_invites.sql` conserva intacto el historial de 0020 y elimina el acceso directo de
+`authenticated` a `appointment_invites`. La preparación y el registro del resultado se realizan exclusivamente con
+RPCs `SECURITY DEFINER`, `search_path` fijo, validación explícita de usuario, rol y suscripción, bloqueo por cita y de
+fila, y comparación exacta de la versión de PostgreSQL. Las RPCs no conceden acceso anónimo ni permiten operar sobre
+otra clínica.
+
+La restricción única `(clinic_id, id, patient_id)` de `appointments` respalda una FK compuesta equivalente desde
+`appointment_invites`. Así, incluso una escritura con privilegios elevados no puede mezclar clínica, cita y paciente.
+La aplicación no requiere `SELECT` directo sobre esta tabla, por lo que tampoco se concede.
+
+La edición de una cita existente no permite cambiar de paciente. Esta decisión evita reutilizar un UID cuyo attendee
+original ya pudo importar, mezclar datos entre destinatarios o dejar una cancelación parcial si falla el proveedor.
+Para corregir el paciente se debe cancelar la cita existente y crear una nueva; cada cita conserva así un único
+destinatario y su propio ciclo UID/SEQUENCE. El rechazo ocurre antes de escribir y la UI muestra el paciente como
+inmutable.
+
 ## Correo e ICS
 
 Se reutiliza Resend. El wrapper admite adjuntos y envía una idempotency key formada por cita, secuencia y método. El
@@ -57,9 +75,10 @@ No se requieren credenciales de Google Calendar para adjuntos `.ics`.
 
 ## Validación local y staging
 
-- La migración 0020 fue aplicada mediante un reset completo 0001–0020 en Supabase local aislado. Las pruebas SQL
-  verifican UID, secuencia, idempotencia, estados consumidos, roles, tenant, constraints y el fallo explícito ante
-  duplicados históricos. La configuración local temporal no forma parte del repositorio.
+- Las migraciones 0020 y 0021 fueron aplicadas mediante un reset completo 0001–0021 en Supabase local aislado. Las
+  pruebas SQL verifican UID, secuencia, idempotencia, estados consumidos, roles, tenant, privilegios mínimos, FKs
+  compuestas y el fallo explícito ante duplicados históricos. La configuración local temporal no forma parte del
+  repositorio.
 - La migración 0020 fue aplicada correctamente en staging.
 - Resend usa `mail.clinicontrol.mx` como dominio verificado y `EMAIL_REQUIRED=false` permanece configurado.
 - Gmail/Google Calendar fue validado end-to-end: creación, reprogramación sobre el mismo evento, cancelación,
@@ -68,12 +87,7 @@ No se requieren credenciales de Google Calendar para adjuntos `.ics`.
 - Apple Calendar continúa pendiente por falta de una cuenta disponible. No se presenta como compatibilidad validada;
   esta ausencia de cobertura manual no invalida los resultados obtenidos en Gmail y Outlook.
 
-## Hallazgos de revisión final pendientes
+## Estado de despliegue
 
-- La migración concede `SELECT`, `INSERT` y `UPDATE` de tabla a `authenticated` para una RPC `SECURITY INVOKER`.
-  Las policies limitan por `clinic_id`, pero las FKs actuales de `appointment_invites` no vinculan de forma compuesta
-  `clinic_id` con `appointment_id` y `patient_id`. Antes de sacar el PR de draft se debe impedir que una escritura
-  directa pueda mezclar identificadores de otra clínica o bloquear su fila única de email.
-- La edición de citas permite cambiar `patient_id`, pero el flujo de calendario no trata ese cambio como una operación
-  de destinatario: no cancela el evento del paciente anterior ni solicita el evento para el nuevo. Debe definirse y
-  probarse ese ciclo antes de habilitar el flujo como listo para merge.
+La migración 0021 queda validada localmente y pendiente de aplicación controlada en staging. No está aplicada en
+staging ni en producción. La migración 0020 ya aplicada en staging no fue modificada.

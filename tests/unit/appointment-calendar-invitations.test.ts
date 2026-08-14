@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   buildAppointmentCalendarOperation,
+  canKeepAppointmentCalendarRecipient,
   getCalendarDeliveryPreflight,
   getStatusCalendarOperation,
   hasAppointmentCalendarRelevantChange,
@@ -158,6 +159,15 @@ test("a newly created appointment uses its database version and reaches calendar
   assert.equal(staleDelivery.outcome, "duplicate");
 });
 
+test("an existing appointment keeps its patient as the calendar recipient", () => {
+  assert.equal(canKeepAppointmentCalendarRecipient("patient-a", "patient-a"), true);
+  assert.equal(canKeepAppointmentCalendarRecipient("patient-a", "patient-b"), false);
+
+  const updateService = readFileSync(new URL("../../lib/server/update-appointment.ts", import.meta.url), "utf8");
+  assert.match(updateService, /if \(!canKeepAppointmentCalendarRecipient\(original\.patient_id, input\.patientId\)\)/);
+  assert.match(updateService, /Crea una cita nueva para el paciente correcto/);
+});
+
 test("creating without email can retry successfully after adding email", () => {
   const missing = simulateDelivery(null, { operationKey: "appointment:created", recipientValid: false, providerReady: true });
   assert.deepEqual(missing, { outcome: "missing_recipient", state: null });
@@ -214,14 +224,17 @@ test("only calendar-relevant edits and cancel/restore status changes trigger del
   assert.equal(getStatusCalendarOperation("confirmed"), null);
 });
 
-test("migration contains atomic locking and both uniqueness barriers", () => {
-  const migration = readFileSync(new URL("../../supabase/migrations/0020_appointment_calendar_email_invitations.sql", import.meta.url), "utf8");
-  assert.match(migration, /pg_advisory_xact_lock/);
-  assert.match(migration, /appointment_invites_appointment_email_unique_idx/);
-  assert.match(migration, /appointment_invites_email_idempotency_key_unique_idx/);
-  assert.match(migration, /grant select, insert, update on table public\.appointment_invites to authenticated/i);
-  assert.match(migration, /last_idempotency_key = v_key/);
-  assert.match(migration, /sequence = i\.sequence \+ 1/);
+test("migrations preserve uniqueness and move calendar writes behind secure RPCs", () => {
+  const migration0020 = readFileSync(new URL("../../supabase/migrations/0020_appointment_calendar_email_invitations.sql", import.meta.url), "utf8");
+  const migration0021 = readFileSync(new URL("../../supabase/migrations/0021_secure_appointment_calendar_invites.sql", import.meta.url), "utf8");
+  assert.match(migration0020, /appointment_invites_appointment_email_unique_idx/);
+  assert.match(migration0020, /appointment_invites_email_idempotency_key_unique_idx/);
+  assert.match(migration0021, /security definer[\s\S]+set search_path = public, pg_temp/i);
+  assert.match(migration0021, /revoke all privileges on table public\.appointment_invites from authenticated/i);
+  assert.match(migration0021, /foreign key \(clinic_id, appointment_id, patient_id\)/i);
+  assert.match(migration0021, /p_appointment_version timestamptz/i);
+  assert.match(migration0021, /for update/i);
+  assert.match(migration0021, /sequence = i\.sequence \+ 1/);
 });
 
 test("service performs recipient and provider preflight before reserving idempotency", () => {

@@ -14,7 +14,11 @@ import {
   type AppointmentFormValues
 } from "@/lib/appointments/create";
 import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
-import { buildAppointmentCalendarOperation, hasAppointmentCalendarRelevantChange } from "@/lib/calendar/invitation";
+import {
+  buildAppointmentCalendarOperation,
+  canKeepAppointmentCalendarRecipient,
+  hasAppointmentCalendarRelevantChange
+} from "@/lib/calendar/invitation";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -233,6 +237,14 @@ export async function updateAppointmentForActiveTenant(
   }
 
   const original = appointmentResult.data as EditableAppointment;
+  if (!canKeepAppointmentCalendarRecipient(original.patient_id, input.patientId)) {
+    return {
+      state: "validation_error",
+      error: "No es posible cambiar el paciente de una cita existente.",
+      fieldErrors: { patientId: "Crea una cita nueva para el paciente correcto." },
+      values
+    };
+  }
   const [patientResult, doctorResult] = await Promise.all([
     supabase
       .from("patients")

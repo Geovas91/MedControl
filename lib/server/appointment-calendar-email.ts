@@ -22,17 +22,29 @@ export type AppointmentCalendarDeliveryOutcome =
   | "duplicate";
 
 type PrepareResult = {
-  invite_id: string;
-  ics_uid: string;
+  invite_id: string | null;
+  ics_uid: string | null;
   sequence: number;
   should_send: boolean;
+  version_matches: boolean;
 };
 
 type AppointmentDeliveryClient = {
   rpc(
     fn: "prepare_appointment_email_invite",
-    args: { p_appointment_id: string; p_method: AppointmentIcsMethod; p_idempotency_key: string }
+    args: { p_appointment_id: string; p_method: AppointmentIcsMethod; p_idempotency_key: string; p_appointment_version: string }
   ): Promise<{ data: PrepareResult[] | null; error: { code?: string } | null }>;
+  rpc(
+    fn: "record_appointment_email_invite_result",
+    args: {
+      p_invite_id: string;
+      p_sequence: number;
+      p_idempotency_key: string;
+      p_outcome: "sent" | "failed" | "delivery_unknown";
+      p_provider_message_id: string | null;
+      p_error_code: string | null;
+    }
+  ): Promise<{ data: boolean | null; error: { code?: string } | null }>;
 };
 
 const compatibleEmail = /^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/;
@@ -149,7 +161,8 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
   const prepare = await (supabase as unknown as AppointmentDeliveryClient).rpc("prepare_appointment_email_invite", {
     p_appointment_id: appointment.id,
     p_method: input.method,
-    p_idempotency_key: input.operationKey
+    p_idempotency_key: input.operationKey,
+    p_appointment_version: input.appointmentVersion
   });
   const prepared = prepare.data?.[0];
 
@@ -161,44 +174,40 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
     });
     return "failed";
   }
+  if (!prepared.version_matches) return "duplicate";
   if (!prepared.should_send) return "duplicate";
-  const invite = prepared;
+  if (!prepared.invite_id || !prepared.ics_uid) return "failed";
+  const invite = {
+    inviteId: prepared.invite_id,
+    icsUid: prepared.ics_uid,
+    sequence: prepared.sequence
+  };
 
   async function persistOutcome(outcome: "sent" | "failed" | "delivery_unknown", messageId?: string, errorCode?: string) {
-    const inviteStatus = outcome === "sent" ? "sent" : "failed";
-    const { error } = await supabase
-      .from("appointment_invites")
-      .update({
-        status: inviteStatus,
-        delivery_status: outcome,
-        provider: "resend",
-        provider_message_id: messageId ?? null,
-        sent_at: outcome === "sent" ? new Date().toISOString() : null,
-        failed_reason: errorCode ?? null
-      } as never)
-      .eq("id", invite.invite_id)
-      .eq("clinic_id", clinicId)
-      .eq("sequence", invite.sequence)
-      .eq("last_idempotency_key", input.operationKey);
+    const persistence = await (supabase as unknown as AppointmentDeliveryClient).rpc(
+      "record_appointment_email_invite_result",
+      {
+        p_invite_id: invite.inviteId,
+        p_sequence: invite.sequence,
+        p_idempotency_key: input.operationKey,
+        p_outcome: outcome,
+        p_provider_message_id: messageId ?? null,
+        p_error_code: errorCode ?? null
+      }
+    );
 
-    if (error) {
+    if (persistence.error || !persistence.data) {
       logger.error("Appointment calendar invite result persistence failed", {
         component: "appointment_calendar_email",
         status: "persistence_error",
-        code: error.code
+        code: persistence.error?.code
       });
     }
-
-    await supabase
-      .from("appointments")
-      .update({ invite_status: inviteStatus } as never)
-      .eq("id", appointment.id)
-      .eq("clinic_id", clinicId);
   }
 
   const ics = generateAppointmentIcs({
     method: input.method,
-    uid: invite.ics_uid,
+    uid: invite.icsUid,
     sequence: invite.sequence,
     startsAt: appointment.starts_at,
     endsAt: appointment.ends_at,

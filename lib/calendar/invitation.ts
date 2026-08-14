@@ -19,6 +19,10 @@ export function isCurrentAppointmentVersion(currentVersion: string, expectedVers
   return currentVersion === expectedVersion;
 }
 
+export function canKeepAppointmentCalendarRecipient(currentPatientId: string, requestedPatientId: string) {
+  return currentPatientId === requestedPatientId;
+}
+
 export function getCalendarDeliveryPreflight(input: { recipientValid: boolean; providerReady: boolean }): CalendarDeliveryPreflight {
   if (!input.recipientValid) return "missing_recipient";
   if (!input.providerReady) return "disabled";
