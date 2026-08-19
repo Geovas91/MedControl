@@ -4,6 +4,7 @@ import { getConsentFormValues, validateConsentValues, type ConsentFormValues } f
 import { canCreateConsent, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
 import { getTemplateContent } from "@/lib/clinical-record/templates";
 import { createSigningToken, hashSigningToken } from "@/lib/consents/signing";
+import { buildConsentSigningUrl } from "@/lib/consents/signing-url";
 import { logger } from "@/lib/logger";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
@@ -112,7 +113,7 @@ export async function createConsentSigningLink(patientId: string, consentId: str
     p_expires_at: expiresAt
   });
   if (update.error || update.data !== true) { logger.error("Consent signing link RPC failed", { component: "clinical_consents", operation: "create_signing_link", status: update.error ? "rpc_error" : "stale", code: update.error?.code }); return { state: "error" as const }; }
-  return { state: "success" as const, url: new URL(`/consent/sign/${rawToken}`, getAppBaseUrl()).toString(), expiresAt };
+  return { state: "success" as const, url: buildConsentSigningUrl(rawToken, getAppBaseUrl()), expiresAt };
 }
 
 export async function revokeConsentSigningLink(patientId: string, consentId: string) {
