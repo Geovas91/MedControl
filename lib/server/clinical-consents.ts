@@ -4,6 +4,7 @@ import { getConsentFormValues, validateConsentValues, type ConsentFormValues } f
 import { canCreateConsent, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
 import { getTemplateContent } from "@/lib/clinical-record/templates";
 import { createSigningToken, hashSigningToken } from "@/lib/consents/signing";
+import { buildConsentSigningUrl } from "@/lib/consents/signing-url";
 import { logger } from "@/lib/logger";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
@@ -14,10 +15,28 @@ import type { Database } from "@/types/database";
 
 type ConsentRow = Database["public"]["Tables"]["consents"]["Row"];
 type SignatureRow = Database["public"]["Tables"]["consent_signatures"]["Row"];
-type ConsentInsert = Database["public"]["Tables"]["consents"]["Insert"];
 type TemplateOption = { id: string; name: string; description: string | null; template_schema: Database["public"]["Tables"]["medical_note_templates"]["Row"]["template_schema"]; is_system_template: boolean };
-export type ConsentDetail = Pick<ConsentRow, "id" | "consent_type" | "consent_version" | "consent_text" | "status" | "expires_at" | "signed_at" | "revoked_at" | "created_at" | "template_id" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at"> & { signatures: Pick<SignatureRow, "id" | "signer_full_name" | "signed_at" | "accepted_privacy_notice" | "accepted_sensitive_data_processing">[] };
+export type ConsentDetail = Pick<ConsentRow, "id" | "clinical_record_id" | "consent_type" | "consent_version" | "consent_text" | "status" | "expires_at" | "signed_at" | "revoked_at" | "cancelled_at" | "cancelled_by" | "cancellation_reason" | "created_at" | "template_id" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at"> & { signatures: Pick<SignatureRow, "id" | "signer_full_name" | "signed_at" | "accepted_privacy_notice" | "accepted_sensitive_data_processing">[] };
 type Result<T> = { state: "ready"; data: T } | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "not_found" | "error"; data: null };
+type RpcResult<T> = Promise<{ data: T | null; error: { code: string } | null }>;
+type ConsentLifecycleRpcClient = {
+  rpc(name: "create_consent_for_current_user", args: Database["public"]["Functions"]["create_consent_for_current_user"]["Args"]): RpcResult<string>;
+  rpc(name: "issue_consent_signing_link_for_current_user", args: Database["public"]["Functions"]["issue_consent_signing_link_for_current_user"]["Args"]): RpcResult<boolean>;
+  rpc(name: "revoke_consent_signing_link_for_current_user", args: Database["public"]["Functions"]["revoke_consent_signing_link_for_current_user"]["Args"]): RpcResult<boolean>;
+  rpc(name: "cancel_consent_for_current_user", args: Database["public"]["Functions"]["cancel_consent_for_current_user"]["Args"]): RpcResult<string>;
+};
+
+type PublicConsentLookupRpcClient = {
+  rpc(name: "get_public_consent_for_signing", args: Database["public"]["Functions"]["get_public_consent_for_signing"]["Args"]): RpcResult<Database["public"]["Functions"]["get_public_consent_for_signing"]["Returns"]>;
+};
+
+function consentRpc(client: Awaited<ReturnType<typeof createClient>>) {
+  return client as unknown as ConsentLifecycleRpcClient;
+}
+
+function publicConsentRpc(client: Awaited<ReturnType<typeof createClient>>) {
+  return client as unknown as PublicConsentLookupRpcClient;
+}
 
 async function resolvePatient(patientId: string, canCreate = false): Promise<Result<{ context: Extract<Awaited<ReturnType<typeof getActiveTenantContext>>, { state: "ready" }>; supabase: Awaited<ReturnType<typeof createClient>>; patient: { id: string; full_name: string } }>> {
   if (!isValidPatientUuid(patientId)) return { state: "invalid_id", data: null };
@@ -36,7 +55,7 @@ export async function getConsentForActiveTenant(patientId: string, consentId: st
   const resolved = await resolvePatient(patientId);
   if (resolved.state !== "ready") return resolved;
   const { context, supabase, patient } = resolved.data;
-  const consentResult = await supabase.from("consents").select("id, consent_type, consent_version, consent_text, status, expires_at, signed_at, revoked_at, created_at, template_id, signing_token_expires_at, signing_token_used_at, signing_token_revoked_at").eq("id", consentId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).maybeSingle();
+  const consentResult = await supabase.from("consents").select("id, clinical_record_id, consent_type, consent_version, consent_text, status, expires_at, signed_at, revoked_at, cancelled_at, cancelled_by, cancellation_reason, created_at, template_id, signing_token_expires_at, signing_token_used_at, signing_token_revoked_at").eq("id", consentId).eq("clinic_id", context.tenant.clinic.id).eq("patient_id", patient.id).maybeSingle();
   if (consentResult.error) { logger.error("Consent detail query failed", { component: "clinical_consents", operation: "detail", status: "query_error", code: consentResult.error.code }); return { state: "error", data: null }; }
   if (!consentResult.data) return { state: "not_found", data: null };
   const signaturesResult = await supabase.from("consent_signatures").select("id, signer_full_name, signed_at, accepted_privacy_notice, accepted_sensitive_data_processing").eq("consent_id", consentId).eq("patient_id", patient.id).order("signed_at", { ascending: false });
@@ -73,10 +92,16 @@ export async function createConsentForActiveTenant(patientId: string, values: Co
   const consentText = template ? getTemplateContent(template.template_schema) : values.consentText;
   const consentType = template ? template.name : values.consentType;
   if (!consentText) return { state: "validation_error" as const, error: "La plantilla no contiene texto utilizable.", errors: { templateId: "Actualiza la plantilla antes de usarla." }, values };
-  const insert: ConsentInsert = { clinic_id: context.tenant.clinic.id, patient_id: patient.id, created_by: context.user.id, consent_type: consentType, consent_version: values.consentVersion, consent_text: consentText, template_id: template?.id ?? null, status: "pending" };
-  const insertResult = (await supabase.from("consents").insert(insert as never).select("id").single()) as unknown as { data: { id: string } | null; error: { code: string } | null };
-  if (insertResult.error || !insertResult.data) { logger.error("Consent insert failed", { component: "clinical_consents", operation: "create", status: insertResult.error ? "insert_error" : "missing_result", code: insertResult.error?.code }); return { state: "error" as const, error: "No fue posible crear el consentimiento.", values }; }
-  return { state: "success" as const, consentId: insertResult.data.id, patientId: patient.id };
+  const createResult = await consentRpc(supabase).rpc("create_consent_for_current_user", {
+    p_clinic_id: context.tenant.clinic.id,
+    p_patient_id: patient.id,
+    p_consent_type: consentType,
+    p_consent_version: values.consentVersion,
+    p_consent_text: consentText,
+    p_template_id: template?.id ?? null
+  });
+  if (createResult.error || !createResult.data) { logger.error("Consent creation RPC failed", { component: "clinical_consents", operation: "create", status: createResult.error ? "rpc_error" : "missing_result", code: createResult.error?.code }); return { state: "error" as const, error: "No fue posible crear el consentimiento.", values }; }
+  return { state: "success" as const, consentId: createResult.data, patientId: patient.id };
 }
 
 export async function createConsentSigningLink(patientId: string, consentId: string) {
@@ -87,10 +112,22 @@ export async function createConsentSigningLink(patientId: string, consentId: str
   if (resolved.state !== "ready") return resolved;
   if (!canCreateWithEntitlements(await getClinicEntitlements(resolved.data.context.tenant.clinic.id))) return { state: "forbidden" as const };
   const rawToken = createSigningToken();
+  const tokenHash = hashSigningToken(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const update = await resolved.data.supabase.from("consents").update({ signing_token_hash: hashSigningToken(rawToken), signing_token_expires_at: expiresAt, signing_token_used_at: null, signing_token_revoked_at: null } as never).eq("id", consentId).eq("clinic_id", resolved.data.context.tenant.clinic.id).eq("patient_id", resolved.data.patient.id).eq("status", "pending").select("id").maybeSingle();
-  if (update.error || !update.data) { logger.error("Consent signing link update failed", { component: "clinical_consents", operation: "create_signing_link", status: update.error ? "query_error" : "stale", code: update.error?.code }); return { state: "error" as const }; }
-  return { state: "success" as const, url: new URL(`/consent/sign/${rawToken}`, getAppBaseUrl()).toString(), expiresAt };
+  const update = await consentRpc(resolved.data.supabase).rpc("issue_consent_signing_link_for_current_user", {
+    p_clinic_id: resolved.data.context.tenant.clinic.id,
+    p_patient_id: resolved.data.patient.id,
+    p_consent_id: consentId,
+    p_token_hash: tokenHash,
+    p_expires_at: expiresAt
+  });
+  if (update.error || update.data !== true) { logger.error("Consent signing link RPC failed", { component: "clinical_consents", operation: "create_signing_link", status: update.error ? "rpc_error" : "stale", code: update.error?.code }); return { state: "error" as const }; }
+  const verification = await publicConsentRpc(resolved.data.supabase).rpc("get_public_consent_for_signing", { p_token_hash: tokenHash });
+  if (verification.error || !verification.data?.length) {
+    logger.error("Consent signing link verification failed", { component: "clinical_consents", operation: "verify_signing_link", status: verification.error ? "rpc_error" : "hash_mismatch", code: verification.error?.code });
+    return { state: "error" as const };
+  }
+  return { state: "success" as const, url: buildConsentSigningUrl(rawToken, getAppBaseUrl()), expiresAt };
 }
 
 export async function revokeConsentSigningLink(patientId: string, consentId: string) {
@@ -99,9 +136,29 @@ export async function revokeConsentSigningLink(patientId: string, consentId: str
   if (detail.data.status !== "pending") return { state: "invalid_state" as const };
   const resolved = await resolvePatient(patientId, true);
   if (resolved.state !== "ready") return resolved;
-  const update = await resolved.data.supabase.from("consents").update({ signing_token_hash: null, signing_token_expires_at: null, signing_token_revoked_at: new Date().toISOString() } as never).eq("id", consentId).eq("clinic_id", resolved.data.context.tenant.clinic.id).eq("patient_id", resolved.data.patient.id).eq("status", "pending").select("id").maybeSingle();
-  if (update.error || !update.data) { logger.error("Consent signing link revoke failed", { component: "clinical_consents", operation: "revoke_signing_link", status: update.error ? "query_error" : "stale", code: update.error?.code }); return { state: "error" as const }; }
+  const update = await consentRpc(resolved.data.supabase).rpc("revoke_consent_signing_link_for_current_user", {
+    p_clinic_id: resolved.data.context.tenant.clinic.id,
+    p_patient_id: resolved.data.patient.id,
+    p_consent_id: consentId
+  });
+  if (update.error || update.data !== true) { logger.error("Consent signing link revoke RPC failed", { component: "clinical_consents", operation: "revoke_signing_link", status: update.error ? "rpc_error" : "stale", code: update.error?.code }); return { state: "error" as const }; }
   return { state: "success" as const };
+}
+
+export async function cancelConsentForActiveTenant(patientId: string, consentId: string, reason: string) {
+  const detail = await getConsentForActiveTenant(patientId, consentId);
+  if (detail.state !== "ready") return detail;
+  if (detail.data.status !== "pending") return { state: "invalid_state" as const };
+  const resolved = await resolvePatient(patientId, true);
+  if (resolved.state !== "ready") return resolved;
+  const result = await consentRpc(resolved.data.supabase).rpc("cancel_consent_for_current_user", {
+    p_clinic_id: resolved.data.context.tenant.clinic.id,
+    p_patient_id: resolved.data.patient.id,
+    p_consent_id: consentId,
+    p_reason: reason.trim() || null
+  });
+  if (result.error) { logger.error("Consent cancellation RPC failed", { component: "clinical_consents", operation: "cancel", status: "rpc_error", code: result.error.code }); return { state: "error" as const }; }
+  return result.data === "cancelled" || result.data === "already_cancelled" ? { state: "success" as const } : { state: "invalid_state" as const };
 }
 
 export { getConsentFormValues };

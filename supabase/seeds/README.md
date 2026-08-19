@@ -103,13 +103,13 @@ union all select 'doctor_public_profiles', count(*) from public.doctor_public_pr
 union all select 'doctor_reviews', count(*) from public.doctor_reviews where clinic_id = '10000000-0000-4000-8000-000000000001' and id::text like '2a000000-%';
 ```
 
-Para limpiar únicamente el dataset y conservar la infraestructura de la cuenta demo:
+Para limpiar únicamente un dataset que todavía no contiene evidencia clínica inmutable y conservar la infraestructura de la cuenta demo:
 
 ```powershell
 psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/reset_demo1_data.sql
 ```
 
-El reset valida que demo1 conserve su UUID y tipo `demo`. También aborta si detecta citas, pagos, notas, consentimientos, firmas, invitaciones, logs o reseñas no administrados que dependan de los registros del seed; así evita que una cascada elimine datos añadidos posteriormente.
+El reset valida que demo1 conserve su UUID y tipo `demo`. Aborta antes de borrar si detecta firmas finales, consentimientos firmados o cancelados, notas finalizadas u otra evidencia clínica inmutable dentro del dataset. En ese caso, el único flujo admitido para regenerar el demo local es `supabase db reset --local`; el helper no desactiva triggers ni ofrece un modo de mantenimiento. También aborta si detecta citas, pagos, notas, consentimientos, firmas, invitaciones, logs o reseñas no administrados que dependan de los registros del seed, evitando que una cascada elimine datos añadidos posteriormente.
 
 Nunca uses datos reales en estos seeds ni ejecutes `demo1_data.sql`, `reset_demo1_data.sql` o cualquier otro reset en producción.
 

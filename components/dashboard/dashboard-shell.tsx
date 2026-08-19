@@ -6,6 +6,7 @@ import { CalendarDays, ClipboardList, CreditCard, FileSignature, Globe2, LayoutD
 import { useEffect, useRef, useState } from "react";
 import { AppVersionLabel } from "@/components/app-version-label";
 import { InstallAppButton } from "@/components/pwa/install-app-button";
+import { isDashboardNavItemActive } from "@/lib/dashboard/navigation";
 import { cn } from "@/lib/utils";
 
 const DRAWER_ID = "dashboard-mobile-navigation";
@@ -103,7 +104,7 @@ export function DashboardShell({ children, footer, account, subscriptionNotice }
       <nav className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto p-3" aria-label={inDrawer ? "Navegación principal" : undefined}>
         {navItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const active = isDashboardNavItemActive(pathname, item.href);
           return <Link key={item.href} href={item.href} onClick={closeDrawer} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium text-[var(--foreground-soft)] transition duration-150 hover:bg-[var(--surface-muted)] hover:text-ink", active && "bg-[var(--clinic-soft)] text-clinic")}><Icon className="h-4 w-4" />{item.label}</Link>;
         })}
       </nav>
@@ -133,7 +134,7 @@ export function DashboardShell({ children, footer, account, subscriptionNotice }
         </div>
       </main>
       <nav className="app-mobile-navigation app-navigation glass-nav fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 grid grid-cols-4 p-1 lg:hidden" aria-label="Navegación móvil principal">
-        {mobileNavItems.map((item) => { const Icon = item.icon; const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href)); return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("grid min-h-12 place-items-center gap-0.5 rounded-[var(--radius-sm)] px-2 text-[11px] font-semibold text-[var(--foreground-muted)]", active && "bg-[var(--clinic-soft)] text-clinic")}><Icon className="h-4 w-4" />{item.label}</Link>; })}
+        {mobileNavItems.map((item) => { const Icon = item.icon; const active = isDashboardNavItemActive(pathname, item.href); return <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined} className={cn("grid min-h-12 place-items-center gap-0.5 rounded-[var(--radius-sm)] px-2 text-[11px] font-semibold text-[var(--foreground-muted)]", active && "bg-[var(--clinic-soft)] text-clinic")}><Icon className="h-4 w-4" />{item.label}</Link>; })}
         <button type="button" aria-label="Abrir más opciones" aria-expanded={open} aria-controls={DRAWER_ID} onClick={openDrawer} className="grid min-h-12 place-items-center gap-0.5 rounded-[var(--radius-sm)] px-2 text-[11px] font-semibold text-[var(--foreground-muted)]"><Menu className="h-4 w-4" />Más</button>
       </nav>
     </div>

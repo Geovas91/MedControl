@@ -1,8 +1,6 @@
 import "server-only";
 
-import { createHash, randomBytes } from "crypto";
-
-const TOKEN_BYTES = 32;
+export { createSigningToken, hashSigningToken } from "@/lib/consents/signing-token";
 export const MAX_SIGNATURE_BYTES = 250 * 1024;
 export const MAX_SIGNATURE_WIDTH = 1600;
 export const MAX_SIGNATURE_HEIGHT = 800;
@@ -12,14 +10,6 @@ const IHDR_OFFSET = 8;
 const MIN_PNG_HEADER_BYTES = 24;
 const MAX_SIGNATURE_DATA_URL_LENGTH = PNG_PREFIX.length + Math.ceil(MAX_SIGNATURE_BYTES / 3) * 4;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
-
-export function createSigningToken() {
-  return randomBytes(TOKEN_BYTES).toString("base64url");
-}
-
-export function hashSigningToken(token: string) {
-  return createHash("sha256").update(token, "utf8").digest("hex");
-}
 
 export function isValidSignaturePng(signature: string) {
   try {

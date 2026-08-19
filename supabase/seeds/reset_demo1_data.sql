@@ -21,6 +21,20 @@ declare
     '21000000-0000-4000-8000-000000000011'::uuid,
     '21000000-0000-4000-8000-000000000012'::uuid
   ];
+  record_ids constant uuid[] := array[
+    '2b000000-0000-4000-8000-000000000001'::uuid,
+    '2b000000-0000-4000-8000-000000000002'::uuid,
+    '2b000000-0000-4000-8000-000000000003'::uuid,
+    '2b000000-0000-4000-8000-000000000004'::uuid,
+    '2b000000-0000-4000-8000-000000000005'::uuid,
+    '2b000000-0000-4000-8000-000000000006'::uuid,
+    '2b000000-0000-4000-8000-000000000007'::uuid,
+    '2b000000-0000-4000-8000-000000000008'::uuid,
+    '2b000000-0000-4000-8000-000000000009'::uuid,
+    '2b000000-0000-4000-8000-000000000010'::uuid,
+    '2b000000-0000-4000-8000-000000000011'::uuid,
+    '2b000000-0000-4000-8000-000000000012'::uuid
+  ];
   appointment_ids constant uuid[] := array[
     '22000000-0000-4000-8000-000000000001'::uuid,
     '22000000-0000-4000-8000-000000000002'::uuid,
@@ -93,11 +107,54 @@ begin
     raise exception 'Reset blocked: demo1 does not exist with the expected UUID and tenant_type demo.';
   end if;
 
+  -- This helper is intentionally incapable of deleting immutable clinical
+  -- evidence. Rebuild the complete local database when the demo has advanced
+  -- to a signed, cancelled, or finalized state.
+  if exists (
+    select 1
+    from public.consent_signatures
+    where consent_id = any(consent_ids)
+      or patient_id = any(patient_ids)
+  ) or exists (
+    select 1
+    from public.consents
+    where (id = any(consent_ids) or patient_id = any(patient_ids))
+      and status in ('signed', 'cancelled')
+  ) or exists (
+    select 1
+    from public.medical_notes
+    where (
+      id = any(note_ids)
+      or patient_id = any(patient_ids)
+      or appointment_id = any(appointment_ids)
+      or template_id = any(template_ids)
+    )
+      and status = 'finalized'
+  ) then
+    raise exception using
+      message = 'Reset blocked: demo1 contains immutable clinical evidence. Use a full local Supabase reset to regenerate the demo dataset.';
+  end if;
+
   if exists (
     select 1 from public.appointments
     where patient_id = any(patient_ids) and not (id = any(appointment_ids))
   ) then
     raise exception 'Reset blocked: unmanaged appointments reference demo1 seed patients.';
+  end if;
+
+  if exists (
+    select 1 from public.clinical_records
+    where patient_id = any(patient_ids) and not (id = any(record_ids))
+  ) then
+    raise exception 'Reset blocked: unmanaged clinical records reference demo1 seed patients.';
+  end if;
+
+  if exists (
+    select 1 from public.clinical_records
+    where id = any(record_ids)
+      and (clinic_id <> demo_clinic_id or not (patient_id = any(patient_ids)))
+  ) then
+    raise exception 'Reset blocked: deterministic clinical record UUIDs are owned outside demo1.';
   end if;
 
   if exists (
@@ -254,6 +311,23 @@ where clinic_id = '10000000-0000-4000-8000-000000000001'
     '22000000-0000-4000-8000-000000000016',
     '22000000-0000-4000-8000-000000000017',
     '22000000-0000-4000-8000-000000000018'
+  );
+
+delete from public.clinical_records
+where clinic_id = '10000000-0000-4000-8000-000000000001'
+  and id in (
+    '2b000000-0000-4000-8000-000000000001',
+    '2b000000-0000-4000-8000-000000000002',
+    '2b000000-0000-4000-8000-000000000003',
+    '2b000000-0000-4000-8000-000000000004',
+    '2b000000-0000-4000-8000-000000000005',
+    '2b000000-0000-4000-8000-000000000006',
+    '2b000000-0000-4000-8000-000000000007',
+    '2b000000-0000-4000-8000-000000000008',
+    '2b000000-0000-4000-8000-000000000009',
+    '2b000000-0000-4000-8000-000000000010',
+    '2b000000-0000-4000-8000-000000000011',
+    '2b000000-0000-4000-8000-000000000012'
   );
 
 delete from public.patients

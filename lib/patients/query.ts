@@ -113,7 +113,11 @@ export function getPatientPagination(total: number, requestedPage: number, pageS
   };
 }
 
-export function buildPatientListHref(query: PatientListQuery, page: number) {
+export function buildPatientListHref(
+  query: PatientListQuery,
+  page: number,
+  basePath: "/dashboard/patients" | "/dashboard/consents" = "/dashboard/patients"
+) {
   const params = new URLSearchParams();
 
   if (query.search) {
@@ -133,5 +137,5 @@ export function buildPatientListHref(query: PatientListQuery, page: number) {
   }
 
   const value = params.toString();
-  return value ? `/dashboard/patients?${value}` : "/dashboard/patients";
+  return value ? `${basePath}?${value}` : basePath;
 }

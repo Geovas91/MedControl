@@ -110,6 +110,27 @@ values
   )
 on conflict (id) do nothing;
 
+insert into public.clinical_records (
+  id,
+  clinic_id,
+  patient_id,
+  created_by
+)
+values
+  (
+    '21000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001'
+  ),
+  (
+    '21000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001'
+  )
+on conflict (id) do nothing;
+
 insert into public.appointments (
   id,
   clinic_id,
@@ -168,6 +189,7 @@ insert into public.consents (
   id,
   clinic_id,
   patient_id,
+  clinical_record_id,
   created_by,
   consent_type,
   consent_version,
@@ -180,6 +202,7 @@ values (
   '50000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
   '20000000-0000-0000-0000-000000000001',
+  '21000000-0000-0000-0000-000000000001',
   '00000000-0000-0000-0000-000000000001',
   'General patient consent',
   'demo-v1',

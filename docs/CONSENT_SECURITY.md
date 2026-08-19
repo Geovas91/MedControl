@@ -10,8 +10,14 @@ related signature arguments), while SQL queries use `c` and `cl` aliases. This
 prevents a parameter from being confused with a similarly named column. The signing
 RPC performs only inexpensive input checks first, then finds and locks `c` by its
 token hash. It rejects missing, used, revoked, or expired records before decoding
-or parsing the supplied PNG. Expiration uses the existing `consent_status.expired`
-value and clears the stored hash before returning the same generic public result.
+or parsing the supplied PNG. An expired link returns the same generic public
+result without changing the legal document state; `expired` is not used for new
+consent lifecycle transitions.
+
+Authenticated creation, link issue/revocation and cancellation use separate
+`SECURITY DEFINER` RPCs with a fixed `search_path`. Direct client writes to
+`consents` and `consent_signatures` are revoked. Direct reads also exclude the
+legacy plaintext token, token hash and signature image columns.
 
 The RPC grants are limited to `anon` and `authenticated`; broad public execution is
 revoked. Inputs do not include clinic ID, patient ID, consent ID, URL, or raw
@@ -24,9 +30,10 @@ data URL: decoded bytes must have the PNG magic signature and IHDR header, be at
 most 250 KB, and have a nonzero width up to 1600 and height up to 800. SVG,
 arbitrary base64, and uploaded files are unsupported.
 
-The inspected `consent_signatures` schema does not have `clinic_id`, `created_by`,
-`signature_type`, or `signer_role`. The RPC derives its required `consent_id` and
-`patient_id` from the locked consent and receives the required signer name. Its
+The `consent_signatures` schema includes a tenant-derived `clinic_id` and composite
+relationships to its consent and patient. It does not yet have `created_by`,
+`signature_type`, or `signer_role`. The RPC derives its required tenant,
+`consent_id` and `patient_id` from the locked consent and receives the required signer name. Its
 remaining required fields have safe defaults: both acceptance flags default to
 false but are explicitly set true after validation, while `signed_at` and
 `created_at` default to `now()`.

@@ -1,30 +1,43 @@
 # Consentimientos y firmas
 
-Los consentimientos se implementan con `consents` y las firmas existentes con
-`consent_signatures`. Todas las lecturas se limitan a paciente y clinica activa;
-la politica RLS de firmas verifica adicionalmente el consentimiento relacionado.
+La implementación vigente corresponde a la fase 1 de Consentimiento Digital v1.
+El diseño completo y sus fases están documentados en
+`docs/CONSENT_DIGITAL_V1.md`.
 
-## Creacion
+## Integridad y creación
 
-Los roles `owner`, `admin` y `doctor` pueden crear un consentimiento para un
-paciente de su clinica. Se validan tipo, version y texto en el servidor. El nuevo
-registro inicia en `pending`, guarda el creador autenticado y genera el
-`signing_token` con `crypto.randomUUID()` exclusivamente en el servidor.
+Cada consentimiento pertenece a una clínica, un paciente y el expediente
+universal activo de ese mismo paciente. La relación se protege con claves
+foráneas compuestas; no depende solamente de filtros de la interfaz.
 
-El token no se devuelve a la interfaz, no se agrega a URLs, no se escribe en logs
-y no se usa para activar un flujo publico en este cambio.
+Los roles `owner`, `admin` y `doctor` crean consentimientos mediante
+`create_consent_for_current_user`. La función vuelve a validar membresía,
+entitlement, paciente y expediente, deriva `clinical_record_id`, inserta el
+consentimiento pendiente y registra `consent_created` en `audit_logs` dentro de
+la misma transacción. `assistant` no obtiene acceso clínico.
 
-## Visualizacion de firmas
+## Ciclo de vida fase 1
 
-El detalle puede mostrar firmas existentes con nombre de firmante y fecha. No lee
-ni expone `signature_data`, metadata de IP, user agent o hash de documento.
+Los nuevos documentos usan únicamente `pending`, `signed` y `cancelled`.
+`expired` permanece como valor legacy del enum para compatibilidad, pero un
+enlace vencido ya no cambia el estado legal del consentimiento.
 
-La captura de firmas queda intencionalmente deshabilitada. Aunque el esquema tiene
-una tabla de firmas, no hay en este alcance un flujo publico autenticado y
-verificado que permita atribuir una firma de manera segura. No se debe fabricar
-identidades ni reutilizar el flujo mock publico de consentimientos para datos
-reales.
+Solo un documento `pending` puede cancelarse. La cancelación conserva la fila,
+revoca el enlace actual, guarda actor, fecha y motivo normalizado opcional, y
+registra `consent_cancelled`. Una cancelación repetida es idempotente.
 
-Los consentimientos no tienen una relacion de cita en el esquema actual, por lo
-que la interfaz no inventa ese enlace. Tampoco se implementan revocacion,
-expiracion ni cambios de estado en este PR.
+Un consentimiento firmado no puede volver a pendiente ni cancelarse. Su
+clínica, paciente, expediente, tipo, versión, texto, plantilla y datos de firma
+son inmutables. `consent_signatures` admite como máximo una firma por
+consentimiento y sus filas no pueden actualizarse ni eliminarse.
+
+## Acceso y datos legacy
+
+Los clientes autenticados conservan lectura RLS únicamente de columnas
+necesarias. No pueden leer directamente `signing_token`, `signing_token_hash` o
+`signature_data`, ni escribir `consents` o `consent_signatures`. Las mutaciones
+se realizan mediante RPCs específicas con `search_path` fijo.
+
+La columna plaintext `signing_token` se conserva temporalmente para no destruir
+datos históricos, pero ningún código nuevo la usa. Se retirará en 0024 junto con
+la sustitución del modelo transitorio de tokens.

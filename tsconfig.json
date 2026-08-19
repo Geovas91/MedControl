@@ -38,6 +38,7 @@
   "exclude": [
     "node_modules",
     "scripts/test-invitation-email.ts",
-    "scripts/test-auth-oauth.ts"
+    "scripts/test-auth-oauth.ts",
+    "scripts/test-consent-token-integration.ts"
   ]
 }
