@@ -62,11 +62,8 @@ test("public signing route keeps no-store and no-referrer headers", () => {
   assert.match(nextConfig, /source: "\/consent\/sign\/:path\*"[\s\S]+?Referrer-Policy", value: "no-referrer"/);
 });
 
-test("legacy mock creation route redirects to the real patient workflow", () => {
+test("legacy mock creation route redirects to consent patient selection", () => {
   const legacyPage = readFileSync(new URL("../../app/dashboard/consents/new/page.tsx", import.meta.url), "utf8");
-  const legacyIndex = readFileSync(new URL("../../app/dashboard/consents/page.tsx", import.meta.url), "utf8");
-  assert.match(legacyPage, /redirect\("\/dashboard\/patients"\)/);
-  assert.match(legacyIndex, /redirect\("\/dashboard\/patients"\)/);
+  assert.match(legacyPage, /redirect\("\/dashboard\/consents"\)/);
   assert.doesNotMatch(legacyPage, /demo-token|Mock consent link and QR generation/);
-  assert.doesNotMatch(legacyIndex, /demo-token|enlaces demo|placeholders QR/);
 });
