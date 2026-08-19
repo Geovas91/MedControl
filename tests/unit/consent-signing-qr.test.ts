@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { createConsentSigningQr, getConsentSigningQrAvailability } from "../../lib/consents/signing-qr.ts";
 import { buildConsentSigningUrl } from "../../lib/consents/signing-url.ts";
 
-const token = "real_test_token_abcdefghijklmnopqrstuvwxyz_1234567890";
+const token = "0123456789abcdef-0123456789abcdef_012345678";
 const signingUrl = `https://staging.clinicontrol.mx/consent/sign/${token}`;
 
 function decodeCreatedQrPayload(value: string) {
@@ -58,11 +58,15 @@ test("revoked, signed and cancelled states disable QR", () => {
 });
 
 test("generated signing URL reaches the existing public consent route", () => {
+  assert.equal(token.length, 43);
+  assert.match(token, /-/);
+  assert.match(token, /_/);
   const generatedUrl = buildConsentSigningUrl(token, "https://staging.clinicontrol.mx");
   assert.equal(generatedUrl, signingUrl);
   assert.equal(new URL(generatedUrl).pathname, `/consent/sign/${token}`);
 
   const publicPage = readFileSync(new URL("../../app/consent/sign/[token]/page.tsx", import.meta.url), "utf8");
+  assert.match(publicPage, /const \{ token \} = await params/);
   assert.match(publicPage, /getPublicConsentByToken\(token\)/);
   assert.match(publicPage, /<PublicConsentSigningPage token=\{token\} consent=\{consent\}/);
 });
