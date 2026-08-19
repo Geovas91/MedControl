@@ -591,6 +591,92 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["consent_signatures"]["Insert"]>;
       };
+      consent_signed_snapshots: {
+        Row: {
+          id: string;
+          clinic_id: string;
+          patient_id: string;
+          clinical_record_id: string;
+          consent_id: string;
+          signature_id: string;
+          clinic_name: string;
+          clinic_timezone: string;
+          patient_display_name: string;
+          consent_type: string;
+          consent_version: string;
+          consent_text: string;
+          issued_at: Timestamp;
+          signer_full_name: string;
+          accepted_privacy_notice: boolean;
+          accepted_sensitive_data_processing: boolean;
+          signed_at: Timestamp;
+          snapshot_source: Database["public"]["Enums"]["consent_snapshot_source"];
+          snapshot_captured_at: Timestamp;
+          created_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          clinic_id: string;
+          patient_id: string;
+          clinical_record_id: string;
+          consent_id: string;
+          signature_id: string;
+          clinic_name: string;
+          clinic_timezone: string;
+          patient_display_name: string;
+          consent_type: string;
+          consent_version: string;
+          consent_text: string;
+          issued_at: Timestamp;
+          signer_full_name: string;
+          accepted_privacy_notice: boolean;
+          accepted_sensitive_data_processing: boolean;
+          signed_at: Timestamp;
+          snapshot_source: Database["public"]["Enums"]["consent_snapshot_source"];
+          snapshot_captured_at?: Timestamp;
+          created_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["consent_signed_snapshots"]["Insert"]>;
+      };
+      consent_documents: {
+        Row: {
+          id: string;
+          clinic_id: string;
+          patient_id: string;
+          consent_id: string;
+          snapshot_id: string;
+          document_type: "signed_consent";
+          status: Database["public"]["Enums"]["consent_document_status"];
+          renderer_version: string;
+          storage_bucket: string;
+          storage_path: string;
+          sha256: string | null;
+          size_bytes: number | null;
+          generated_at: Timestamp | null;
+          last_error_code: string | null;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          clinic_id: string;
+          patient_id: string;
+          consent_id: string;
+          snapshot_id: string;
+          document_type?: "signed_consent";
+          status?: Database["public"]["Enums"]["consent_document_status"];
+          renderer_version?: string;
+          storage_bucket?: string;
+          storage_path: string;
+          sha256?: string | null;
+          size_bytes?: number | null;
+          generated_at?: Timestamp | null;
+          last_error_code?: string | null;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["consent_documents"]["Insert"]>;
+      };
       calendar_integrations: {
         Row: {
           id: string;
@@ -818,6 +904,29 @@ export type Database = {
         Args: { p_token_hash: string; p_signer_name: string; p_signature_png: string; p_accepted_privacy: boolean; p_accepted_sensitive_data: boolean };
         Returns: string;
       };
+      get_signed_consent_evidence_for_current_user: {
+        Args: { p_clinic_id: string; p_patient_id: string; p_consent_id: string };
+        Returns: Array<{
+          snapshot_id: string;
+          document_id: string;
+          clinic_name: string;
+          clinic_timezone: string;
+          patient_display_name: string;
+          consent_type: string;
+          consent_version: string;
+          consent_text: string;
+          issued_at: Timestamp;
+          signer_full_name: string;
+          accepted_privacy_notice: boolean;
+          accepted_sensitive_data_processing: boolean;
+          signed_at: Timestamp;
+          snapshot_source: Database["public"]["Enums"]["consent_snapshot_source"];
+          signature_data: string;
+          document_status: Database["public"]["Enums"]["consent_document_status"];
+          renderer_version: string;
+          generated_at: Timestamp | null;
+        }>;
+      };
       create_consent_for_current_user: {
         Args: {
           p_clinic_id: string;
@@ -983,6 +1092,8 @@ export type Database = {
       clinical_history_status: "draft" | "pending" | "completed";
       clinical_alert_type: "allergy" | "active_condition" | "current_medication";
       information_reliability: "reliable" | "partially_reliable" | "unreliable" | "unknown";
+      consent_snapshot_source: "realtime" | "legacy_backfill";
+      consent_document_status: "pending" | "ready" | "failed";
     };
     CompositeTypes: Record<string, never>;
   };
