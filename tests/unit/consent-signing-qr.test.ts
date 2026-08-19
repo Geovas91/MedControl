@@ -25,6 +25,7 @@ test("QR encodes exactly the signing URL and no IDs or PII", async () => {
   const qr = await createConsentSigningQr(signingUrl);
   assert.equal(qr.payload, signingUrl);
   assert.equal(decodeCreatedQrPayload(qr.payload), signingUrl);
+  assert.equal(new URL(qr.payload).pathname.split("/").at(-1), token);
   assert.match(qr.svg, /^<svg/);
   assert.match(qr.svg, /width="320"/);
 
@@ -32,6 +33,16 @@ test("QR encodes exactly the signing URL and no IDs or PII", async () => {
     assert.equal(qr.payload.includes(forbidden), false);
     assert.equal(qr.svg.includes(forbidden), false);
   }
+});
+
+test("copied signing URL and QR payload use the same emitted token without a second action", () => {
+  const controls = readFileSync(new URL("../../components/clinical-record/consent-signing-link-controls.tsx", import.meta.url), "utf8");
+  const showQr = controls.slice(controls.indexOf("async function showQr()"), controls.indexOf("  return <section"));
+  assert.match(controls, /createConsentSigningQr\(qrAvailability\.signingUrl\)/);
+  assert.match(controls, /navigator\.clipboard\.writeText\(state\.url!\)/);
+  assert.doesNotMatch(showQr, /formAction|action\(/);
+  assert.match(controls, /useFormStatus\(\)/);
+  assert.match(controls, /disabled=\{pending\}/);
 });
 
 test("QR rejects query parameters, fragments and non-signing paths", async () => {

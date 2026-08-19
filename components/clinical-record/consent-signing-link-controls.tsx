@@ -2,10 +2,16 @@
 
 import { Copy, Link2, QrCode, RotateCcw, X, XCircle } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { createConsentSigningQr, getConsentSigningQrAvailability } from "@/lib/consents/signing-qr";
 
 type SigningLinkState = { error?: string; url?: string; expiresAt?: string };
+
+function GenerateSigningLinkButton({ hasActiveLink }: { hasActiveLink: boolean }) {
+  const { pending } = useFormStatus();
+  return <Button type="submit" disabled={pending}><Link2 className="h-4 w-4" />{pending ? "Generando enlace…" : hasActiveLink ? "Regenerar enlace" : "Generar enlace de firma"}</Button>;
+}
 
 export function ConsentSigningLinkControls({ action, revokeAction, cancelAction, hasActiveLink }: { action: (state: SigningLinkState, formData: FormData) => Promise<SigningLinkState>; revokeAction: () => Promise<void>; cancelAction: (formData: FormData) => Promise<void>; hasActiveLink: boolean }) {
   const [state, formAction] = useActionState(action, {});
@@ -34,7 +40,7 @@ export function ConsentSigningLinkControls({ action, revokeAction, cancelAction,
     <h2 className="font-bold text-ink">Enlace de firma</h2>
     <p className="mt-2 text-sm text-slate-600">Este enlace permite revisar y firmar el consentimiento. Compártelo únicamente con el paciente correspondiente.</p>
     <div className="mt-4 flex flex-wrap gap-3">
-      <form action={formAction}><Button type="submit"><Link2 className="h-4 w-4" />{effectiveHasActiveLink ? "Regenerar enlace" : "Generar enlace de firma"}</Button></form>
+      <form action={formAction}><GenerateSigningLinkButton hasActiveLink={effectiveHasActiveLink} /></form>
       <Button id="consent-qr-trigger" type="button" variant="secondary" disabled={!qrAvailability.available} aria-describedby={!qrAvailability.available ? "consent-qr-availability" : undefined} onClick={() => { void showQr(); }}><QrCode className="h-4 w-4" />Mostrar QR</Button>
       {effectiveHasActiveLink ? <form action={revokeAction}><Button type="submit" variant="secondary"><RotateCcw className="h-4 w-4" />Revocar enlace</Button></form> : null}
     </div>

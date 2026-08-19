@@ -26,8 +26,16 @@ type ConsentLifecycleRpcClient = {
   rpc(name: "cancel_consent_for_current_user", args: Database["public"]["Functions"]["cancel_consent_for_current_user"]["Args"]): RpcResult<string>;
 };
 
+type PublicConsentLookupRpcClient = {
+  rpc(name: "get_public_consent_for_signing", args: Database["public"]["Functions"]["get_public_consent_for_signing"]["Args"]): RpcResult<Database["public"]["Functions"]["get_public_consent_for_signing"]["Returns"]>;
+};
+
 function consentRpc(client: Awaited<ReturnType<typeof createClient>>) {
   return client as unknown as ConsentLifecycleRpcClient;
+}
+
+function publicConsentRpc(client: Awaited<ReturnType<typeof createClient>>) {
+  return client as unknown as PublicConsentLookupRpcClient;
 }
 
 async function resolvePatient(patientId: string, canCreate = false): Promise<Result<{ context: Extract<Awaited<ReturnType<typeof getActiveTenantContext>>, { state: "ready" }>; supabase: Awaited<ReturnType<typeof createClient>>; patient: { id: string; full_name: string } }>> {
@@ -104,15 +112,21 @@ export async function createConsentSigningLink(patientId: string, consentId: str
   if (resolved.state !== "ready") return resolved;
   if (!canCreateWithEntitlements(await getClinicEntitlements(resolved.data.context.tenant.clinic.id))) return { state: "forbidden" as const };
   const rawToken = createSigningToken();
+  const tokenHash = hashSigningToken(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const update = await consentRpc(resolved.data.supabase).rpc("issue_consent_signing_link_for_current_user", {
     p_clinic_id: resolved.data.context.tenant.clinic.id,
     p_patient_id: resolved.data.patient.id,
     p_consent_id: consentId,
-    p_token_hash: hashSigningToken(rawToken),
+    p_token_hash: tokenHash,
     p_expires_at: expiresAt
   });
   if (update.error || update.data !== true) { logger.error("Consent signing link RPC failed", { component: "clinical_consents", operation: "create_signing_link", status: update.error ? "rpc_error" : "stale", code: update.error?.code }); return { state: "error" as const }; }
+  const verification = await publicConsentRpc(resolved.data.supabase).rpc("get_public_consent_for_signing", { p_token_hash: tokenHash });
+  if (verification.error || !verification.data?.length) {
+    logger.error("Consent signing link verification failed", { component: "clinical_consents", operation: "verify_signing_link", status: verification.error ? "rpc_error" : "hash_mismatch", code: verification.error?.code });
+    return { state: "error" as const };
+  }
   return { state: "success" as const, url: buildConsentSigningUrl(rawToken, getAppBaseUrl()), expiresAt };
 }
 
