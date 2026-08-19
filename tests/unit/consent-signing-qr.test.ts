@@ -40,6 +40,7 @@ test("copied signing URL and QR payload use the same emitted token without a sec
   const showQr = controls.slice(controls.indexOf("async function showQr()"), controls.indexOf("  return <section"));
   assert.match(controls, /createConsentSigningQr\(qrAvailability\.signingUrl\)/);
   assert.match(controls, /navigator\.clipboard\.writeText\(state\.url!\)/);
+  assert.match(controls, /name="signing_url" value=\{state\.url \?\? ""\}/);
   assert.doesNotMatch(showQr, /formAction|action\(/);
   assert.match(controls, /useFormStatus\(\)/);
   assert.match(controls, /disabled=\{pending\}/);

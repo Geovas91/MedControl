@@ -16,7 +16,7 @@ import type { Database } from "@/types/database";
 type ConsentRow = Database["public"]["Tables"]["consents"]["Row"];
 type SignatureRow = Database["public"]["Tables"]["consent_signatures"]["Row"];
 type TemplateOption = { id: string; name: string; description: string | null; template_schema: Database["public"]["Tables"]["medical_note_templates"]["Row"]["template_schema"]; is_system_template: boolean };
-export type ConsentDetail = Pick<ConsentRow, "id" | "clinical_record_id" | "consent_type" | "consent_version" | "consent_text" | "status" | "expires_at" | "signed_at" | "revoked_at" | "cancelled_at" | "cancelled_by" | "cancellation_reason" | "created_at" | "template_id" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at"> & { signatures: Pick<SignatureRow, "id" | "signer_full_name" | "signed_at" | "accepted_privacy_notice" | "accepted_sensitive_data_processing">[] };
+export type ConsentDetail = Pick<ConsentRow, "id" | "clinical_record_id" | "consent_type" | "consent_version" | "consent_text" | "status" | "expires_at" | "signed_at" | "revoked_at" | "cancelled_at" | "cancelled_by" | "cancellation_reason" | "created_at" | "template_id" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at"> & { patientEmail: string | null; signatures: Pick<SignatureRow, "id" | "signer_full_name" | "signed_at" | "accepted_privacy_notice" | "accepted_sensitive_data_processing">[] };
 type Result<T> = { state: "ready"; data: T } | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "not_found" | "error"; data: null };
 type RpcResult<T> = Promise<{ data: T | null; error: { code: string } | null }>;
 type ConsentLifecycleRpcClient = {
@@ -38,13 +38,13 @@ function publicConsentRpc(client: Awaited<ReturnType<typeof createClient>>) {
   return client as unknown as PublicConsentLookupRpcClient;
 }
 
-async function resolvePatient(patientId: string, canCreate = false): Promise<Result<{ context: Extract<Awaited<ReturnType<typeof getActiveTenantContext>>, { state: "ready" }>; supabase: Awaited<ReturnType<typeof createClient>>; patient: { id: string; full_name: string } }>> {
+async function resolvePatient(patientId: string, canCreate = false): Promise<Result<{ context: Extract<Awaited<ReturnType<typeof getActiveTenantContext>>, { state: "ready" }>; supabase: Awaited<ReturnType<typeof createClient>>; patient: { id: string; full_name: string; email: string | null } }>> {
   if (!isValidPatientUuid(patientId)) return { state: "invalid_id", data: null };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
   if (canCreate ? !canCreateConsent(context.tenant.membership.role) : !canViewClinicalRecord(context.tenant.membership.role)) return { state: "forbidden", data: null };
   const supabase = await createClient();
-  const patientResult = await supabase.from("patients").select("id, full_name").eq("id", patientId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
+  const patientResult = await supabase.from("patients").select("id, full_name, email").eq("id", patientId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (patientResult.error) { logger.error("Consent patient query failed", { component: "clinical_consents", operation: "patient", status: "query_error", code: patientResult.error.code }); return { state: "error", data: null }; }
   if (!patientResult.data) return { state: "not_found", data: null };
   return { state: "ready", data: { context, supabase, patient: patientResult.data } };
@@ -60,7 +60,7 @@ export async function getConsentForActiveTenant(patientId: string, consentId: st
   if (!consentResult.data) return { state: "not_found", data: null };
   const signaturesResult = await supabase.from("consent_signatures").select("id, signer_full_name, signed_at, accepted_privacy_notice, accepted_sensitive_data_processing").eq("consent_id", consentId).eq("patient_id", patient.id).order("signed_at", { ascending: false });
   if (signaturesResult.error) { logger.error("Consent signature query failed", { component: "clinical_consents", operation: "signatures", status: "query_error", code: signaturesResult.error.code }); return { state: "error", data: null }; }
-  return { state: "ready", data: { ...(consentResult.data as Omit<ConsentDetail, "signatures">), signatures: (signaturesResult.data ?? []) as ConsentDetail["signatures"], timeZone: context.tenant.clinic.timezone } };
+  return { state: "ready", data: { ...(consentResult.data as Omit<ConsentDetail, "signatures" | "patientEmail">), patientEmail: patient.email, signatures: (signaturesResult.data ?? []) as ConsentDetail["signatures"], timeZone: context.tenant.clinic.timezone } };
 }
 
 export async function getConsentTemplateOptions(patientId: string): Promise<Result<{ patient: { id: string; full_name: string }; templates: TemplateOption[] }>> {

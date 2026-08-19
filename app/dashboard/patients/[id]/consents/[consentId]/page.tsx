@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Download, FileSignature, RefreshCw } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { cancelConsentAction, generateConsentDocumentAction, generateConsentSigningLinkAction, revokeConsentSigningLinkAction } from "@/app/dashboard/patients/[id]/consents/[consentId]/actions";
+import { cancelConsentAction, generateConsentDocumentAction, generateConsentSigningLinkAction, revokeConsentSigningLinkAction, sendConsentEmailAction } from "@/app/dashboard/patients/[id]/consents/[consentId]/actions";
 import { ConsentSigningLinkControls } from "@/components/clinical-record/consent-signing-link-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -65,7 +65,7 @@ export default async function ConsentDetailPage({ params, searchParams }: { para
             </div>
           </section>
         ) : null}
-        {consent.status === "pending" ? <ConsentSigningLinkControls action={generateConsentSigningLinkAction.bind(null, id, consentId)} revokeAction={revokeConsentSigningLinkAction.bind(null, id, consentId)} cancelAction={cancelConsentAction.bind(null, id, consentId)} hasActiveLink={Boolean(consent.signing_token_expires_at && !consent.signing_token_revoked_at && !consent.signing_token_used_at && new Date(consent.signing_token_expires_at) > new Date())} /> : null}
+        {consent.status === "pending" ? <ConsentSigningLinkControls action={generateConsentSigningLinkAction.bind(null, id, consentId)} emailAction={sendConsentEmailAction.bind(null, id, consentId)} revokeAction={revokeConsentSigningLinkAction.bind(null, id, consentId)} cancelAction={cancelConsentAction.bind(null, id, consentId)} patientEmail={consent.patientEmail} signingTokenExpiresAt={consent.signing_token_expires_at} signingTokenUsedAt={consent.signing_token_used_at} signingTokenRevokedAt={consent.signing_token_revoked_at} hasActiveLink={Boolean(consent.signing_token_expires_at && !consent.signing_token_revoked_at && !consent.signing_token_used_at && new Date(consent.signing_token_expires_at) > new Date())} /> : null}
       </section>
     </>
   );
