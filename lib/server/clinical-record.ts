@@ -16,8 +16,10 @@ export type ClinicalRecordNote = Pick<
   NoteRow,
   "id" | "doctor_id" | "appointment_id" | "template_id" | "status" | "specialty" | "clinical_impression" | "created_at"
 > & { doctorName: string | null; templateName: string | null };
-export type ClinicalRecordConsent = Pick<ConsentRow, "id" | "consent_type" | "status" | "signed_at" | "expires_at" | "created_at"> & {
+export type ClinicalRecordConsent = Pick<ConsentRow, "id" | "consent_type" | "consent_version" | "status" | "signed_at" | "expires_at" | "created_at"> & {
   signatureCount: number;
+  signedBy: string | null;
+  documentStatus: Database["public"]["Enums"]["consent_document_status"] | null;
 };
 export type ClinicalTemplate = Pick<TemplateRow, "id" | "name" | "specialty" | "description" | "template_schema">;
 
@@ -43,7 +45,8 @@ export type ClinicalRecordResult =
   | { state: "error"; data: null };
 
 type DoctorProfile = { profile_id: string | null; display_name: string };
-type SignatureRow = { consent_id: string };
+type SignatureRow = { consent_id: string; signer_full_name: string };
+type DocumentRow = { consent_id: string; status: Database["public"]["Enums"]["consent_document_status"] };
 
 function normalizePage(value: string | string[] | undefined) {
   const candidate = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : 1;
@@ -88,15 +91,16 @@ export async function getClinicalRecordForActiveTenant(
   const pageCount = Math.max(1, Math.ceil(totalNotes / pageSize));
   const page = Math.min(requestedPage, pageCount);
   const from = (page - 1) * pageSize;
-  const [notesResult, consentsResult, templatesResult, doctorsResult, signaturesResult] = await Promise.all([
+  const [notesResult, consentsResult, templatesResult, doctorsResult, signaturesResult, documentsResult] = await Promise.all([
     supabase.from("medical_notes").select("id, doctor_id, appointment_id, template_id, status, specialty, clinical_impression, created_at").eq("clinic_id", clinicId).eq("patient_id", patientId).order("created_at", { ascending: false }).order("id", { ascending: false }).range(from, from + pageSize - 1),
-    supabase.from("consents").select("id, consent_type, status, signed_at, expires_at, created_at").eq("clinic_id", clinicId).eq("patient_id", patientId).order("created_at", { ascending: false }),
+    supabase.from("consents").select("id, consent_type, consent_version, status, signed_at, expires_at, created_at").eq("clinic_id", clinicId).eq("patient_id", patientId).order("created_at", { ascending: false }),
     supabase.from("medical_note_templates").select("id, name, specialty, description, template_schema").or(`is_system_template.eq.true,clinic_id.eq.${clinicId}`).eq("is_active", true).order("name", { ascending: true }),
     supabase.from("doctor_public_profiles").select("profile_id, display_name").eq("clinic_id", clinicId).limit(100),
-    supabase.from("consent_signatures").select("consent_id").eq("patient_id", patientId)
+    supabase.from("consent_signatures").select("consent_id, signer_full_name").eq("patient_id", patientId),
+    supabase.from("consent_documents").select("consent_id, status").eq("clinic_id", clinicId).eq("patient_id", patientId)
   ]);
-  if (notesResult.error || consentsResult.error || templatesResult.error || doctorsResult.error || signaturesResult.error) {
-    logger.error("Clinical record data query failed", { component: "clinical_record", operation: "data", status: "query_error", notesCode: notesResult.error?.code, consentsCode: consentsResult.error?.code, templatesCode: templatesResult.error?.code, doctorsCode: doctorsResult.error?.code, signaturesCode: signaturesResult.error?.code });
+  if (notesResult.error || consentsResult.error || templatesResult.error || doctorsResult.error || signaturesResult.error || documentsResult.error) {
+    logger.error("Clinical record data query failed", { component: "clinical_record", operation: "data", status: "query_error", notesCode: notesResult.error?.code, consentsCode: consentsResult.error?.code, templatesCode: templatesResult.error?.code, doctorsCode: doctorsResult.error?.code, signaturesCode: signaturesResult.error?.code, documentsCode: documentsResult.error?.code });
     return { state: "error", data: null };
   }
   const doctors = new Map(((doctorsResult.data ?? []) as DoctorProfile[]).filter((row): row is DoctorProfile & { profile_id: string } => Boolean(row.profile_id)).map((row) => [row.profile_id, row.display_name]));
@@ -104,7 +108,9 @@ export async function getClinicalRecordForActiveTenant(
   const templateNames = new Map(templates.map((template) => [template.id, template.name]));
   const signatures = (signaturesResult.data ?? []) as SignatureRow[];
   const signatureCounts = signatures.reduce<Map<string, number>>((counts, signature) => counts.set(signature.consent_id, (counts.get(signature.consent_id) ?? 0) + 1), new Map());
+  const signerNames = new Map(signatures.map((signature) => [signature.consent_id, signature.signer_full_name]));
+  const documentStatuses = new Map(((documentsResult.data ?? []) as DocumentRow[]).map((document) => [document.consent_id, document.status]));
   const notes = ((notesResult.data ?? []) as Omit<ClinicalRecordNote, "doctorName" | "templateName">[]).map((note) => ({ ...note, doctorName: note.doctor_id ? doctors.get(note.doctor_id) ?? null : null, templateName: note.template_id ? templateNames.get(note.template_id) ?? null : null }));
-  const consents = ((consentsResult.data ?? []) as Omit<ClinicalRecordConsent, "signatureCount">[]).map((consent) => ({ ...consent, signatureCount: signatureCounts.get(consent.id) ?? 0 }));
+  const consents = ((consentsResult.data ?? []) as Omit<ClinicalRecordConsent, "signatureCount" | "signedBy" | "documentStatus">[]).map((consent) => ({ ...consent, signatureCount: signatureCounts.get(consent.id) ?? 0, signedBy: signerNames.get(consent.id) ?? null, documentStatus: documentStatuses.get(consent.id) ?? null }));
   return { state: "ready", data: { tenant: context.tenant, patient: patientResult.data, notes, totalNotes, page, pageCount, consents, templates, signatureCount: signatures.length } };
 }

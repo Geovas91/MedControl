@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { cancelConsentForActiveTenant, createConsentSigningLink, revokeConsentSigningLink } from "@/lib/server/clinical-consents";
+import { generateConsentDocumentForActiveTenant } from "@/lib/server/consent-documents";
 
 export async function generateConsentSigningLinkAction(patientId: string, consentId: string, _state: { error?: string }, _formData: FormData) {
   const result = await createConsentSigningLink(patientId, consentId);
@@ -31,4 +32,15 @@ export async function cancelConsentAction(patientId: string, consentId: string, 
   revalidatePath(`/dashboard/patients/${patientId}/consents`);
   revalidatePath(`/dashboard/patients/${patientId}/consents/${consentId}`);
   redirect(`/dashboard/patients/${patientId}/consents/${consentId}?consent_cancelled=1`);
+}
+
+export async function generateConsentDocumentAction(patientId: string, consentId: string) {
+  const result = await generateConsentDocumentForActiveTenant(patientId, consentId);
+  if (result.state === "invalid_id" || result.state === "not_found") notFound();
+  if (result.state === "unauthenticated") redirect("/login");
+  revalidatePath(`/dashboard/patients/${patientId}/clinical-record`);
+  revalidatePath(`/dashboard/patients/${patientId}/consents`);
+  revalidatePath(`/dashboard/patients/${patientId}/consents/${consentId}`);
+  if (result.state !== "ready") redirect(`/dashboard/patients/${patientId}/consents/${consentId}?pdf_error=1`);
+  redirect(`/dashboard/patients/${patientId}/consents/${consentId}?pdf_ready=1`);
 }
