@@ -15,6 +15,13 @@ function appointmentVariant(status: string) {
   return status === "completed" ? "green" as const : status === "waiting" ? "amber" as const : status === "scheduled" || status === "confirmed" ? "teal" as const : "slate" as const;
 }
 
+function consultationsHref(patientId: string, notesPage: number, appointmentsPage: number) {
+  const query = new URLSearchParams({ tab: "consultas" });
+  if (notesPage > 1) query.set("page", String(notesPage));
+  if (appointmentsPage > 1) query.set("appointments_page", String(appointmentsPage));
+  return `/dashboard/patients/${patientId}?${query.toString()}`;
+}
+
 export function PatientConsultationsTab({ data }: { data: ClinicalRecordData }) {
   const timeZone = data.tenant.clinic.timezone;
   const patientId = data.patient.id;
@@ -31,7 +38,7 @@ export function PatientConsultationsTab({ data }: { data: ClinicalRecordData }) 
           <Link href={`/dashboard/patients/${patientId}/notes/${note.id}`} className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold text-clinic hover:underline">Abrir detalle de la nota</Link>
         </article>) : <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">No hay consultas registradas.</p>}
       </div>
-      {data.pageCount > 1 ? <nav aria-label="Paginación de notas clínicas" className="mt-5 flex items-center justify-between gap-3 text-sm font-semibold"><Link aria-disabled={data.page === 1} className={data.page === 1 ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={`/dashboard/patients/${patientId}?tab=consultas&page=${Math.max(1, data.page - 1)}`}>Anterior</Link><span className="text-slate-500">Página {data.page} de {data.pageCount}</span><Link aria-disabled={data.page === data.pageCount} className={data.page === data.pageCount ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={`/dashboard/patients/${patientId}?tab=consultas&page=${Math.min(data.pageCount, data.page + 1)}`}>Siguiente</Link></nav> : null}
+      {data.pageCount > 1 ? <nav aria-label="Paginación de notas clínicas" className="mt-5 flex items-center justify-between gap-3 text-sm font-semibold"><Link aria-disabled={data.page === 1} className={data.page === 1 ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={consultationsHref(patientId, Math.max(1, data.page - 1), data.appointmentsPage)}>Anterior</Link><span className="text-slate-500">Página {data.page} de {data.pageCount}</span><Link aria-disabled={data.page === data.pageCount} className={data.page === data.pageCount ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={consultationsHref(patientId, Math.min(data.pageCount, data.page + 1), data.appointmentsPage)}>Siguiente</Link></nav> : null}
     </section>
 
     <section className="surface-card p-4 sm:p-5">
@@ -43,6 +50,7 @@ export function PatientConsultationsTab({ data }: { data: ClinicalRecordData }) 
           <Link href={`/dashboard/appointments/${appointment.id}`} className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold text-clinic hover:underline">Abrir detalle de la cita</Link>
         </article>) : <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 md:col-span-2">No hay citas registradas.</p>}
       </div>
+      {data.appointmentsPageCount > 1 ? <nav aria-label="Paginación del historial de citas" className="mt-5 flex items-center justify-between gap-3 text-sm font-semibold"><Link aria-disabled={data.appointmentsPage === 1} className={data.appointmentsPage === 1 ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={consultationsHref(patientId, data.page, Math.max(1, data.appointmentsPage - 1))}>Anterior</Link><span className="text-slate-500">Página {data.appointmentsPage} de {data.appointmentsPageCount} · {data.totalAppointments} citas</span><Link aria-disabled={data.appointmentsPage === data.appointmentsPageCount} className={data.appointmentsPage === data.appointmentsPageCount ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={consultationsHref(patientId, data.page, Math.min(data.appointmentsPageCount, data.appointmentsPage + 1))}>Siguiente</Link></nav> : null}
     </section>
   </div>;
 }

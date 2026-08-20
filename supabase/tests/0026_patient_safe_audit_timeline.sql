@@ -51,7 +51,7 @@ insert into public.audit_logs(id, clinic_id, actor_user_id, entity_type, entity_
 
 do $$
 declare
-  v_rpc regprocedure := 'public.list_patient_audit_timeline_for_current_user(uuid,uuid,integer)'::regprocedure;
+  v_rpc regprocedure := 'public.list_patient_audit_timeline_for_current_user(uuid,uuid,timestamp with time zone,uuid,integer)'::regprocedure;
 begin
   if not has_function_privilege('authenticated', v_rpc, 'execute')
     or has_function_privilege('anon', v_rpc, 'execute') then
@@ -78,6 +78,7 @@ begin
     select 1 from public.list_patient_audit_timeline_for_current_user(
       'b2000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000001',
+      null, null,
       100
     ) where action = 'consent_created'
       and related_consent_id = 'b7000000-0000-4000-8000-000000000001'
@@ -87,6 +88,7 @@ begin
     select 1 from public.list_patient_audit_timeline_for_current_user(
       'b2000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000001',
+      null, null,
       100
     ) where resource_type = 'vital_sign_measurements'
   ) then raise exception 'Patient clinical change events are not related correctly'; end if;
@@ -94,21 +96,52 @@ begin
     select 1 from public.list_patient_audit_timeline_for_current_user(
       'b2000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000001',
+      null, null,
       100
     ) where action = 'other_patient_secret'
   ) then raise exception 'Same-tenant cross-patient audit event leaked'; end if;
   if (select count(*) from public.list_patient_audit_timeline_for_current_user(
     'b2000000-0000-4000-8000-000000000001',
     'b3000000-0000-4000-8000-000000000001',
+    null, null,
     1
   )) <> 1 then raise exception 'Audit limit is not enforced'; end if;
   if exists (
     select 1 from public.list_patient_audit_timeline_for_current_user(
       'b2000000-0000-4000-8000-000000000002',
       'b3000000-0000-4000-8000-000000000003',
+      null, null,
       100
     )
   ) then raise exception 'Cross-tenant audit access leaked'; end if;
+end
+$$;
+
+do $$
+declare
+  v_first_id uuid;
+  v_first_at timestamptz;
+begin
+  select event_id, occurred_at into strict v_first_id, v_first_at
+  from public.list_patient_audit_timeline_for_current_user(
+    'b2000000-0000-4000-8000-000000000001',
+    'b3000000-0000-4000-8000-000000000001',
+    null, null, 1
+  );
+  if exists (
+    select 1 from public.list_patient_audit_timeline_for_current_user(
+      'b2000000-0000-4000-8000-000000000001',
+      'b3000000-0000-4000-8000-000000000001',
+      v_first_at, v_first_id, 100
+    ) where event_id = v_first_id
+  ) then raise exception 'Audit cursor repeated its boundary event'; end if;
+  if not exists (
+    select 1 from public.list_patient_audit_timeline_for_current_user(
+      'b2000000-0000-4000-8000-000000000001',
+      'b3000000-0000-4000-8000-000000000001',
+      v_first_at, v_first_id, 100
+    )
+  ) then raise exception 'Audit cursor hid older events'; end if;
 end
 $$;
 
@@ -119,6 +152,7 @@ begin
     select 1 from public.list_patient_audit_timeline_for_current_user(
       'b2000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000001',
+      null, null,
       100
     )
   ) then raise exception 'Doctor gained access to owner/admin patient audit'; end if;
@@ -132,6 +166,7 @@ begin
     select 1 from public.list_patient_audit_timeline_for_current_user(
       'b2000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000001',
+      null, null,
       100
     ) where action = 'patient_and_record_created'
   ) then raise exception 'Admin cannot see the patient audit timeline'; end if;
@@ -145,6 +180,7 @@ begin
     select 1 from public.list_patient_audit_timeline_for_current_user(
       'b2000000-0000-4000-8000-000000000001',
       'b3000000-0000-4000-8000-000000000001',
+      null, null,
       100
     )
   ) then raise exception 'Assistant gained access to owner/admin patient audit'; end if;

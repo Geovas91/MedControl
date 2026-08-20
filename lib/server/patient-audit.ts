@@ -12,9 +12,11 @@ type AuditRpcRow = Database["public"]["Functions"]["list_patient_audit_timeline_
 type AuditRpcClient = {
   rpc(
     fn: "list_patient_audit_timeline_for_current_user",
-    args: { p_clinic_id: string; p_patient_id: string; p_limit: number }
+    args: { p_clinic_id: string; p_patient_id: string; p_before_occurred_at: string | null; p_before_event_id: string | null; p_limit: number }
   ): Promise<{ data: AuditRpcRow[] | null; error: { code: string } | null }>;
 };
+
+const auditPageSize = 20;
 
 export type PatientAuditEvent = {
   id: string;
@@ -25,11 +27,28 @@ export type PatientAuditEvent = {
   occurredAt: string;
 };
 
+export type PatientAuditPage = {
+  events: PatientAuditEvent[];
+  hasPrevious: boolean;
+  nextCursor: { occurredAt: string; eventId: string } | null;
+};
+
 type PatientAuditResult =
-  | { state: "ready"; data: PatientAuditEvent[] }
+  | { state: "ready"; data: PatientAuditPage }
   | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "error"; data: null };
 
-export async function getPatientAuditForActiveTenant(patientId: string): Promise<PatientAuditResult> {
+function normalizeAuditCursor(searchParams: { before?: string | string[]; beforeId?: string | string[] }) {
+  const before = typeof searchParams.before === "string" ? searchParams.before : null;
+  const beforeId = typeof searchParams.beforeId === "string" ? searchParams.beforeId : null;
+  if (!before || !beforeId || !isValidPatientUuid(beforeId)) return null;
+  const occurredAt = new Date(before);
+  return Number.isFinite(occurredAt.getTime()) ? { occurredAt: occurredAt.toISOString(), eventId: beforeId } : null;
+}
+
+export async function getPatientAuditForActiveTenant(
+  patientId: string,
+  searchParams: { before?: string | string[]; beforeId?: string | string[] } = {}
+): Promise<PatientAuditResult> {
   if (!isValidPatientUuid(patientId)) return { state: "invalid_id", data: null };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
@@ -37,10 +56,13 @@ export async function getPatientAuditForActiveTenant(patientId: string): Promise
 
   const supabase = await createClient();
   const auditRpcClient = supabase as unknown as AuditRpcClient;
+  const cursor = normalizeAuditCursor(searchParams);
   const result = await auditRpcClient.rpc("list_patient_audit_timeline_for_current_user", {
     p_clinic_id: context.tenant.clinic.id,
     p_patient_id: patientId,
-    p_limit: 100
+    p_before_occurred_at: cursor?.occurredAt ?? null,
+    p_before_event_id: cursor?.eventId ?? null,
+    p_limit: auditPageSize + 1
   });
 
   if (result.error) {
@@ -53,7 +75,9 @@ export async function getPatientAuditForActiveTenant(patientId: string): Promise
     return { state: "error", data: null };
   }
 
-  const events = ((result.data ?? []) as AuditRpcRow[]).map((event) => ({
+  const rows = (result.data ?? []) as AuditRpcRow[];
+  const visibleRows = rows.slice(0, auditPageSize);
+  const events = visibleRows.map((event) => ({
     id: event.event_id,
     actionLabel: getPatientAuditActionLabel(event.action),
     resourceLabel: getPatientAuditResourceLabel(event.resource_type),
@@ -66,5 +90,15 @@ export async function getPatientAuditForActiveTenant(patientId: string): Promise
     occurredAt: event.occurred_at
   }));
 
-  return { state: "ready", data: events };
+  const lastVisible = visibleRows.at(-1);
+  return {
+    state: "ready",
+    data: {
+      events,
+      hasPrevious: Boolean(cursor),
+      nextCursor: rows.length > auditPageSize && lastVisible
+        ? { occurredAt: lastVisible.occurred_at, eventId: lastVisible.event_id }
+        : null
+    }
+  };
 }

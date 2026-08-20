@@ -1,7 +1,11 @@
+drop function if exists public.list_patient_audit_timeline_for_current_user(uuid, uuid, integer);
+
 create or replace function public.list_patient_audit_timeline_for_current_user(
   p_clinic_id uuid,
   p_patient_id uuid,
-  p_limit integer default 50
+  p_before_occurred_at timestamptz default null,
+  p_before_event_id uuid default null,
+  p_limit integer default 21
 )
 returns table (
   event_id uuid,
@@ -151,14 +155,22 @@ as $$
     ) as actor_name,
     event.occurred_at
   from safe_events as event
+  where (
+    (p_before_occurred_at is null and p_before_event_id is null)
+    or (
+      p_before_occurred_at is not null
+      and p_before_event_id is not null
+      and (event.occurred_at, event.event_id) < (p_before_occurred_at, p_before_event_id)
+    )
+  )
   order by event.occurred_at desc, event.event_id desc
-  limit least(greatest(coalesce(p_limit, 50), 1), 100);
+  limit least(greatest(coalesce(p_limit, 21), 1), 101);
 $$;
 
-revoke all on function public.list_patient_audit_timeline_for_current_user(uuid, uuid, integer)
+revoke all on function public.list_patient_audit_timeline_for_current_user(uuid, uuid, timestamptz, uuid, integer)
   from public, anon;
-grant execute on function public.list_patient_audit_timeline_for_current_user(uuid, uuid, integer)
+grant execute on function public.list_patient_audit_timeline_for_current_user(uuid, uuid, timestamptz, uuid, integer)
   to authenticated;
 
-comment on function public.list_patient_audit_timeline_for_current_user(uuid, uuid, integer) is
-  'Owner/admin-only patient audit projection. It returns presentation-safe fields and never exposes audit metadata or clinical before/after payloads.';
+comment on function public.list_patient_audit_timeline_for_current_user(uuid, uuid, timestamptz, uuid, integer) is
+  'Owner/admin-only patient audit cursor projection. It returns presentation-safe fields and never exposes audit metadata or clinical before/after payloads.';

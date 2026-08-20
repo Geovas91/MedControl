@@ -881,7 +881,7 @@ export type Database = {
         Returns: boolean;
       };
       list_patient_audit_timeline_for_current_user: {
-        Args: { p_clinic_id: string; p_patient_id: string; p_limit?: number };
+        Args: { p_clinic_id: string; p_patient_id: string; p_before_occurred_at?: Timestamp | null; p_before_event_id?: string | null; p_limit?: number };
         Returns: Array<{
           event_id: string;
           event_source: string;

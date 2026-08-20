@@ -17,7 +17,7 @@ import { getPatientDetailForActiveTenant } from "@/lib/server/patient-detail";
 import { getClinicalRecordForActiveTenant } from "@/lib/server/clinical-record";
 
 export const dynamic="force-dynamic";
-type Query={tab?:string;page?:string;created?:string;updated?:string;history_saved?:string;vital_created?:string};
+type Query={tab?:string;page?:string;appointments_page?:string;documents_page?:string;audit_before?:string;audit_before_id?:string;created?:string;updated?:string;history_saved?:string;vital_created?:string};
 const tabs=[['resumen','Resumen'],['datos','Datos personales'],['antecedentes','Antecedentes'],['historia','Historia clínica inicial'],['signos-vitales','Signos vitales'],['consultas','Consultas'],['documentos','Documentos'],['consentimientos','Consentimientos'],['auditoria','Auditoría']] as const;
 const clinicalTabs=new Set(['antecedentes','historia','signos-vitales','consultas','documentos','consentimientos']);
 function text(value:unknown){return typeof value==='string'&&value.trim()?value:'Sin registro'}
@@ -31,8 +31,8 @@ export default async function PatientPage({params,searchParams}:{params:Promise<
  if(result.state!=='ready')return <section className="surface-card p-5"><h1 className="text-xl font-bold">Paciente no disponible</h1><p className="mt-2 text-sm text-slate-600">No fue posible cargar el registro dentro de la clínica activa.</p></section>;
  const {data}=result;const patient=data.patient;const canClinical=canViewClinicalRecord(data.tenant.membership.role);const canAudit=canViewPatientAudit(data.tenant.membership.role);const clinical=canClinical?await getPatientClinicalBundle(id):null;
  const bundle=clinical?.state==='ready'?clinical.data:null;let tab=tabs.some(([key])=>key===query.tab)?query.tab!:'resumen';if((clinicalTabs.has(tab)&&!canClinical)||(tab==='auditoria'&&!canAudit))tab='resumen';
- const record=canClinical&&(tab==='consultas'||tab==='documentos')?await getClinicalRecordForActiveTenant(id,{page:query.page}):null;
- const audit=canAudit&&tab==='auditoria'?await getPatientAuditForActiveTenant(id):null;
+ const record=canClinical&&(tab==='consultas'||tab==='documentos')?await getClinicalRecordForActiveTenant(id,{page:query.page,appointmentsPage:query.appointments_page,documentsPage:query.documents_page,paginateAppointments:tab==='consultas',paginateDocuments:tab==='documentos'}):null;
+ const audit=canAudit&&tab==='auditoria'?await getPatientAuditForActiveTenant(id,{before:query.audit_before,beforeId:query.audit_before_id}):null;
  const allergies=bundle?.alerts.filter(a=>a.alert_type==='allergy')??[];const conditions=bundle?.alerts.filter(a=>a.alert_type==='active_condition')??[];
  const message=query.created==='1'?'Paciente y expediente creados correctamente.':query.updated==='1'?'Datos administrativos actualizados.':query.history_saved==='1'?'Historia clínica guardada.':query.vital_created==='1'?'Signos vitales registrados.':null;
  const tabHref=(key:string)=>`/dashboard/patients/${id}?tab=${key}`;
@@ -53,7 +53,7 @@ export default async function PatientPage({params,searchParams}:{params:Promise<
    {tab==='consultas'&&record?.state==='ready'?<PatientConsultationsTab data={record.data}/>:null}
    {tab==='documentos'&&record?.state==='ready'?<PatientDocumentsTab data={record.data}/>:null}
    {tab==='consentimientos'?<section className="surface-card p-8 text-center"><FileSignature className="mx-auto h-8 w-8 text-clinic"/><h2 className="mt-3 text-lg font-bold">Consentimientos</h2><p className="mt-2 text-sm text-slate-500">Consulta el histórico, la evidencia firmada y los documentos PDF de este paciente.</p><ButtonLink href={`/dashboard/patients/${id}/consents`} className="mt-4">Ver consentimientos</ButtonLink></section>:null}
-   {tab==='auditoria'&&audit?.state==='ready'?<PatientAuditTab events={audit.data} timeZone={data.tenant.clinic.timezone}/>:null}
+   {tab==='auditoria'&&audit?.state==='ready'?<PatientAuditTab data={audit.data} patientId={id} timeZone={data.tenant.clinic.timezone}/>:null}
    {(tab==='consultas'||tab==='documentos')&&record&&record.state!=='ready'?<section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No fue posible cargar esta sección clínica. No se muestran datos parciales.</section>:null}
    {tab==='auditoria'&&audit&&audit.state!=='ready'?<section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">No fue posible cargar la auditoría segura del paciente.</section>:null}
    {canClinical&&!bundle?<section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">El expediente clínico no pudo cargarse. No se muestran datos parciales.</section>:null}

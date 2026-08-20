@@ -34,6 +34,9 @@ test("Consultas keeps clinical notes and appointments as separate real resources
   assert.match(consultations, /No hay consultas registradas/);
   assert.match(clinicalRecordService, /\.from\("medical_notes"\)[\s\S]+\.eq\("clinic_id", clinicId\)\.eq\("patient_id", patientId\)/);
   assert.match(clinicalRecordService, /\.from\("appointments"\)[\s\S]+\.eq\("clinic_id", clinicId\)\.eq\("patient_id", patientId\)/);
+  assert.match(clinicalRecordService, /appointmentsPageCount[\s\S]+appointmentsQuery\.range/);
+  assert.match(consultations, /Paginación del historial de citas/);
+  assert.doesNotMatch(clinicalRecordService, /\.limit\(100\)/);
 });
 
 test("Documentos exposes only the persisted consent and PDF flow", () => {
@@ -42,6 +45,8 @@ test("Documentos exposes only the persisted consent and PDF flow", () => {
   assert.match(documents, /generateConsentDocumentAction/);
   assert.match(documents, /Reintentar PDF/);
   assert.match(documents, /No hay documentos clínicos registrados/);
+  assert.match(documents, /Paginación de documentos clínicos/);
+  assert.match(clinicalRecordService, /documentsPageCount[\s\S]+consentsQuery\.range/);
   assert.doesNotMatch(documents, /upload|archivo genérico|mock/i);
 });
 
@@ -52,6 +57,7 @@ test("safe patient audit RPC is tenant, patient and owner-admin constrained", ()
   assert.match(migration, /consent\.clinic_id = p_clinic_id[\s\S]+consent\.patient_id = patient\.id/);
   assert.match(migration, /document\.clinic_id = p_clinic_id[\s\S]+document\.patient_id = patient\.id/);
   assert.match(migration, /resource\.resource_type = change\.entity_type[\s\S]+resource\.resource_id = change\.entity_id/);
+  assert.match(migration, /\(event\.occurred_at, event\.event_id\) < \(p_before_occurred_at, p_before_event_id\)/);
   assert.match(migration, /revoke all on function[\s\S]+from public, anon/);
   assert.doesNotMatch(migration.match(/returns table \([\s\S]+?\n\)/)?.[0] ?? "", /metadata|previous_values|new_values|changed_fields|token|hash|signature|url/i);
 });
@@ -60,6 +66,9 @@ test("audit presentation never consumes raw payloads or an admin client", () => 
   assert.match(auditService, /\.rpc\("list_patient_audit_timeline_for_current_user"/);
   assert.match(auditService, /p_clinic_id: context\.tenant\.clinic\.id/);
   assert.match(auditService, /p_patient_id: patientId/);
+  assert.match(auditService, /p_limit: auditPageSize \+ 1/);
+  assert.match(auditService, /rows\.slice\(0, auditPageSize\)/);
+  assert.match(auditComponent, /Ver eventos más antiguos/);
   assert.doesNotMatch(auditService, /createAdminClient|metadata|previous_values|new_values|changed_fields/);
   assert.doesNotMatch(auditComponent, /token|hash|signature|metadata|payload|url privada/i);
   assert.equal(getPatientAuditActionLabel("consent_signed"), "Consentimiento firmado");

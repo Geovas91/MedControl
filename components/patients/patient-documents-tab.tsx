@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Download, Eye, FileSignature, Plus, RefreshCw } from "lucide-react";
 import { generateConsentDocumentAction } from "@/app/dashboard/patients/[id]/consents/[consentId]/actions";
 import { Badge } from "@/components/ui/badge";
@@ -22,5 +23,6 @@ export function PatientDocumentsTab({ data }: { data: ClinicalRecordData }) {
         <div className="mt-4 flex flex-wrap gap-2"><ButtonLink href={`/dashboard/patients/${patientId}/consents/${consent.id}`} variant="secondary" className="min-h-10 px-3"><Eye className="h-4 w-4" />Abrir</ButtonLink>{consent.status === "signed" && consent.documentStatus === "ready" ? <ButtonLink href={`/api/consents/${consent.id}/document`} className="min-h-10 px-3"><Download className="h-4 w-4" />Descargar PDF</ButtonLink> : null}{consent.status === "signed" && consent.documentStatus !== "ready" ? <form action={generateConsentDocumentAction.bind(null, patientId, consent.id)}><Button type="submit" className="min-h-10 px-3"><RefreshCw className="h-4 w-4" />{consent.documentStatus === "failed" ? "Reintentar PDF" : "Generar PDF"}</Button></form> : null}</div>
       </article>) : <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500 md:col-span-2">No hay documentos clínicos registrados.</p>}
     </div>
+    {data.documentsPageCount > 1 ? <nav aria-label="Paginación de documentos clínicos" className="mt-5 flex items-center justify-between gap-3 text-sm font-semibold"><Link aria-disabled={data.documentsPage === 1} className={data.documentsPage === 1 ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={`/dashboard/patients/${patientId}?tab=documentos&documents_page=${Math.max(1, data.documentsPage - 1)}`}>Anterior</Link><span className="text-slate-500">Página {data.documentsPage} de {data.documentsPageCount} · {data.totalDocuments} documentos</span><Link aria-disabled={data.documentsPage === data.documentsPageCount} className={data.documentsPage === data.documentsPageCount ? "pointer-events-none text-slate-400" : "text-clinic hover:underline"} href={`/dashboard/patients/${patientId}?tab=documentos&documents_page=${Math.min(data.documentsPageCount, data.documentsPage + 1)}`}>Siguiente</Link></nav> : null}
   </section>;
 }
