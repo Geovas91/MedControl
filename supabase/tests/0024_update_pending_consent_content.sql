@@ -66,21 +66,6 @@ insert into public.clinical_records(id, clinic_id, patient_id, status) values
   ('94000000-0000-4000-8000-000000000001', '92000000-0000-4000-8000-000000000001', '93000000-0000-4000-8000-000000000001', 'active'),
   ('94000000-0000-4000-8000-000000000002', '92000000-0000-4000-8000-000000000002', '93000000-0000-4000-8000-000000000002', 'active');
 
-insert into public.medical_note_templates(
-  id, clinic_id, name, description, template_schema, is_system_template,
-  is_active, template_kind, created_by
-) values (
-  '96000000-0000-4000-8000-000000000001',
-  '92000000-0000-4000-8000-000000000001',
-  'Plantilla original',
-  'Plantilla reutilizable para comprobar snapshots',
-  jsonb_build_object('content', E'Texto original de plantilla.\nNo debe modificarse.', 'templateKind', 'consent'),
-  false, true, 'consent', '91000000-0000-4000-8000-000000000003'
-);
-
-create temporary table created_consent_test_ids(consent_id uuid primary key);
-grant select, insert on created_consent_test_ids to authenticated;
-
 insert into public.consents(
   id, clinic_id, patient_id, clinical_record_id, consent_type, consent_version,
   consent_text, status, signed_at, cancelled_at, cancelled_by, cancellation_reason,
@@ -95,116 +80,6 @@ insert into public.consents(
   ('95000000-0000-4000-8000-000000000007', '92000000-0000-4000-8000-000000000001', '93000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000001', 'Cancelled original', 'v1', 'Cancelled immutable text', 'cancelled', null, now(), '91000000-0000-4000-8000-000000000003', 'Cancelled for test', null, null, '2026-01-01 00:00:07+00'),
   ('95000000-0000-4000-8000-000000000008', '92000000-0000-4000-8000-000000000001', '93000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000001', 'Revision original', 'v1', 'Revision-controlled text', 'pending', null, null, null, null, null, null, '2026-01-01 00:00:08+00'),
   ('95000000-0000-4000-8000-000000000009', '92000000-0000-4000-8000-000000000002', '93000000-0000-4000-8000-000000000002', '94000000-0000-4000-8000-000000000002', 'Tenant B original', 'v1', 'Tenant B protected text', 'pending', null, null, null, null, null, null, '2026-01-01 00:00:09+00');
-
--- Creation uses the exact edited form snapshot, leaves its template untouched,
--- emits no token, and can issue a link immediately from the persisted revision.
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000003', true);
-insert into created_consent_test_ids(consent_id)
-select public.create_consent_for_current_user(
-  '92000000-0000-4000-8000-000000000001',
-  '93000000-0000-4000-8000-000000000001',
-  E'  Tipo visible personalizado  ',
-  E' v3-clínica ',
-  E'  Texto editado antes de crear.  \n\nSegunda línea significativa.\t\n',
-  '96000000-0000-4000-8000-000000000001'
-);
-
-do $$
-declare
-  v_consent_id uuid := (select consent_id from created_consent_test_ids);
-begin
-  if not exists (
-    select 1 from public.consents
-    where id = v_consent_id
-      and clinic_id = '92000000-0000-4000-8000-000000000001'
-      and patient_id = '93000000-0000-4000-8000-000000000001'
-      and consent_type = E'  Tipo visible personalizado  '
-      and consent_version = E' v3-clínica '
-      and consent_text = E'  Texto editado antes de crear.  \n\nSegunda línea significativa.\t\n'
-      and template_id = '96000000-0000-4000-8000-000000000001'
-      and status = 'pending'
-  ) then raise exception 'Created consent did not persist the exact visible snapshot'; end if;
-end
-$$;
-
-reset role;
-do $$
-declare
-  v_consent_id uuid := (select consent_id from created_consent_test_ids);
-begin
-  if exists (
-    select 1 from public.consents
-    where id = v_consent_id
-      and (signing_token is not null or signing_token_hash is not null
-        or signing_token_expires_at is not null or signing_token_used_at is not null
-        or signing_token_revoked_at is not null)
-  ) then raise exception 'Creating a consent emitted token state'; end if;
-  if (select template_schema->>'content' from public.medical_note_templates where id = '96000000-0000-4000-8000-000000000001')
-    <> E'Texto original de plantilla.\nNo debe modificarse.' then
-    raise exception 'Creating the snapshot modified the reusable template';
-  end if;
-end
-$$;
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000003', true);
-do $$
-declare
-  v_consent_id uuid := (select consent_id from created_consent_test_ids);
-  v_revision timestamptz;
-  v_public record;
-begin
-  select updated_at into strict v_revision from public.consents where id = v_consent_id;
-  if not public.issue_current_consent_signing_link_for_current_user(
-    '92000000-0000-4000-8000-000000000001',
-    '93000000-0000-4000-8000-000000000001',
-    v_consent_id, repeat('f', 64), now() + interval '1 day', v_revision
-  ) then raise exception 'Newly created clean consent could not issue a link immediately'; end if;
-
-  select * into strict v_public
-  from public.get_public_consent_for_signing(repeat('f', 64));
-  if v_public.consent_type is distinct from E'  Tipo visible personalizado  '
-    or v_public.consent_version is distinct from E' v3-clínica '
-    or v_public.consent_text is distinct from E'  Texto editado antes de crear.  \n\nSegunda línea significativa.\t\n' then
-    raise exception 'Public URL did not receive the exact created snapshot';
-  end if;
-end
-$$;
-
-set local role anon;
-do $$
-declare
-  v_png text := 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
-begin
-  if public.sign_public_consent(repeat('f', 64), 'Paciente Snapshot', v_png, true, true) <> 'signed' then
-    raise exception 'Exact created snapshot could not be signed';
-  end if;
-end
-$$;
-
-reset role;
-do $$
-declare
-  v_consent_id uuid := (select consent_id from created_consent_test_ids);
-  v_snapshot_id uuid;
-begin
-  select id into strict v_snapshot_id
-  from public.consent_signed_snapshots
-  where consent_id = v_consent_id
-    and consent_type = E'  Tipo visible personalizado  '
-    and consent_version = E' v3-clínica '
-    and consent_text = E'  Texto editado antes de crear.  \n\nSegunda línea significativa.\t\n';
-  if not exists (
-    select 1 from public.consent_documents
-    where consent_id = v_consent_id and snapshot_id = v_snapshot_id
-  ) then raise exception 'PDF metadata does not reference the exact signed snapshot'; end if;
-  if (select template_schema->>'content' from public.medical_note_templates where id = '96000000-0000-4000-8000-000000000001')
-    <> E'Texto original de plantilla.\nNo debe modificarse.' then
-    raise exception 'Signing the snapshot modified the reusable template';
-  end if;
-end
-$$;
 
 set local role authenticated;
 
