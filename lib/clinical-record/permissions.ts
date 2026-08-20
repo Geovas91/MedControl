@@ -13,6 +13,10 @@ export const canCreateConsent = canViewClinicalRecord;
 export const canUseClinicalTemplate = canViewClinicalRecord;
 export const canFinalizeClinicalNote = canViewClinicalRecord;
 
+export function canViewPatientAudit(role: ClinicMemberRole) {
+  return role === "owner" || role === "admin";
+}
+
 export function canEditClinicalNote({
   role,
   authorId,

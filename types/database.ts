@@ -880,6 +880,18 @@ export type Database = {
         Args: { clinic_id: string };
         Returns: boolean;
       };
+      list_patient_audit_timeline_for_current_user: {
+        Args: { p_clinic_id: string; p_patient_id: string; p_limit?: number };
+        Returns: Array<{
+          event_id: string;
+          event_source: string;
+          action: string;
+          resource_type: string;
+          related_consent_id: string | null;
+          actor_name: string | null;
+          occurred_at: Timestamp;
+        }>;
+      };
       is_platform_admin: {
         Args: Record<string, never>;
         Returns: boolean;
