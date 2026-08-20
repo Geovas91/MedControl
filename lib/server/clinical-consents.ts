@@ -2,7 +2,6 @@ import "server-only";
 
 import { getConsentFormValues, validateConsentValues, type ConsentFormValues } from "@/lib/clinical-record/consents";
 import { canCreateConsent, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
-import { getTemplateContent } from "@/lib/clinical-record/templates";
 import { createSigningToken, hashSigningToken } from "@/lib/consents/signing";
 import { buildConsentSigningUrl } from "@/lib/consents/signing-url";
 import { logger } from "@/lib/logger";
@@ -82,24 +81,21 @@ export async function createConsentForActiveTenant(patientId: string, values: Co
   if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
     return { state: "forbidden" as const, error: "La suscripción actual no permite crear consentimientos." };
   }
-  let template: TemplateOption | null = null;
+  let templateId: string | null = null;
   if (values.templateId) {
     if (!isValidPatientUuid(values.templateId)) return { state: "validation_error" as const, error: "La plantilla seleccionada no es valida.", errors: { templateId: "Selecciona una plantilla disponible." }, values };
-    const templateResult = await supabase.from("medical_note_templates").select("id, name, description, template_schema").eq("id", values.templateId).or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).eq("template_kind", "consent").eq("is_active", true).maybeSingle();
+    const templateResult = await supabase.from("medical_note_templates").select("id").eq("id", values.templateId).or(`is_system_template.eq.true,clinic_id.eq.${context.tenant.clinic.id}`).eq("template_kind", "consent").eq("is_active", true).maybeSingle();
     if (templateResult.error) { logger.error("Consent template query failed", { component: "clinical_consents", operation: "template", status: "query_error", code: templateResult.error.code }); return { state: "error" as const, error: "No fue posible validar la plantilla.", values }; }
     if (!templateResult.data) return { state: "validation_error" as const, error: "La plantilla ya no esta disponible.", errors: { templateId: "Selecciona una plantilla activa." }, values };
-    template = templateResult.data as TemplateOption;
+    templateId = (templateResult.data as { id: string }).id;
   }
-  const consentText = template ? getTemplateContent(template.template_schema) : values.consentText;
-  const consentType = template ? template.name : values.consentType;
-  if (!consentText) return { state: "validation_error" as const, error: "La plantilla no contiene texto utilizable.", errors: { templateId: "Actualiza la plantilla antes de usarla." }, values };
   const createResult = await consentRpc(supabase).rpc("create_consent_for_current_user", {
     p_clinic_id: context.tenant.clinic.id,
     p_patient_id: patient.id,
-    p_consent_type: consentType,
+    p_consent_type: values.consentType,
     p_consent_version: values.consentVersion,
-    p_consent_text: consentText,
-    p_template_id: template?.id ?? null
+    p_consent_text: values.consentText,
+    p_template_id: templateId
   });
   if (createResult.error || !createResult.data) { logger.error("Consent creation RPC failed", { component: "clinical_consents", operation: "create", status: createResult.error ? "rpc_error" : "missing_result", code: createResult.error?.code }); return { state: "error" as const, error: "No fue posible crear el consentimiento.", values }; }
   return { state: "success" as const, consentId: createResult.data, patientId: patient.id };

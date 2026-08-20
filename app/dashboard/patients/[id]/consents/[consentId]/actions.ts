@@ -46,9 +46,7 @@ export type UpdateConsentState = {
 };
 
 export async function updateConsentAction(patientId: string, consentId: string, _state: UpdateConsentState, formData: FormData): Promise<UpdateConsentState> {
-  const parsedValues = getConsentFormValues(formData);
-  const submittedConsentText = formData.get("consent_text");
-  const values = { ...parsedValues, consentText: typeof submittedConsentText === "string" ? submittedConsentText : "" };
+  const values = getConsentFormValues(formData);
   const editableValues = { consentType: values.consentType, consentVersion: values.consentVersion, consentText: values.consentText };
   const result = await updatePendingConsentForActiveTenant(patientId, consentId, values, String(formData.get("expected_updated_at") ?? ""));
   if (result.state === "invalid_id" || result.state === "not_found") notFound();

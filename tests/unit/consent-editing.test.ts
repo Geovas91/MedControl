@@ -12,7 +12,7 @@ const persisted = {
 const workspace = readFileSync(new URL("../../components/clinical-record/pending-consent-workspace.tsx", import.meta.url), "utf8");
 const signingControls = readFileSync(new URL("../../components/clinical-record/consent-signing-link-controls.tsx", import.meta.url), "utf8");
 const server = readFileSync(new URL("../../lib/server/clinical-consents.ts", import.meta.url), "utf8");
-const actions = readFileSync(new URL("../../app/dashboard/patients/[id]/consents/[consentId]/actions.ts", import.meta.url), "utf8");
+const consentValues = readFileSync(new URL("../../lib/clinical-record/consents.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../supabase/migrations/0024_update_pending_consent_content.sql", import.meta.url), "utf8");
 
 test("editing without saving creates a dirty state and blocks every signing channel", () => {
@@ -62,8 +62,8 @@ test("editing an issued consent does not mutate its reusable template", () => {
 });
 
 test("saving preserves the exact submitted consent text, including surrounding whitespace", () => {
-  assert.match(actions, /submittedConsentText = formData\.get\("consent_text"\)/);
-  assert.match(actions, /consentText: typeof submittedConsentText === "string" \? submittedConsentText : ""/);
+  assert.match(consentValues, /consentText: formText\(formData\.get\("consent_text"\)\)/);
+  assert.match(consentValues, /if \(!values\.consentText\.trim\(\)\)/);
   assert.match(migration, /v_text text := coalesce\(p_consent_text, ''\)/);
   assert.doesNotMatch(migration, /v_text text := trim/);
   assert.match(migration, /v_text !~ '\[\^\[:space:\]\]'/);
