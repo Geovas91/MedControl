@@ -2,8 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Download, FileSignature, RefreshCw } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { cancelConsentAction, generateConsentDocumentAction, generateConsentSigningLinkAction, revokeConsentSigningLinkAction, sendConsentEmailAction } from "@/app/dashboard/patients/[id]/consents/[consentId]/actions";
-import { ConsentSigningLinkControls } from "@/components/clinical-record/consent-signing-link-controls";
+import { cancelConsentAction, generateConsentDocumentAction, generateConsentSigningLinkAction, revokeConsentSigningLinkAction, sendConsentEmailAction, updateConsentAction } from "@/app/dashboard/patients/[id]/consents/[consentId]/actions";
+import { PendingConsentWorkspace } from "@/components/clinical-record/pending-consent-workspace";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { formatPatientTimestamp, getConsentStatusLabel } from "@/lib/patients/detail";
@@ -39,9 +39,11 @@ export default async function ConsentDetailPage({ params, searchParams }: { para
       {query.cancellation_error === "1" || query.pdf_error === "1" ? <p role="alert" className="mb-5 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">No fue posible completar la acción. La firma clínica permanece intacta.</p> : null}
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <Badge variant={consent.status === "signed" ? "green" : consent.status === "pending" ? "amber" : "slate"}>{getConsentStatusLabel(consent.status)}</Badge>
-        <h1 className="mt-4 text-2xl font-bold text-ink">{consent.consent_type}</h1>
-        <p className="mt-2 text-sm text-slate-500">Versión {consent.consent_version}</p>
-        <section className="mt-6"><h2 className="font-bold text-ink">Texto firmado</h2><p className="mt-3 whitespace-pre-wrap rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-700">{consent.consent_text}</p></section>
+        {consent.status !== "pending" ? <>
+          <h1 className="mt-4 text-2xl font-bold text-ink">{consent.consent_type}</h1>
+          <p className="mt-2 text-sm text-slate-500">Versión {consent.consent_version}</p>
+          <section className="mt-6"><h2 className="font-bold text-ink">Texto firmado</h2><p className="mt-3 whitespace-pre-wrap rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-700">{consent.consent_text}</p></section>
+        </> : null}
         {consent.status === "cancelled" ? <section className="mt-6 rounded-md border border-slate-200 bg-slate-50 p-4"><h2 className="font-bold text-ink">Cancelación</h2><p className="mt-2 text-sm text-slate-600">{formatPatientTimestamp(consent.cancelled_at, consent.timeZone)}</p>{consent.cancellation_reason ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{consent.cancellation_reason}</p> : null}</section> : null}
         {consent.status === "signed" && evidence ? (
           <section className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 sm:p-5">
@@ -65,7 +67,7 @@ export default async function ConsentDetailPage({ params, searchParams }: { para
             </div>
           </section>
         ) : null}
-        {consent.status === "pending" ? <ConsentSigningLinkControls action={generateConsentSigningLinkAction.bind(null, id, consentId)} emailAction={sendConsentEmailAction.bind(null, id, consentId)} revokeAction={revokeConsentSigningLinkAction.bind(null, id, consentId)} cancelAction={cancelConsentAction.bind(null, id, consentId)} patientEmail={consent.patientEmail} signingTokenExpiresAt={consent.signing_token_expires_at} signingTokenUsedAt={consent.signing_token_used_at} signingTokenRevokedAt={consent.signing_token_revoked_at} hasActiveLink={Boolean(consent.signing_token_expires_at && !consent.signing_token_revoked_at && !consent.signing_token_used_at && new Date(consent.signing_token_expires_at) > new Date())} /> : null}
+        {consent.status === "pending" ? <PendingConsentWorkspace initialValues={{ consentType: consent.consent_type, consentVersion: consent.consent_version, consentText: consent.consent_text }} initialUpdatedAt={consent.updated_at} updateAction={updateConsentAction.bind(null, id, consentId)} signingAction={generateConsentSigningLinkAction.bind(null, id, consentId)} emailAction={sendConsentEmailAction.bind(null, id, consentId)} revokeAction={revokeConsentSigningLinkAction.bind(null, id, consentId)} cancelAction={cancelConsentAction.bind(null, id, consentId)} patientEmail={consent.patientEmail} signingTokenExpiresAt={consent.signing_token_expires_at} signingTokenUsedAt={consent.signing_token_used_at} signingTokenRevokedAt={consent.signing_token_revoked_at} hasActiveLink={Boolean(consent.signing_token_expires_at && !consent.signing_token_revoked_at && !consent.signing_token_used_at && new Date(consent.signing_token_expires_at) > new Date())} /> : null}
       </section>
     </>
   );

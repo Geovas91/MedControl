@@ -938,6 +938,18 @@ export type Database = {
         };
         Returns: string;
       };
+      update_pending_consent_for_current_user: {
+        Args: {
+          p_clinic_id: string;
+          p_patient_id: string;
+          p_consent_id: string;
+          p_consent_type: string;
+          p_consent_version: string;
+          p_consent_text: string;
+          p_expected_updated_at: Timestamp;
+        };
+        Returns: string;
+      };
       issue_consent_signing_link_for_current_user: {
         Args: {
           p_clinic_id: string;
@@ -945,6 +957,17 @@ export type Database = {
           p_consent_id: string;
           p_token_hash: string;
           p_expires_at: Timestamp;
+        };
+        Returns: boolean;
+      };
+      issue_current_consent_signing_link_for_current_user: {
+        Args: {
+          p_clinic_id: string;
+          p_patient_id: string;
+          p_consent_id: string;
+          p_token_hash: string;
+          p_expires_at: Timestamp;
+          p_expected_updated_at: Timestamp;
         };
         Returns: boolean;
       };
