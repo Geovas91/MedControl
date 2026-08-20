@@ -4,7 +4,9 @@ begin;
 do $$
 declare
   v_create regprocedure := 'public.create_consent_for_current_user(uuid,uuid,text,text,text,uuid)'::regprocedure;
-  v_issue regprocedure := 'public.issue_consent_signing_link_for_current_user(uuid,uuid,uuid,text,timestamp with time zone)'::regprocedure;
+  v_update regprocedure := 'public.update_pending_consent_for_current_user(uuid,uuid,uuid,text,text,text,timestamp with time zone)'::regprocedure;
+  v_issue regprocedure := 'public.issue_current_consent_signing_link_for_current_user(uuid,uuid,uuid,text,timestamp with time zone,timestamp with time zone)'::regprocedure;
+  v_legacy_issue regprocedure := 'public.issue_consent_signing_link_for_current_user(uuid,uuid,uuid,text,timestamp with time zone)'::regprocedure;
   v_revoke regprocedure := 'public.revoke_consent_signing_link_for_current_user(uuid,uuid,uuid)'::regprocedure;
   v_cancel regprocedure := 'public.cancel_consent_for_current_user(uuid,uuid,uuid,text)'::regprocedure;
 begin
@@ -51,23 +53,28 @@ begin
     raise exception 'Authenticated retains direct consent write privileges';
   end if;
   if not has_function_privilege('authenticated', v_create, 'execute')
+    or not has_function_privilege('authenticated', v_update, 'execute')
     or not has_function_privilege('authenticated', v_issue, 'execute')
     or not has_function_privilege('authenticated', v_revoke, 'execute')
     or not has_function_privilege('authenticated', v_cancel, 'execute') then
     raise exception 'Authenticated consent lifecycle RPC grants are incomplete';
   end if;
   if has_function_privilege('anon', v_create, 'execute')
+    or has_function_privilege('anon', v_update, 'execute')
     or has_function_privilege('anon', v_issue, 'execute')
     or has_function_privilege('anon', v_revoke, 'execute')
     or has_function_privilege('anon', v_cancel, 'execute') then
     raise exception 'Anon can execute an authenticated consent lifecycle RPC';
   end if;
+  if has_function_privilege('authenticated', v_legacy_issue, 'execute') then
+    raise exception 'Authenticated retains the unversioned signing-link issuance path';
+  end if;
   if (
     select count(*) from pg_proc
-    where oid in (v_create::oid, v_issue::oid, v_revoke::oid, v_cancel::oid)
+    where oid in (v_create::oid, v_update::oid, v_issue::oid, v_revoke::oid, v_cancel::oid)
       and prosecdef
       and proconfig @> array['search_path=public, pg_temp']
-  ) <> 4 then raise exception 'Consent lifecycle RPC security properties are incomplete'; end if;
+  ) <> 5 then raise exception 'Consent lifecycle RPC security properties are incomplete'; end if;
 end
 $$;
 
@@ -203,9 +210,9 @@ do $$ begin
     raise exception 'Assistant created a consent';
   exception when insufficient_privilege then null; end;
   begin
-    perform public.issue_consent_signing_link_for_current_user(
+    perform public.issue_current_consent_signing_link_for_current_user(
       '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
-      (select value from consent_test_ids where key = 'doctor'), repeat('d', 64), now() + interval '7 days'
+      (select value from consent_test_ids where key = 'doctor'), repeat('d', 64), now() + interval '7 days', now()
     );
     raise exception 'Assistant issued a consent signing link';
   exception when insufficient_privilege then null; end;
@@ -236,9 +243,9 @@ do $$ begin
     raise exception 'Outsider created a consent';
   exception when insufficient_privilege then null; end;
   begin
-    perform public.issue_consent_signing_link_for_current_user(
+    perform public.issue_current_consent_signing_link_for_current_user(
       '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
-      (select value from consent_test_ids where key = 'doctor'), repeat('e', 64), now() + interval '7 days'
+      (select value from consent_test_ids where key = 'doctor'), repeat('e', 64), now() + interval '7 days', now()
     );
     raise exception 'Outsider issued a consent signing link';
   exception when insufficient_privilege then null; end;
@@ -316,9 +323,9 @@ declare
   v_cancel uuid := (select value from consent_test_ids where key = 'cancel');
 begin
   begin
-    perform public.issue_consent_signing_link_for_current_user(
+    perform public.issue_current_consent_signing_link_for_current_user(
       '22000000-0000-4000-8000-000000000002', '33000000-0000-4000-8000-000000000005',
-      v_doctor, repeat('c', 64), now() + interval '7 days'
+      v_doctor, repeat('c', 64), now() + interval '7 days', now()
     );
     raise exception 'Doctor issued a signing link through another clinic';
   exception when insufficient_privilege then null; end;
@@ -335,9 +342,9 @@ begin
     );
     raise exception 'Doctor cancelled a consent through another clinic';
   exception when insufficient_privilege then null; end;
-  if public.issue_consent_signing_link_for_current_user(
+  if public.issue_current_consent_signing_link_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005',
-    v_doctor, repeat('c', 64), now() + interval '7 days'
+    v_doctor, repeat('c', 64), now() + interval '7 days', now()
   ) then raise exception 'Doctor issued a link with a foreign patient ID'; end if;
   if public.revoke_consent_signing_link_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005', v_doctor
@@ -347,13 +354,29 @@ begin
     v_doctor, 'Foreign patient'
   ) <> 'unavailable' then raise exception 'Doctor resolved a consent with a foreign patient ID'; end if;
 
-  if not public.issue_consent_signing_link_for_current_user(
+  if public.update_pending_consent_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
-    v_doctor, repeat('a', 64), now() + interval '7 days'
+    v_doctor, 'Doctor actualizado', 'v2', 'Texto persistido nuevo.',
+    (select updated_at from public.consents where id = v_doctor)
+  ) <> 'updated' then raise exception 'Doctor could not update a pending issued consent'; end if;
+  if (select consent_text from public.consents where id = v_doctor) <> 'Texto persistido nuevo.' then
+    raise exception 'Pending consent update was not persisted';
+  end if;
+
+  if not public.issue_current_consent_signing_link_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+    v_doctor, repeat('a', 64), now() + interval '7 days',
+    (select updated_at from public.consents where id = v_doctor)
   ) then raise exception 'Doctor could not issue a signing link'; end if;
-  if not public.issue_consent_signing_link_for_current_user(
+  if public.update_pending_consent_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+    v_doctor, 'No permitido', 'v3', 'No debe reemplazar el texto con un enlace activo.',
+    (select updated_at from public.consents where id = v_doctor)
+  ) <> 'active_link' then raise exception 'Active signing link did not block consent edits'; end if;
+  if not public.issue_current_consent_signing_link_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000004',
-    v_cancel, repeat('b', 64), now() + interval '7 days'
+    v_cancel, repeat('b', 64), now() + interval '7 days',
+    (select updated_at from public.consents where id = v_cancel)
   ) then raise exception 'Doctor could not issue a cancellable signing link'; end if;
   if public.cancel_consent_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000004',
@@ -386,9 +409,9 @@ begin
     raise exception 'Past-due clinic created a consent';
   exception when insufficient_privilege then null; end;
   begin
-    perform public.issue_consent_signing_link_for_current_user(
+    perform public.issue_current_consent_signing_link_for_current_user(
       '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
-      v_doctor, repeat('f', 64), now() + interval '7 days'
+      v_doctor, repeat('f', 64), now() + interval '7 days', now()
     );
     raise exception 'Past-due clinic issued a signing link';
   exception when insufficient_privilege then null; end;
@@ -406,9 +429,10 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000003', true);
 do $$
 begin
-  if not public.issue_consent_signing_link_for_current_user(
+  if not public.issue_current_consent_signing_link_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
-    (select value from consent_test_ids where key = 'doctor'), repeat('a', 64), now() + interval '7 days'
+    (select value from consent_test_ids where key = 'doctor'), repeat('a', 64), now() + interval '7 days',
+    (select updated_at from public.consents where id = (select value from consent_test_ids where key = 'doctor'))
   ) then raise exception 'Doctor could not reissue the revoked signing link'; end if;
 end
 $$;
@@ -439,6 +463,11 @@ do $$
 declare
   v_doctor uuid := (select value from consent_test_ids where key = 'doctor');
 begin
+  if public.update_pending_consent_for_current_user(
+    '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
+    v_doctor, 'No permitido', 'v3', 'No debe modificar evidencia firmada.',
+    (select updated_at from public.consents where id = v_doctor)
+  ) <> 'immutable' then raise exception 'Signed consent update RPC was not immutable'; end if;
   if public.cancel_consent_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',
     v_doctor, 'No permitido después de firma'
@@ -463,7 +492,8 @@ begin
     or exists (select 1 from public.consent_signatures where consent_id = v_cancel) then
     raise exception 'Cancelled consent final state is inconsistent';
   end if;
-  if (select count(*) from public.audit_logs where entity_id = v_doctor and action = 'consent_signed') <> 1
+  if (select count(*) from public.audit_logs where entity_id = v_doctor and action = 'consent_updated') <> 1
+    or (select count(*) from public.audit_logs where entity_id = v_doctor and action = 'consent_signed') <> 1
     or (select count(*) from public.audit_logs where entity_id = v_cancel and action = 'consent_cancelled') <> 1 then
     raise exception 'Consent signature or cancellation audit is incomplete';
   end if;

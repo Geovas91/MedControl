@@ -3,6 +3,7 @@ import "server-only";
 import { hashSigningToken, isValidSignaturePng } from "@/lib/consents/signing";
 import { getPublicConsentForSigning, submitPublicConsentSignature, type PublicConsentRpcClient } from "@/lib/consents/public-signing-rpc";
 import { logger } from "@/lib/logger";
+import { generateConsentDocumentAfterPublicSigning } from "@/lib/server/consent-documents";
 import { createClient } from "@/lib/supabase/server";
 
 export type PublicConsent = { clinicName: string; consentType: string; consentVersion: string; consentText: string; expiresAt: string };
@@ -28,7 +29,10 @@ export async function getPublicConsentByToken(token: string): Promise<PublicCons
 export async function signPublicConsent(token: string, signerName: string, signature: string, acceptedPrivacy: boolean, acceptedSensitiveData: boolean) {
   if (!/^[A-Za-z0-9_-]{40,}$/.test(token) || signerName.trim().length < 2 || signerName.trim().length > 160 || !acceptedPrivacy || !acceptedSensitiveData || !isValidSignaturePng(signature)) return { state: "invalid" as const };
   const supabase = await createClient();
-  const result = await submitPublicConsentSignature(publicConsentRpc(supabase), { tokenHash: hashSigningToken(token), signerName: signerName.trim(), signature, acceptedPrivacy, acceptedSensitiveData });
+  const tokenHash = hashSigningToken(token);
+  const result = await submitPublicConsentSignature(publicConsentRpc(supabase), { tokenHash, signerName: signerName.trim(), signature, acceptedPrivacy, acceptedSensitiveData });
   if (result.error) { logger.error("Public consent signing failed", { component: "public_consent", operation: "sign", status: "rpc_error", code: result.error.code }); return { state: "error" as const }; }
-  return result.data === "signed" ? { state: "success" as const } : { state: "invalid" as const };
+  if (result.data !== "signed") return { state: "invalid" as const };
+  await generateConsentDocumentAfterPublicSigning(tokenHash);
+  return { state: "success" as const };
 }

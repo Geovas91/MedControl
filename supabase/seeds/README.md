@@ -11,6 +11,7 @@ Este directorio contiene seeds operativos, pequeños e idempotentes para entorno
 - `minimal.sql`: crea un tenant mínimo de desarrollo para pruebas de infraestructura.
 - `reset_demo.sql`: elimina exclusivamente `demo1` cuando sigue clasificado como `demo`.
 - `reset_demo1_data.sql`: elimina sólo los registros ficticios administrados por `demo1_data.sql` y conserva la cuenta, clínica, registro `public.profiles`, membresía y suscripción. La ficha pública ficticia del directorio sí se elimina porque pertenece al dataset.
+- `repair_demo1_legacy_consent_fixtures.sql`: mantenimiento único, previo a `0023`, para reparar exclusivamente las dos firmas ficticias históricas con `signature_data = NULL`; valida tenant, UUIDs, relaciones y marcador del seed antes de operar.
 - `reset_qa.sql`: elimina exclusivamente `demo2` cuando sigue clasificado como `qa`.
 
 Supabase ejecuta `supabase/seed.sql` durante `supabase db reset`; no ejecuta automáticamente los archivos de este directorio. Estos seeds deben aplicarse de forma explícita después de las migraciones.
@@ -81,12 +82,12 @@ Cantidades esperadas administradas por el seed:
 | `medical_note_templates` | 2 |
 | `medical_notes` | 5 |
 | `consents` | 4 |
-| `consent_signatures` | 2 |
+| `consent_signatures` | 0 |
 | `bot_settings` | 1 |
 | `doctor_public_profiles` | 1 |
 | `doctor_reviews` | 3 |
 
-Los valores de `signing_token` exigidos por el esquema de consentimientos son identificadores deterministas, explícitamente ficticios y no secretos. No deben reutilizarse fuera de demo1.
+Los cuatro consentimientos se mantienen en estado `pending`, con escenarios ficticios vigentes, vencidos o revocados, sin simular evidencia final. El seed no crea firmas: cualquier ejemplo `signed` debe producirse exclusivamente mediante el flujo público normal y su PNG validado. Los valores de `signing_token` exigidos por el esquema son identificadores deterministas, explícitamente ficticios y no secretos. No deben reutilizarse fuera de demo1.
 
 Para verificar los conteos del dataset por su espacio de UUIDs deterministas:
 
@@ -110,6 +111,14 @@ psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/reset_demo1_dat
 ```
 
 El reset valida que demo1 conserve su UUID y tipo `demo`. Aborta antes de borrar si detecta firmas finales, consentimientos firmados o cancelados, notas finalizadas u otra evidencia clínica inmutable dentro del dataset. En ese caso, el único flujo admitido para regenerar el demo local es `supabase db reset --local`; el helper no desactiva triggers ni ofrece un modo de mantenimiento. También aborta si detecta citas, pagos, notas, consentimientos, firmas, invitaciones, logs o reseñas no administrados que dependan de los registros del seed, evitando que una cascada elimine datos añadidos posteriormente.
+
+La reparación histórica de los dos fixtures de consentimiento de staging no forma parte del reset ordinario ni de la migración documental. Requiere aprobación explícita y debe ejecutarse una sola vez, únicamente en el tenant demo y antes de `0023`:
+
+```powershell
+psql "$env:SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/seeds/repair_demo1_legacy_consent_fixtures.sql
+```
+
+El maintenance aborta salvo que encuentre exactamente la clínica demo, los dos pares deterministas consentimiento/firma, `signature_data IS NULL` y el marcador ficticio esperado. Sus cambios de funciones son transaccionales y acotados: los triggers nunca se deshabilitan y las definiciones inmutables originales se restauran antes del commit. Después se puede ejecutar `reset_demo1_data.sql` y volver a cargar `demo1_data.sql`.
 
 Nunca uses datos reales en estos seeds ni ejecutes `demo1_data.sql`, `reset_demo1_data.sql` o cualquier otro reset en producción.
 

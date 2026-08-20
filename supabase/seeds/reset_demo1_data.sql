@@ -86,10 +86,6 @@ declare
     '26000000-0000-4000-8000-000000000003'::uuid,
     '26000000-0000-4000-8000-000000000004'::uuid
   ];
-  signature_ids constant uuid[] := array[
-    '27000000-0000-4000-8000-000000000001'::uuid,
-    '27000000-0000-4000-8000-000000000002'::uuid
-  ];
   review_ids constant uuid[] := array[
     '2a000000-0000-4000-8000-000000000001'::uuid,
     '2a000000-0000-4000-8000-000000000002'::uuid,
@@ -184,14 +180,6 @@ begin
   end if;
 
   if exists (
-    select 1 from public.consent_signatures
-    where (consent_id = any(consent_ids) or patient_id = any(patient_ids))
-      and not (id = any(signature_ids))
-  ) then
-    raise exception 'Reset blocked: unmanaged signatures reference demo1 seed consents.';
-  end if;
-
-  if exists (
     select 1 from public.appointment_invites
     where appointment_id = any(appointment_ids) or patient_id = any(patient_ids)
   ) then
@@ -229,23 +217,6 @@ where clinic_id = '10000000-0000-4000-8000-000000000001'
 delete from public.doctor_public_profiles
 where clinic_id = '10000000-0000-4000-8000-000000000001'
   and id = '29000000-0000-4000-8000-000000000001';
-
-delete from public.consent_signatures
-where id in (
-    '27000000-0000-4000-8000-000000000001',
-    '27000000-0000-4000-8000-000000000002'
-  )
-  and consent_id in (
-    select id
-    from public.consents
-    where clinic_id = '10000000-0000-4000-8000-000000000001'
-      and id in (
-        '26000000-0000-4000-8000-000000000001',
-        '26000000-0000-4000-8000-000000000002',
-        '26000000-0000-4000-8000-000000000003',
-        '26000000-0000-4000-8000-000000000004'
-      )
-  );
 
 delete from public.consents
 where clinic_id = '10000000-0000-4000-8000-000000000001'

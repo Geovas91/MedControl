@@ -2,7 +2,7 @@ type LogLevel = "info" | "warn" | "error";
 
 type LogContext = Record<string, unknown>;
 
-const sensitiveKeyPattern = /password|token|secret|authorization|cookie|medicalNote|diagnosis|patientName|email|phone/i;
+const sensitiveKeyPattern = /password|token|secret|authorization|cookie|medicalNote|diagnosis|patientName|email|phone|hash|signature|pdfBytes|consentText|storagePath/i;
 const redacted = "[redacted]";
 
 function sanitizeValue(value: unknown): unknown {
