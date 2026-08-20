@@ -1,6 +1,6 @@
 import "server-only";
 
-import { runConsentEmailDelivery, type ConsentEmailDeliveryDependencies } from "@/lib/consents/email-delivery";
+import { loadConsentEmailData, runConsentEmailDelivery, type ConsentEmailDeliveryDependencies } from "@/lib/consents/email-delivery";
 import type { ConsentEmailResult } from "@/lib/consents/email";
 import { getInvitationEmailConfiguration } from "@/lib/email/provider";
 import { sendWithResend } from "@/lib/email/resend-provider";
@@ -64,29 +64,33 @@ export async function deliverConsentSigningEmail(input: { patientId: string; con
       },
       loadData: async (context) => {
         const supabase = await createClient();
-        const [patientResult, consentResult] = await Promise.all([
-          supabase.from("patients").select("id, email").eq("id", input.patientId).eq("clinic_id", context.clinicId).maybeSingle(),
-          supabase.from("consents").select("id, patient_id, status, consent_type, signing_token_hash, signing_token_expires_at, signing_token_used_at, signing_token_revoked_at").eq("id", input.consentId).eq("patient_id", input.patientId).eq("clinic_id", context.clinicId).maybeSingle()
-        ]);
-        if (patientResult.error || consentResult.error) return { state: "query_failed" as const };
-        if (!patientResult.data || !consentResult.data) return { state: "not_found" as const };
-        const patient = patientResult.data as Pick<Database["public"]["Tables"]["patients"]["Row"], "id" | "email">;
-        const consent = consentResult.data as Pick<Database["public"]["Tables"]["consents"]["Row"], "id" | "patient_id" | "status" | "consent_type" | "signing_token_hash" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at">;
-        return {
-          state: "ready" as const,
-          data: {
-            patientEmail: patient.email,
-            consent: {
+        return loadConsentEmailData({
+          patient: async () => {
+            const result = await supabase.from("patients").select("id, email").eq("id", input.patientId).eq("clinic_id", context.clinicId).maybeSingle();
+            if (result.error) return { data: null, errorCode: result.error.code || "unknown" };
+            const patient = result.data as Pick<Database["public"]["Tables"]["patients"]["Row"], "id" | "email"> | null;
+            return { data: patient ? { email: patient.email } : null };
+          },
+          consent: async () => {
+            const result = await supabase.from("consents").select("id, patient_id, status, consent_type, signing_token_expires_at, signing_token_used_at, signing_token_revoked_at").eq("id", input.consentId).eq("patient_id", input.patientId).eq("clinic_id", context.clinicId).maybeSingle();
+            if (result.error) return { data: null, errorCode: result.error.code || "unknown" };
+            const consent = result.data as Pick<Database["public"]["Tables"]["consents"]["Row"], "id" | "patient_id" | "status" | "consent_type" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at"> | null;
+            return { data: consent ? {
               id: consent.id,
               status: consent.status,
               consentType: consent.consent_type,
-              signingTokenHash: consent.signing_token_hash,
               signingTokenExpiresAt: consent.signing_token_expires_at,
               signingTokenUsedAt: consent.signing_token_used_at,
               signingTokenRevokedAt: consent.signing_token_revoked_at
-            }
+            } : null };
+          },
+          consentTokenHash: async () => {
+            const result = await createAdminClient().from("consents").select("signing_token_hash").eq("id", input.consentId).eq("patient_id", input.patientId).eq("clinic_id", context.clinicId).maybeSingle();
+            if (result.error) return { data: null, errorCode: result.error.code || "unknown" };
+            const consent = result.data as Pick<Database["public"]["Tables"]["consents"]["Row"], "signing_token_hash"> | null;
+            return { data: consent ? { signingTokenHash: consent.signing_token_hash } : null };
           }
-        };
+        });
       },
       getCanonicalBaseUrl: getAppBaseUrl,
       providerReady: (canonicalBaseUrl) => {
@@ -107,11 +111,12 @@ export async function deliverConsentSigningEmail(input: { patientId: string; con
         action,
         errorCode
       }),
-      log: (level, code) => logger[level]("Consent email delivery result", {
+      log: (level, code, safeContext) => logger[level]("Consent email delivery result", {
         component: "consent_email",
         operation: "delivery",
         status: code === "unauthenticated" ? "unauthenticated" : code === "forbidden" ? "forbidden" : "failed",
         code,
+        ...(safeContext?.supabaseErrorCode ? { supabase_error_code: safeContext.supabaseErrorCode } : {}),
         consent_id: input.consentId,
         patient_id: input.patientId
       })

@@ -13,7 +13,7 @@ type ReadyContext = {
   timeZone: string;
 };
 
-type ConsentEmailData = {
+export type ConsentEmailData = {
   patientEmail: string | null;
   consent: {
     id: string;
@@ -26,14 +26,43 @@ type ConsentEmailData = {
   };
 };
 
+type ConsentEmailDataLoadResult =
+  | { state: "ready"; data: ConsentEmailData }
+  | { state: "query_failed"; query: "patient" | "consent" | "consent_token"; supabaseErrorCode: string }
+  | { state: "not_found" };
+
+type SafeQueryResult<T> = { data: T | null; errorCode?: string };
+
+export async function loadConsentEmailData(queries: {
+  patient: () => Promise<SafeQueryResult<{ email: string | null }>>;
+  consent: () => Promise<SafeQueryResult<Omit<ConsentEmailData["consent"], "signingTokenHash">>>;
+  consentTokenHash: () => Promise<SafeQueryResult<{ signingTokenHash: string | null }>>;
+}): Promise<ConsentEmailDataLoadResult> {
+  const [patient, consent] = await Promise.all([queries.patient(), queries.consent()]);
+  if (patient.errorCode) return { state: "query_failed", query: "patient", supabaseErrorCode: patient.errorCode };
+  if (consent.errorCode) return { state: "query_failed", query: "consent", supabaseErrorCode: consent.errorCode };
+  if (!patient.data || !consent.data) return { state: "not_found" };
+
+  const token = await queries.consentTokenHash();
+  if (token.errorCode) return { state: "query_failed", query: "consent_token", supabaseErrorCode: token.errorCode };
+  if (!token.data) return { state: "not_found" };
+  return {
+    state: "ready",
+    data: {
+      patientEmail: patient.data.email,
+      consent: { ...consent.data, signingTokenHash: token.data.signingTokenHash }
+    }
+  };
+}
+
 export type ConsentEmailDeliveryDependencies = {
   resolveContext: () => Promise<ReadyContext | { state: "unauthenticated" } | { state: "forbidden" }>;
-  loadData: (context: ReadyContext) => Promise<{ state: "ready"; data: ConsentEmailData } | { state: "query_failed" } | { state: "not_found" }>;
+  loadData: (context: ReadyContext) => Promise<ConsentEmailDataLoadResult>;
   getCanonicalBaseUrl: () => string;
   providerReady: (canonicalBaseUrl: string) => boolean;
   send: (input: { to: string; subject: string; html: string; text: string; idempotencyKey: string }) => Promise<{ ok: true } | { ok: false }>;
   audit: (context: ReadyContext, action: "consent_email_sent" | "consent_email_failed", errorCode?: string) => Promise<void>;
-  log: (level: "info" | "warn" | "error", code: string) => void;
+  log: (level: "info" | "warn" | "error", code: string, context?: { supabaseErrorCode?: string }) => void;
 };
 
 export async function runConsentEmailDelivery(
@@ -52,8 +81,9 @@ export async function runConsentEmailDelivery(
 
   const loaded = await dependencies.loadData(context);
   if (loaded.state === "query_failed") {
-    dependencies.log("error", "query_failed");
-    await dependencies.audit(context, "consent_email_failed", "query_failed");
+    const code = `${loaded.query}_query_failed`;
+    dependencies.log("error", code, { supabaseErrorCode: loaded.supabaseErrorCode });
+    await dependencies.audit(context, "consent_email_failed", code);
     return { state: "query_failed" };
   }
   if (loaded.state === "not_found") return { state: "not_found" };

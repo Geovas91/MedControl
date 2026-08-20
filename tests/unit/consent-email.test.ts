@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canCreateConsent } from "../../lib/clinical-record/permissions.ts";
-import { runConsentEmailDelivery, type ConsentEmailDeliveryDependencies } from "../../lib/consents/email-delivery.ts";
+import { loadConsentEmailData, runConsentEmailDelivery, type ConsentEmailDeliveryDependencies } from "../../lib/consents/email-delivery.ts";
 import { getConsentEmailActionOutcome, getConsentEmailAvailability, getConsentEmailDialogView } from "../../lib/consents/email.ts";
 import { hashSigningToken } from "../../lib/consents/signing-token.ts";
 import { extractConsentSigningToken } from "../../lib/consents/signing-url.ts";
@@ -21,7 +21,7 @@ const active = {
 };
 
 function createDeliveryHarness(overrides: Partial<ConsentEmailDeliveryDependencies> = {}) {
-  const logs: Array<{ level: string; code: string }> = [];
+  const logs: Array<{ level: string; code: string; supabaseErrorCode?: string }> = [];
   const audits: Array<{ action: string; errorCode?: string }> = [];
   const messages: Array<Record<string, unknown>> = [];
   const context = {
@@ -52,7 +52,7 @@ function createDeliveryHarness(overrides: Partial<ConsentEmailDeliveryDependenci
     providerReady: () => true,
     send: async (message) => { messages.push(message); return { ok: true }; },
     audit: async (_context, action, errorCode) => { audits.push({ action, errorCode }); },
-    log: (level, code) => { logs.push({ level, code }); },
+    log: (level, code, safeContext) => { logs.push({ level, code, supabaseErrorCode: safeContext?.supabaseErrorCode }); },
     ...overrides
   };
   return { dependencies, logs, audits, messages };
@@ -105,6 +105,37 @@ test("server action outcome maps every delivery state to a safe UX", () => {
   assert.deepEqual(getConsentEmailActionOutcome({ state: "not_found" }), { kind: "not_found" });
 });
 
+test("authenticated data loading identifies the failed query and preserves the safe Supabase code", async () => {
+  let tokenQueryCalls = 0;
+  const patientFailure = await loadConsentEmailData({
+    patient: async () => ({ data: null, errorCode: "42501" }),
+    consent: async () => ({ data: null }),
+    consentTokenHash: async () => { tokenQueryCalls += 1; return { data: null }; }
+  });
+  assert.deepEqual(patientFailure, { state: "query_failed", query: "patient", supabaseErrorCode: "42501" });
+  assert.equal(tokenQueryCalls, 0);
+
+  const consentFailure = await loadConsentEmailData({
+    patient: async () => ({ data: { email: "paciente@example.com" } }),
+    consent: async () => ({ data: null, errorCode: "PGRST204" }),
+    consentTokenHash: async () => { tokenQueryCalls += 1; return { data: null }; }
+  });
+  assert.deepEqual(consentFailure, { state: "query_failed", query: "consent", supabaseErrorCode: "PGRST204" });
+  assert.equal(tokenQueryCalls, 0);
+});
+
+test("authenticated patient and consent reads complete before the scoped token lookup", async () => {
+  const calls: string[] = [];
+  const loaded = await loadConsentEmailData({
+    patient: async () => { calls.push("patient"); return { data: { email: "paciente@example.com" } }; },
+    consent: async () => { calls.push("consent"); return { data: { id: "30000000-0000-4000-8000-000000000001", status: "pending", consentType: "Procedimiento", signingTokenExpiresAt: "2030-01-02T12:00:00.000Z", signingTokenUsedAt: null, signingTokenRevokedAt: null } }; },
+    consentTokenHash: async () => { calls.push("consent_token"); return { data: { signingTokenHash: hashSigningToken(token) } }; }
+  });
+  assert.equal(loaded.state, "ready");
+  assert.deepEqual(calls.slice(0, 2).sort(), ["consent", "patient"]);
+  assert.equal(calls.at(-1), "consent_token");
+});
+
 test("backend distinguishes query, link, state, recipient, provider and Resend failures", async () => {
   const cases: Array<{
     expected: string;
@@ -112,7 +143,9 @@ test("backend distinguishes query, link, state, recipient, provider and Resend f
     overrides: Partial<ConsentEmailDeliveryDependencies>;
     url?: string;
   }> = [
-    { expected: "query_failed", auditCode: "query_failed", overrides: { loadData: async () => ({ state: "query_failed" }) } },
+    { expected: "query_failed", auditCode: "patient_query_failed", overrides: { loadData: async () => ({ state: "query_failed", query: "patient", supabaseErrorCode: "42501" }) } },
+    { expected: "query_failed", auditCode: "consent_query_failed", overrides: { loadData: async () => ({ state: "query_failed", query: "consent", supabaseErrorCode: "PGRST204" }) } },
+    { expected: "query_failed", auditCode: "consent_token_query_failed", overrides: { loadData: async () => ({ state: "query_failed", query: "consent_token", supabaseErrorCode: "42501" }) } },
     { expected: "invalid_link", auditCode: "invalid_link", overrides: {}, url: `https://evil.example/consent/sign/${token}` },
     { expected: "invalid_state", auditCode: "invalid_state", overrides: { loadData: async () => ({ state: "ready", data: { patientEmail: "paciente@example.com", consent: { id: "30000000-0000-4000-8000-000000000001", status: "signed", consentType: "Procedimiento", signingTokenHash: hashSigningToken(token), signingTokenExpiresAt: "2030-01-02T12:00:00.000Z", signingTokenUsedAt: null, signingTokenRevokedAt: null } } }) } },
     { expected: "missing_recipient", auditCode: "missing_recipient", overrides: { loadData: async () => ({ state: "ready", data: { patientEmail: null, consent: { id: "30000000-0000-4000-8000-000000000001", status: "pending", consentType: "Procedimiento", signingTokenHash: hashSigningToken(token), signingTokenExpiresAt: "2030-01-02T12:00:00.000Z", signingTokenUsedAt: null, signingTokenRevokedAt: null } } }) } },
@@ -126,6 +159,7 @@ test("backend distinguishes query, link, state, recipient, provider and Resend f
     assert.equal(result.state, scenario.expected);
     assert.equal(harness.audits.at(-1)?.errorCode, scenario.auditCode);
     assert.equal(harness.logs.at(-1)?.code, scenario.auditCode);
+    if (scenario.expected === "query_failed") assert.ok(harness.logs.at(-1)?.supabaseErrorCode);
   }
 });
 
@@ -174,7 +208,10 @@ test("production adapter stays tenant-scoped and preserves current permissions",
   assert.match(service, /getClinicEntitlements\(context\.tenant\.clinic\.id\)/);
   assert.match(service, /from\("patients"\)[\s\S]*?\.eq\("id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
   assert.match(service, /from\("consents"\)[\s\S]*?\.eq\("id", input\.consentId\)\.eq\("patient_id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
-  assert.match(service, /patientEmail: patient\.email/);
+  const authenticatedConsentSelect = service.match(/from\("consents"\)\.select\("([^"]+)"\)/)?.[1] ?? "";
+  assert.doesNotMatch(authenticatedConsentSelect, /signing_token_hash/);
+  assert.match(service, /createAdminClient\(\)\.from\("consents"\)\.select\("signing_token_hash"\)\.eq\("id", input\.consentId\)\.eq\("patient_id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
+  assert.match(service, /return \{ data: patient \? \{ email: patient\.email \} : null \}/);
   assert.equal(canCreateConsent("assistant"), false);
 });
 
