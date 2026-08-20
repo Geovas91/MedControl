@@ -5,7 +5,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { createConsentSigningQr, getConsentSigningQrAvailability } from "@/lib/consents/signing-qr";
-import { getConsentEmailAvailability } from "@/lib/consents/email";
+import { getConsentEmailAvailability, getConsentEmailDialogView } from "@/lib/consents/email";
 
 type SigningLinkState = { error?: string; url?: string; expiresAt?: string };
 type EmailState = { error?: string; sentTo?: string };
@@ -15,9 +15,15 @@ function GenerateSigningLinkButton({ hasActiveLink }: { hasActiveLink: boolean }
   return <Button type="submit" disabled={pending}><Link2 className="h-4 w-4" />{pending ? "Generando enlace…" : hasActiveLink ? "Regenerar enlace" : "Generar enlace de firma"}</Button>;
 }
 
-function SendEmailButton() {
+function ConsentEmailFormControls({ emailState, onCancel }: { emailState: EmailState; onCancel: () => void }) {
   const { pending } = useFormStatus();
-  return <Button type="submit" disabled={pending}><Mail className="h-4 w-4" />{pending ? "Enviando…" : "Confirmar envío"}</Button>;
+  const dialog = getConsentEmailDialogView({ open: true, pending, emailState });
+
+  return <>
+    <Button type="submit" disabled={dialog.submitDisabled}><Mail className="h-4 w-4" />{dialog.submitLabel}</Button>
+    <Button type="button" variant="secondary" disabled={pending} onClick={onCancel}>Cancelar</Button>
+    {dialog.error ? <p role="alert" className="w-full text-sm text-rose-700">{dialog.error}</p> : null}
+  </>;
 }
 
 export function ConsentSigningLinkControls({ action, emailAction, revokeAction, cancelAction, hasActiveLink, patientEmail, signingTokenExpiresAt, signingTokenUsedAt, signingTokenRevokedAt }: { action: (state: SigningLinkState, formData: FormData) => Promise<SigningLinkState>; emailAction: (state: EmailState, formData: FormData) => Promise<EmailState>; revokeAction: () => Promise<void>; cancelAction: (formData: FormData) => Promise<void>; hasActiveLink: boolean; patientEmail: string | null; signingTokenExpiresAt: string | null; signingTokenUsedAt: string | null; signingTokenRevokedAt: string | null }) {
@@ -64,7 +70,6 @@ export function ConsentSigningLinkControls({ action, emailAction, revokeAction, 
     {state.url ? <div className="mt-4 rounded-md bg-teal-50 p-3"><p className="break-all text-sm text-slate-700">{state.url}</p><Button type="button" variant="ghost" className="mt-2" onClick={() => { void navigator.clipboard.writeText(state.url!); setCopied(true); }}><Copy className="h-4 w-4" />{copied ? "Copiado" : "Copiar enlace"}</Button></div> : null}
     {state.error ? <p role="alert" className="mt-3 text-sm text-rose-700">{state.error}</p> : null}
     {emailState.sentTo ? <p role="status" className="mt-3 text-sm text-emerald-700">Consentimiento enviado a {emailState.sentTo}</p> : null}
-    {emailState.error ? <p role="alert" className="mt-3 text-sm text-rose-700">{emailState.error}</p> : null}
     <form action={cancelAction} className="mt-6 border-t border-slate-200 pt-5"><label htmlFor="cancellation_reason" className="text-sm font-semibold text-ink">Cancelar consentimiento</label><p className="mt-1 text-xs leading-5 text-slate-500">Solo es posible antes de la firma. El consentimiento se conservará como evidencia.</p><input id="cancellation_reason" name="cancellation_reason" maxLength={500} placeholder="Motivo opcional" className="mt-3 h-11 w-full rounded-md border border-slate-300 px-3 text-sm" /><Button type="submit" variant="secondary" className="mt-3 border-rose-300 text-rose-700 hover:bg-rose-50"><XCircle className="h-4 w-4" />Cancelar consentimiento</Button></form>
     <dialog ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="consent-qr-title" aria-describedby="consent-qr-description" onClose={() => document.getElementById("consent-qr-trigger")?.focus()} className="w-[calc(100%-2rem)] max-w-md rounded-lg border border-slate-200 bg-white p-0 shadow-xl backdrop:bg-slate-950/50">
       <div className="p-5 sm:p-6">
@@ -79,8 +84,7 @@ export function ConsentSigningLinkControls({ action, emailAction, revokeAction, 
         <p className="mt-4 text-sm leading-6 text-slate-600">Se enviará el mismo enlace personal disponible para copiar y mostrar como QR.</p>
         <form action={emailFormAction} className="mt-5 flex flex-wrap gap-3">
           <input type="hidden" name="signing_url" value={state.url ?? ""} />
-          <SendEmailButton />
-          <Button type="button" variant="secondary" onClick={() => emailDialogRef.current?.close()}>Cancelar</Button>
+          <ConsentEmailFormControls emailState={emailState} onCancel={() => emailDialogRef.current?.close()} />
         </form>
       </div>
     </dialog>

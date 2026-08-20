@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { cancelConsentForActiveTenant, createConsentSigningLink, revokeConsentSigningLink } from "@/lib/server/clinical-consents";
 import { generateConsentDocumentForActiveTenant } from "@/lib/server/consent-documents";
 import { deliverConsentSigningEmail } from "@/lib/server/consent-email";
+import { getConsentEmailActionOutcome } from "@/lib/consents/email";
 
 export async function generateConsentSigningLinkAction(patientId: string, consentId: string, _state: { error?: string }, _formData: FormData) {
   const result = await createConsentSigningLink(patientId, consentId);
@@ -41,11 +42,10 @@ export async function sendConsentEmailAction(patientId: string, consentId: strin
     consentId,
     signingUrl: String(formData.get("signing_url") ?? "")
   });
-  if (result.state === "not_found") notFound();
-  if (result.state === "unauthenticated") redirect("/login");
-  if (result.state === "sent") return { sentTo: result.recipient };
-  if (result.state === "missing_recipient") return { error: "Este paciente no tiene correo electrónico registrado." };
-  return { error: "No pudimos enviar el consentimiento. Intenta nuevamente." };
+  const outcome = getConsentEmailActionOutcome(result);
+  if (outcome.kind === "not_found") notFound();
+  if (outcome.kind === "redirect_login") redirect("/login");
+  return outcome.state;
 }
 
 export async function generateConsentDocumentAction(patientId: string, consentId: string) {

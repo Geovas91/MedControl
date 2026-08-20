@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canCreateConsent } from "../../lib/clinical-record/permissions.ts";
-import { getConsentEmailAvailability } from "../../lib/consents/email.ts";
+import { runConsentEmailDelivery, type ConsentEmailDeliveryDependencies } from "../../lib/consents/email-delivery.ts";
+import { getConsentEmailActionOutcome, getConsentEmailAvailability, getConsentEmailDialogView } from "../../lib/consents/email.ts";
+import { hashSigningToken } from "../../lib/consents/signing-token.ts";
 import { extractConsentSigningToken } from "../../lib/consents/signing-url.ts";
 import { buildConsentSigningEmail } from "../../lib/email/templates/consent-signing.ts";
 
@@ -17,6 +19,44 @@ const active = {
   signingTokenRevokedAt: null,
   now: new Date("2030-01-01T12:00:00.000Z")
 };
+
+function createDeliveryHarness(overrides: Partial<ConsentEmailDeliveryDependencies> = {}) {
+  const logs: Array<{ level: string; code: string }> = [];
+  const audits: Array<{ action: string; errorCode?: string }> = [];
+  const messages: Array<Record<string, unknown>> = [];
+  const context = {
+    state: "ready" as const,
+    clinicId: "10000000-0000-4000-8000-000000000001",
+    actorId: "20000000-0000-4000-8000-000000000001",
+    clinicName: "Clínica Centro",
+    timeZone: "America/Mexico_City"
+  };
+  const dependencies: ConsentEmailDeliveryDependencies = {
+    resolveContext: async () => context,
+    loadData: async () => ({
+      state: "ready",
+      data: {
+        patientEmail: "paciente@example.com",
+        consent: {
+          id: "30000000-0000-4000-8000-000000000001",
+          status: "pending",
+          consentType: "Procedimiento informado",
+          signingTokenHash: hashSigningToken(token),
+          signingTokenExpiresAt: "2030-01-02T12:00:00.000Z",
+          signingTokenUsedAt: null,
+          signingTokenRevokedAt: null
+        }
+      }
+    }),
+    getCanonicalBaseUrl: () => "https://staging.clinicontrol.mx",
+    providerReady: () => true,
+    send: async (message) => { messages.push(message); return { ok: true }; },
+    audit: async (_context, action, errorCode) => { audits.push({ action, errorCode }); },
+    log: (level, code) => { logs.push({ level, code }); },
+    ...overrides
+  };
+  return { dependencies, logs, audits, messages };
+}
 
 test("pending consent with a current URL and patient email allows delivery", () => {
   assert.deepEqual(getConsentEmailAvailability(active), { available: true, recipient: "paciente@example.com", signingUrl });
@@ -36,6 +76,71 @@ test("signed, cancelled, revoked, used and expired links block delivery", () => 
 
 test("email requires the URL emitted in the current session", () => {
   assert.deepEqual(getConsentEmailAvailability({ ...active, signingUrl: undefined }), { available: false, reason: "missing_url" });
+});
+
+test("dialog behavior covers idle, confirmation, sending, visible error and sent", () => {
+  assert.deepEqual(getConsentEmailDialogView({ open: false, pending: false, emailState: {} }), {
+    phase: "idle", error: undefined, submitDisabled: false, submitLabel: "Confirmar envío", shouldClose: false
+  });
+  assert.equal(getConsentEmailDialogView({ open: true, pending: false, emailState: {} }).phase, "confirming");
+  assert.deepEqual(getConsentEmailDialogView({ open: true, pending: true, emailState: {} }), {
+    phase: "sending", error: undefined, submitDisabled: true, submitLabel: "Enviando…", shouldClose: false
+  });
+  assert.deepEqual(getConsentEmailDialogView({ open: true, pending: false, emailState: { error: "Fallo seguro" } }), {
+    phase: "error", error: "Fallo seguro", submitDisabled: false, submitLabel: "Confirmar envío", shouldClose: false
+  });
+  assert.equal(getConsentEmailDialogView({ open: true, pending: false, emailState: { sentTo: "paciente@example.com" } }).shouldClose, true);
+});
+
+test("server action outcome maps every delivery state to a safe UX", () => {
+  assert.deepEqual(getConsentEmailActionOutcome({ state: "missing_recipient" }), { kind: "state", state: { error: "Este paciente no tiene correo electrónico registrado." } });
+  assert.deepEqual(getConsentEmailActionOutcome({ state: "invalid_link" }), { kind: "state", state: { error: "El enlace de firma ya no es válido. Genera un enlace nuevo e intenta nuevamente." } });
+  assert.deepEqual(getConsentEmailActionOutcome({ state: "invalid_state" }), { kind: "state", state: { error: "Este consentimiento ya no puede enviarse por correo." } });
+  assert.deepEqual(getConsentEmailActionOutcome({ state: "forbidden" }), { kind: "state", state: { error: "No tienes permisos para enviar este consentimiento." } });
+  for (const state of ["provider_unavailable", "query_failed", "delivery_failed"] as const) {
+    assert.deepEqual(getConsentEmailActionOutcome({ state }), { kind: "state", state: { error: "No pudimos enviar el consentimiento. Intenta nuevamente." } });
+  }
+  assert.deepEqual(getConsentEmailActionOutcome({ state: "sent", recipient: "paciente@example.com" }), { kind: "state", state: { sentTo: "paciente@example.com" } });
+  assert.deepEqual(getConsentEmailActionOutcome({ state: "unauthenticated" }), { kind: "redirect_login" });
+  assert.deepEqual(getConsentEmailActionOutcome({ state: "not_found" }), { kind: "not_found" });
+});
+
+test("backend distinguishes query, link, state, recipient, provider and Resend failures", async () => {
+  const cases: Array<{
+    expected: string;
+    auditCode: string;
+    overrides: Partial<ConsentEmailDeliveryDependencies>;
+    url?: string;
+  }> = [
+    { expected: "query_failed", auditCode: "query_failed", overrides: { loadData: async () => ({ state: "query_failed" }) } },
+    { expected: "invalid_link", auditCode: "invalid_link", overrides: {}, url: `https://evil.example/consent/sign/${token}` },
+    { expected: "invalid_state", auditCode: "invalid_state", overrides: { loadData: async () => ({ state: "ready", data: { patientEmail: "paciente@example.com", consent: { id: "30000000-0000-4000-8000-000000000001", status: "signed", consentType: "Procedimiento", signingTokenHash: hashSigningToken(token), signingTokenExpiresAt: "2030-01-02T12:00:00.000Z", signingTokenUsedAt: null, signingTokenRevokedAt: null } } }) } },
+    { expected: "missing_recipient", auditCode: "missing_recipient", overrides: { loadData: async () => ({ state: "ready", data: { patientEmail: null, consent: { id: "30000000-0000-4000-8000-000000000001", status: "pending", consentType: "Procedimiento", signingTokenHash: hashSigningToken(token), signingTokenExpiresAt: "2030-01-02T12:00:00.000Z", signingTokenUsedAt: null, signingTokenRevokedAt: null } } }) } },
+    { expected: "provider_unavailable", auditCode: "provider_unavailable", overrides: { providerReady: () => false } },
+    { expected: "delivery_failed", auditCode: "resend_delivery_failed", overrides: { send: async () => ({ ok: false }) } }
+  ];
+
+  for (const scenario of cases) {
+    const harness = createDeliveryHarness(scenario.overrides);
+    const result = await runConsentEmailDelivery({ signingUrl: scenario.url ?? signingUrl }, harness.dependencies);
+    assert.equal(result.state, scenario.expected);
+    assert.equal(harness.audits.at(-1)?.errorCode, scenario.auditCode);
+    assert.equal(harness.logs.at(-1)?.code, scenario.auditCode);
+  }
+});
+
+test("backend success sends once and audit/log payloads contain no secret material", async () => {
+  const harness = createDeliveryHarness();
+  const result = await runConsentEmailDelivery({ signingUrl }, harness.dependencies);
+  assert.deepEqual(result, { state: "sent", recipient: "paciente@example.com" });
+  assert.equal(harness.messages.length, 1);
+  assert.deepEqual(harness.audits, [{ action: "consent_email_sent", errorCode: undefined }]);
+
+  const invalid = createDeliveryHarness();
+  await runConsentEmailDelivery({ signingUrl: `${signingUrl}?signing_url=${token}&email=paciente@example.com` }, invalid.dependencies);
+  const telemetry = JSON.stringify({ logs: invalid.logs, audits: invalid.audits });
+  assert.doesNotMatch(telemetry, new RegExp(token));
+  assert.doesNotMatch(telemetry, /signing_url|paciente@example\.com|RESEND_API_KEY|consent_text/i);
 });
 
 test("only an exact canonical consent signing URL yields a token", () => {
@@ -62,35 +167,55 @@ test("Spanish email contains only the required summary and button URL", () => {
   assert.doesNotMatch(`${template.html}${template.text}`, /diagnóstico|nota clínica|consent_text|firma gráfica|PDF/i);
 });
 
-test("delivery stays tenant-scoped, server-resolves recipient and preserves current permissions", () => {
+test("production adapter stays tenant-scoped and preserves current permissions", () => {
   const service = readFileSync(new URL("../../lib/server/consent-email.ts", import.meta.url), "utf8");
   assert.match(service, /getActiveTenantContext\(\)/);
   assert.match(service, /canCreateConsent\(context\.tenant\.membership\.role\)/);
   assert.match(service, /getClinicEntitlements\(context\.tenant\.clinic\.id\)/);
-  assert.match(service, /from\("patients"\)[\s\S]*?\.eq\("id", input\.patientId\)\.eq\("clinic_id", clinicId\)/);
-  assert.match(service, /from\("consents"\)[\s\S]*?\.eq\("id", input\.consentId\)\.eq\("patient_id", input\.patientId\)\.eq\("clinic_id", clinicId\)/);
+  assert.match(service, /from\("patients"\)[\s\S]*?\.eq\("id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
+  assert.match(service, /from\("consents"\)[\s\S]*?\.eq\("id", input\.consentId\)\.eq\("patient_id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
   assert.match(service, /patientEmail: patient\.email/);
   assert.equal(canCreateConsent("assistant"), false);
 });
 
-test("client cannot select recipient and server verifies the URL token hash", () => {
+test("client cannot select recipient", () => {
   const actions = readFileSync(new URL("../../app/dashboard/patients/[id]/consents/[consentId]/actions.ts", import.meta.url), "utf8");
-  const service = readFileSync(new URL("../../lib/server/consent-email.ts", import.meta.url), "utf8");
   const sendAction = actions.slice(actions.indexOf("export async function sendConsentEmailAction"), actions.indexOf("export async function generateConsentDocumentAction"));
   assert.match(sendAction, /formData\.get\("signing_url"\)/);
   assert.doesNotMatch(sendAction, /formData\.get\("recipient"\)|formData\.get\("email"\)|formData\.get\("token"\)/);
-  assert.match(service, /extractConsentSigningToken\(input\.signingUrl, canonicalBaseUrl\)/);
-  assert.match(service, /candidateHash = token \? hashSigningToken\(token\) : ""/);
-  assert.match(service, /timingSafeEqual\(Buffer\.from\(candidateHash\), Buffer\.from\(consent\.signing_token_hash\)\)/);
+});
+
+test("backend rejects a canonical URL when its token hash is not the active hash", async () => {
+  const differentToken = "abcdefghij0123456789-abcdefghij0123456789_abc";
+  const harness = createDeliveryHarness({
+    loadData: async () => ({
+      state: "ready",
+      data: {
+        patientEmail: "paciente@example.com",
+        consent: {
+          id: "30000000-0000-4000-8000-000000000001",
+          status: "pending",
+          consentType: "Procedimiento",
+          signingTokenHash: hashSigningToken(differentToken),
+          signingTokenExpiresAt: "2030-01-02T12:00:00.000Z",
+          signingTokenUsedAt: null,
+          signingTokenRevokedAt: null
+        }
+      }
+    })
+  });
+  const result = await runConsentEmailDelivery({ signingUrl }, harness.dependencies);
+  assert.deepEqual(result, { state: "invalid_link" });
+  assert.equal(harness.messages.length, 0);
 });
 
 test("email uses the same session URL as copy and QR without issuing or revoking a link", () => {
   const controls = readFileSync(new URL("../../components/clinical-record/consent-signing-link-controls.tsx", import.meta.url), "utf8");
-  const service = readFileSync(new URL("../../lib/server/consent-email.ts", import.meta.url), "utf8");
+  const delivery = readFileSync(new URL("../../lib/consents/email-delivery.ts", import.meta.url), "utf8");
   assert.match(controls, /createConsentSigningQr\(qrAvailability\.signingUrl\)/);
   assert.match(controls, /navigator\.clipboard\.writeText\(state\.url!\)/);
   assert.match(controls, /name="signing_url" value=\{state\.url \?\? ""\}/);
-  assert.doesNotMatch(service, /issue_consent_signing_link|revoke_consent_signing_link|\.update\(/);
+  assert.doesNotMatch(delivery, /issue_consent_signing_link|revoke_consent_signing_link|\.update\(/);
 });
 
 test("provider failures are audited safely and do not invalidate the consent link", () => {
