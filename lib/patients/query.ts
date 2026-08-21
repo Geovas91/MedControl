@@ -116,7 +116,7 @@ export function getPatientPagination(total: number, requestedPage: number, pageS
 export function buildPatientListHref(
   query: PatientListQuery,
   page: number,
-  basePath: "/dashboard/patients" | "/dashboard/consents" = "/dashboard/patients"
+  basePath: "/dashboard/patients" | "/dashboard/consents" | "/dashboard/medical-notes/new" = "/dashboard/patients"
 ) {
   const params = new URLSearchParams();
 

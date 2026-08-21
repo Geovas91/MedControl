@@ -13,6 +13,7 @@ export async function finalizeClinicalNoteAction(patientId: string, noteId: stri
   if (result.state === "no_active_membership") redirect("/onboarding");
   if (result.state !== "success") return { error: "error" in result ? result.error : "No tienes permiso para finalizar esta nota." };
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/medical-notes");
   revalidatePath(`/dashboard/patients/${result.patientId}`);
   revalidatePath(`/dashboard/patients/${result.patientId}/clinical-record`);
   revalidatePath(`/dashboard/patients/${result.patientId}/notes/${result.noteId}`);

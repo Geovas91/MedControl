@@ -4,6 +4,10 @@ import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { mergeClinicalNoteContent, validateClinicalNoteValues, type ClinicalNoteFormValues } from "@/lib/clinical-record/notes";
 import { canCreateClinicalNote, canEditClinicalNote, canFinalizeClinicalNote, canUseClinicalTemplate, canViewClinicalRecord } from "@/lib/clinical-record/permissions";
 import { isValidPatientUuid } from "@/lib/patients/detail";
+import { getMedicalNotesPagination, type MedicalNotesListQuery } from "@/lib/medical-notes/query";
+import type { PatientListData } from "@/lib/server/patients";
+import { getPatientsForActiveTenant } from "@/lib/server/patients";
+import type { PatientListQuery } from "@/lib/patients/query";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
@@ -25,7 +29,130 @@ export type NoteTemplateOption = Pick<TemplateRow, "id" | "name" | "specialty" |
 export type NoteAppointmentOption = { id: string; title: string; starts_at: string };
 export type ClinicalNoteFormOptions = { patient: { id: string; full_name: string }; templates: NoteTemplateOption[]; appointments: NoteAppointmentOption[]; timeZone: string };
 export type ClinicalNoteDetail = Pick<NoteRow, "id" | "doctor_id" | "appointment_id" | "template_id" | "status" | "specialty" | "clinical_impression" | "diagnosis" | "icd10_code" | "note_data" | "finalized_at" | "finalized_by" | "created_at" | "updated_at"> & { doctorName: string | null; finalizedByName: string | null; templateName: string | null; appointmentTitle: string | null };
+export type GlobalClinicalNote = Pick<NoteRow, "id" | "patient_id" | "doctor_id" | "template_id" | "status" | "specialty" | "clinical_impression" | "created_at"> & {
+  patientName: string;
+  doctorName: string | null;
+  templateName: string | null;
+};
+export type GlobalClinicalNotesData = {
+  notes: GlobalClinicalNote[];
+  total: number;
+  page: number;
+  pageCount: number;
+  timeZone: string;
+  canCreate: boolean;
+};
 type BaseResult<T> = { state: "ready"; data: T } | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "not_found" | "error"; data: null };
+
+function applyGlobalNoteStatus<T extends { eq(column: string, value: string): T }>(query: T, status: MedicalNotesListQuery["status"]) {
+  return status ? query.eq("status", status) : query;
+}
+
+export async function getGlobalClinicalNotesForActiveTenant(query: MedicalNotesListQuery): Promise<BaseResult<GlobalClinicalNotesData>> {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: context.state, data: null };
+  if (!canViewClinicalRecord(context.tenant.membership.role)) return { state: "forbidden", data: null };
+
+  const clinicId = context.tenant.clinic.id;
+  const supabase = await createClient();
+  const countResult = await applyGlobalNoteStatus(
+    supabase.from("medical_notes").select("id", { count: "exact", head: true }).eq("clinic_id", clinicId),
+    query.status
+  );
+  if (countResult.error) {
+    logger.error("Global clinical notes count failed", { component: "clinical_notes", operation: "global_count", status: "query_error", code: countResult.error.code });
+    return { state: "error", data: null };
+  }
+
+  const total = countResult.count ?? 0;
+  const pagination = getMedicalNotesPagination(total, query.page);
+  const notesResult = await applyGlobalNoteStatus(
+    supabase
+      .from("medical_notes")
+      .select("id, patient_id, doctor_id, template_id, status, specialty, clinical_impression, created_at")
+      .eq("clinic_id", clinicId),
+    query.status
+  )
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(pagination.from, pagination.to);
+  if (notesResult.error) {
+    logger.error("Global clinical notes query failed", { component: "clinical_notes", operation: "global_list", status: "query_error", code: notesResult.error.code });
+    return { state: "error", data: null };
+  }
+
+  const rows = (notesResult.data ?? []) as Omit<GlobalClinicalNote, "patientName" | "doctorName" | "templateName">[];
+  const patientIds = [...new Set(rows.map((note) => note.patient_id))];
+  const doctorIds = [...new Set(rows.flatMap((note) => note.doctor_id ? [note.doctor_id] : []))];
+  const templateIds = [...new Set(rows.flatMap((note) => note.template_id ? [note.template_id] : []))];
+  const [patientsResult, doctorsResult, templatesResult, entitlements] = await Promise.all([
+    patientIds.length
+      ? supabase.from("patients").select("id, full_name").eq("clinic_id", clinicId).in("id", patientIds)
+      : Promise.resolve({ data: [], error: null }),
+    doctorIds.length
+      ? supabase.from("doctor_public_profiles").select("profile_id, display_name").eq("clinic_id", clinicId).in("profile_id", doctorIds)
+      : Promise.resolve({ data: [], error: null }),
+    templateIds.length
+      ? supabase.from("medical_note_templates").select("id, name").in("id", templateIds).or(`is_system_template.eq.true,clinic_id.eq.${clinicId}`)
+      : Promise.resolve({ data: [], error: null }),
+    getClinicEntitlements(clinicId)
+  ]);
+  if (patientsResult.error || doctorsResult.error || templatesResult.error) {
+    logger.error("Global clinical note relations failed", {
+      component: "clinical_notes",
+      operation: "global_relations",
+      status: "query_error",
+      patientsCode: patientsResult.error?.code,
+      doctorsCode: doctorsResult.error?.code,
+      templatesCode: templatesResult.error?.code
+    });
+    return { state: "error", data: null };
+  }
+
+  const memberNameRpcClient = supabase as unknown as FinalizerNameRpcClient;
+  const memberNameResults = await Promise.all(doctorIds.map(async (userId) => ({
+    userId,
+    result: await memberNameRpcClient.rpc("get_clinic_member_display_name_for_current_user", { p_clinic_id: clinicId, p_user_id: userId })
+  })));
+  const memberNames = new Map(memberNameResults.flatMap(({ userId, result }) => result.data ? [[userId, result.data] as const] : []));
+  const memberNameErrors = memberNameResults.flatMap(({ result }) => result.error ? [result.error.code] : []);
+  if (memberNameErrors.length) {
+    logger.error("Global clinical note author names failed", { component: "clinical_notes", operation: "global_author_names", status: "query_error", codes: memberNameErrors });
+  }
+
+  const patients = new Map(((patientsResult.data ?? []) as { id: string; full_name: string }[]).map((patient) => [patient.id, patient.full_name]));
+  const doctors = new Map(((doctorsResult.data ?? []) as { profile_id: string | null; display_name: string }[]).flatMap((doctor) => doctor.profile_id ? [[doctor.profile_id, doctor.display_name] as const] : []));
+  const templates = new Map(((templatesResult.data ?? []) as { id: string; name: string }[]).map((template) => [template.id, template.name]));
+  const notes = rows.map((note) => {
+    return {
+      ...note,
+      patientName: patients.get(note.patient_id) ?? "Paciente no disponible",
+      doctorName: note.doctor_id ? doctors.get(note.doctor_id) ?? memberNames.get(note.doctor_id) ?? null : null,
+      templateName: note.template_id ? templates.get(note.template_id) ?? null : null
+    };
+  });
+
+  return {
+    state: "ready",
+    data: {
+      notes,
+      total,
+      page: pagination.page,
+      pageCount: pagination.pageCount,
+      timeZone: context.tenant.clinic.timezone,
+      canCreate: canCreateClinicalNote(context.tenant.membership.role) && canCreateWithEntitlements(entitlements)
+    }
+  };
+}
+
+export async function getClinicalNotePatientSelection(filters: PatientListQuery): Promise<BaseResult<PatientListData>> {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: context.state, data: null };
+  if (!canCreateClinicalNote(context.tenant.membership.role)) return { state: "forbidden", data: null };
+  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return { state: "forbidden", data: null };
+  const patients = await getPatientsForActiveTenant(filters);
+  return patients.state === "ready" ? patients : { state: patients.state, data: null };
+}
 
 async function resolvePatient(patientId: string, requireCreate = false): Promise<BaseResult<{ context: Awaited<ReturnType<typeof getActiveTenantContext>> & { state: "ready" }; supabase: Awaited<ReturnType<typeof createClient>>; patient: { id: string; full_name: string } }>> {
   if (!isValidPatientUuid(patientId)) return { state: "invalid_id", data: null };
