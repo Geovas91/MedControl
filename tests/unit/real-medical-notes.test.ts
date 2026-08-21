@@ -71,7 +71,12 @@ test("patient and note URL manipulation stays tenant and patient constrained", (
   assert.match(newPage, /result\.state === "invalid_id" \|\| result\.state === "not_found"/);
   assert.match(newPage, /notFound\(\)/);
   assert.match(migration, /foreign key \(clinic_id, patient_id\)[\s\S]+references public\.patients\(clinic_id, id\)/i);
-  assert.match(migration, /grant insert, update on table public\.medical_notes to authenticated/i);
+  assert.doesNotMatch(migration, /not valid|security definer/i);
+  assert.match(migration, /revoke all on table public\.medical_notes from public, anon, authenticated/i);
+  assert.match(migration, /grant select, insert, update on table public\.medical_notes to authenticated/i);
+  assert.match(migration, /doctor_id = auth\.uid\(\)[\s\S]+has_clinic_role\(clinic_id, array\['owner', 'doctor', 'admin'\]\)[\s\S]+clinic_has_write_entitlement\(clinic_id\)/i);
+  assert.match(migration, /drop index public\.medical_notes_clinic_id_idx[\s\S]+drop index public\.medical_notes_patient_id_idx/i);
+  assert.match(migration, /medical_notes_clinic_created_id_idx[\s\S]+medical_notes_clinic_status_created_id_idx[\s\S]+medical_notes_patient_created_id_idx/i);
   assert.match(migration, /new\.patient_id is distinct from old\.patient_id/);
   assert.match(migration, /old\.doctor_id is distinct from auth\.uid\(\)[\s\S]+has_clinic_role\(old\.clinic_id, array\['owner', 'admin'\]\)/);
 });
