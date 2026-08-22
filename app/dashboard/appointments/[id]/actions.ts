@@ -6,6 +6,7 @@ import { parseAppointmentStatusFormData } from "@/lib/appointments/status";
 import { updateAppointmentStatusForActiveTenant } from "@/lib/server/update-appointment-status";
 import { deliverAppointmentCalendarEmail } from "@/lib/server/appointment-calendar-email";
 import { getStatusCalendarOperation } from "@/lib/calendar/invitation";
+import { syncAppointmentGoogleCalendar } from "@/lib/server/appointment-google-calendar";
 
 export type AppointmentStatusActionState = {
   error?: string;
@@ -30,14 +31,21 @@ export async function updateAppointmentStatusAction(
   if (result.state !== "success") return { error: result.error };
 
   const calendarOperation = getStatusCalendarOperation(result.outcome);
-  const calendarEmail = calendarOperation
-    ? await deliverAppointmentCalendarEmail({
-        appointmentId,
-        ...calendarOperation,
-        operationKey: result.operationKey,
-        appointmentVersion: result.appointmentVersion
-      })
-    : null;
+  const [calendarEmail] = calendarOperation
+    ? await Promise.all([
+        deliverAppointmentCalendarEmail({
+          appointmentId,
+          ...calendarOperation,
+          operationKey: result.operationKey,
+          appointmentVersion: result.appointmentVersion
+        }),
+        syncAppointmentGoogleCalendar({
+          appointmentId,
+          appointmentVersion: result.appointmentVersion,
+          operation: calendarOperation.method === "CANCEL" ? "delete" : "upsert"
+        })
+      ])
+    : [null];
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/appointments");

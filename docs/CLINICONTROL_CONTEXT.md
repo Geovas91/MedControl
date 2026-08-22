@@ -69,10 +69,11 @@ CliniControl no reemplaza el juicio médico, diagnóstico, tratamiento, consenti
 
 ### Integraciones
 
-- Google Calendar, ICS, WhatsApp y email están marcados como demo/proximamente.
-- No hay OAuth real, sincronización real, SMS, email real ni envío real de WhatsApp.
-- Antes de producción, cualquier token de calendario debe almacenarse cifrado.
-- Las invitaciones de calendario no deben incluir información clínica sensible.
+- Google Calendar usa OAuth server-side real por usuario/clínica y sincronización unidireccional best-effort de las citas asignadas.
+- Los refresh tokens se cifran con AES-256-GCM; access tokens, códigos y state nunca se muestran en UI.
+- Las invitaciones ICS por email usan la integración Resend existente cuando está configurada.
+- No hay SMS, WhatsApp, sincronización bidireccional, importación ni Google Meet automático.
+- Los eventos de Google no incluyen información clínica sensible ni identidad del paciente.
 
 ## Planes Comerciales Vigentes
 

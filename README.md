@@ -26,7 +26,7 @@ CliniControl es una aplicación SaaS para médicos y clínicas pequeñas en Méx
 - No uses datos reales de pacientes en staging.
 - CliniControl no reemplaza el juicio clínico, diagnóstico, tratamiento ni revisión profesional.
 - El flujo público de firma de consentimientos está deshabilitado por defecto y solo puede activarse para demo con `NEXT_PUBLIC_ENABLE_DEMO_CONSENT=true`.
-- Las integraciones de calendario son demo/proximamente. Antes de producción, los tokens de calendario deben almacenarse cifrados.
+- Google Calendar usa OAuth server-side por usuario y clínica; los refresh tokens se cifran con AES-256-GCM y los access tokens no se persisten.
 - No subas credenciales reales al repositorio.
 - `.env.local` debe permanecer ignorado por Git.
 - `SUPABASE_SERVICE_ROLE_KEY` es server-only y nunca debe usarse en Client Components.
@@ -72,11 +72,15 @@ EMAIL_FROM=
 EMAIL_REPLY_TO=
 EMAIL_REQUIRED=false
 RESEND_API_KEY=
+GOOGLE_CALENDAR_CLIENT_ID=
+GOOGLE_CALENDAR_CLIENT_SECRET=
+GOOGLE_CALENDAR_REDIRECT_URI=http://localhost:3000/api/integrations/google-calendar/callback
+CALENDAR_TOKEN_ENCRYPTION_KEY=
 ```
 
 Las invitaciones usan Resend cuando `EMAIL_PROVIDER=resend`, la API key server-only, un remitente de dominio verificado y `APP_BASE_URL` válido están configurados. Sin ello, el enlace sigue disponible para copia manual. Consulta `docs/INVITATION_EMAIL_DELIVERY.md`.
 
-También existen variables para PayPal sandbox, Google Calendar y proveedores de mensajería. Mantén `NEXT_PUBLIC_SUPABASE_URL` como URL base del proyecto, sin `/rest/v1/`.
+Google Calendar requiere un cliente OAuth web independiente del login con Google. Consulta `docs/GOOGLE_CALENDAR_INTEGRATION.md`. Mantén `NEXT_PUBLIC_SUPABASE_URL` como URL base del proyecto, sin `/rest/v1/`.
 
 ## Setup Local
 
