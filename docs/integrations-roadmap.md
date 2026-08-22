@@ -1,15 +1,15 @@
 # CliniControl Integrations Roadmap
 
-This document describes the future implementation plan for calendar integrations, patient consent QR signing, and the premium appointment confirmation bot. The current application remains frontend-only with mock data.
+This document records the integration roadmap and separates the shipped local implementation from future provider work. Google Calendar, consent signing, calendar email invitations and the appointment assistant now use persisted Supabase data; external messaging providers remain outside the current scope.
 
-## Google Calendar OAuth Plan
+## Google Calendar v1 (implemented)
 
-1. Add Supabase Auth for doctors and clinic staff before external account connections.
-2. Create a secure `doctor_calendar_connections` table linked to the authenticated doctor.
-3. Implement Google OAuth using a server-side callback route and encrypted token storage.
-4. Request the minimum calendar scopes needed for appointment creation and sync.
-5. Add calendar selection, sync direction preferences, token refresh handling, and disconnect controls.
-6. Write audit records for connect, disconnect, sync, and token refresh events.
+1. Supabase Auth identifies the user and active clinic; Calendar uses a separate OAuth web client.
+2. Migration 0029 stores one integration per clinic/user/provider and tenant-safe appointment/event mappings.
+3. Authorization Code exchange, refresh and revocation run server-side; refresh tokens use AES-256-GCM.
+4. The only requested scope is `calendar.events.owned` and the target is the user's primary calendar.
+5. Create, reschedule, cancel and restore perform best-effort one-way synchronization after the clinical mutation.
+6. Connect, disconnect, reconnect-required, sync and sanitized failure events are audited.
 
 ## iCalendar Generation Plan
 
@@ -48,23 +48,22 @@ This document describes the future implementation plan for calendar integrations
 - Validate patient opt-in before automated reminders.
 - Keep public consent tokens short-lived and scoped to one consent request.
 
-## What Remains Mock-Only Before Supabase
+## Future provider work outside current v1
 
-- Google OAuth connection flow.
-- Calendar sync jobs and external calendar writes.
-- Email, WhatsApp, and SMS delivery.
-- Legal signature validation.
-- Consent storage and audit trails.
-- Real appointment invitation state persistence.
+- WhatsApp and SMS provider delivery.
+- Calendar webhooks/watch channels and bidirectional synchronization.
+- Calendar selection and bulk import.
 - Public calendar feed URLs.
-- Production credential handling.
+- Google Meet, Outlook and Apple Calendar OAuth.
+- Production provider configuration and external acceptance testing.
 
 ## Future Environment Variables
 
 ```bash
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=
+GOOGLE_CALENDAR_CLIENT_ID=
+GOOGLE_CALENDAR_CLIENT_SECRET=
+GOOGLE_CALENDAR_REDIRECT_URI=
+CALENDAR_TOKEN_ENCRYPTION_KEY=
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_MESSAGING_SERVICE_SID=

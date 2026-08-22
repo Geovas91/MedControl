@@ -35,7 +35,7 @@ The initial schema creates a clinic-centered workspace model:
 
 `consents` stores generated consent documents and signing tokens. `consent_signatures` stores signature metadata.
 
-`calendar_integrations` stores provider metadata. Token columns are placeholders and must be encrypted or stored securely before production.
+`calendar_integrations` stores per-clinic, per-user Google Calendar metadata. Refresh tokens use a versioned AES-256-GCM envelope; access tokens are never persisted and client roles have no table grants.
 
 `appointment_invites` stores invite delivery status and external event identifiers.
 
@@ -118,15 +118,9 @@ The current code does not implement legal signature validation and does not clai
 
 ## 7. Calendar Integration Token Security
 
-`calendar_integrations` includes token placeholder columns so schema relationships can be planned early.
+Migration 0029 hardens `calendar_integrations`, adds one-use OAuth state and appointment/event mapping tables, and removes all client grants. The service layer validates the authenticated active tenant and ownership before using the service role for encrypted-token operations. Disconnect revokes the Google grant before deleting the local token when configuration is available.
 
-Before production:
-
-- Encrypt provider tokens or store them in a secure secret manager.
-- Never expose access tokens to Client Components.
-- Store only the minimum metadata needed for sync.
-- Add disconnect and token rotation workflows.
-- Log connect, refresh, sync, and disconnect events.
+The token encryption key remains an environment secret and must be managed outside PostgreSQL and the repository. See `docs/GOOGLE_CALENDAR_INTEGRATION.md`.
 
 ## 8. Appointment Bot Security And Opt-In
 
