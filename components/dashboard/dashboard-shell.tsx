@@ -16,7 +16,7 @@ const navItems = [
   { href: "/dashboard/medical-notes", label: "Notas médicas", icon: ClipboardList },
   { href: "/dashboard/appointments", label: "Citas", icon: CalendarDays },
   { href: "/dashboard/consents", label: "Consentimientos", icon: FileSignature },
-  { href: "/dashboard/bot", label: "Bot", icon: MessageSquareText },
+  { href: "/dashboard/bot", label: "Asistente", icon: MessageSquareText },
   { href: "/dashboard/payments", label: "Pagos", icon: CreditCard },
   { href: "/dashboard/billing", label: "Facturación", icon: CreditCard },
   { href: "/dashboard/members", label: "Miembros", icon: UsersRound },
