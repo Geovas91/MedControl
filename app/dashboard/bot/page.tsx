@@ -70,7 +70,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
 
   const { data } = result;
   const olderActivityHref = data.activityNextCursor
-    ? `/dashboard/bot?${new URLSearchParams({ activity_before: data.activityNextCursor.occurredAt, activity_before_id: data.activityNextCursor.eventId }).toString()}`
+    ? `/dashboard/bot?${new URLSearchParams({ activity_before: data.activityNextCursor.occurredAt, activity_before_source: data.activityNextCursor.eventSource, activity_before_id: data.activityNextCursor.eventId }).toString()}`
     : null;
 
   return (
@@ -125,7 +125,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
           <h2 className="font-bold text-ink">Canales e integraciones</h2>
           <div className="mt-4 grid gap-3">
             <div className="rounded-[var(--radius-md)] border border-slate-200 p-4">
-              <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 font-semibold text-ink"><Mail className="h-4 w-4 text-clinic" />Email</span><Badge variant={data.emailCalendarChannel === "connected" ? "green" : "slate"}>{data.emailCalendarChannel === "connected" ? "Canal conectado" : "No configurado"}</Badge></div>
+              <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 font-semibold text-ink"><Mail className="h-4 w-4 text-clinic" />Email</span><Badge variant={data.emailCalendarConfigured ? "green" : "slate"}>{data.emailCalendarConfigured ? "Canal conectado" : "No configurado"}</Badge></div>
               <p className="mt-2 text-sm leading-6 text-slate-500">El canal existente envía invitaciones ICS al crear o cambiar citas. No ejecuta recordatorios programados.</p>
             </div>
             <div className="rounded-[var(--radius-md)] border border-slate-200 p-4">
@@ -147,7 +147,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="font-semibold text-ink">{activityLabels[event.action] ?? "Actividad de agenda"}</p>
-                  <Link href={`/dashboard/appointments/${event.appointmentId}`} className="mt-1 inline-flex min-h-8 items-center text-sm font-semibold text-clinic hover:underline">{event.appointmentTitle}</Link>
+                  <Link href={`/dashboard/appointments/${event.appointmentId}`} className="mt-1 inline-flex min-h-8 items-center text-sm font-semibold text-clinic hover:underline">Ver cita</Link>
                   <p className="text-sm text-slate-500">{event.patientName}</p>
                 </div>
                 <time dateTime={event.occurredAt} className="text-sm text-slate-500">{dateTime(event.occurredAt, data.tenant.clinic.timezone)}</time>

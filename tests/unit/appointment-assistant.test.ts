@@ -60,10 +60,12 @@ test("only owner and admin can manage global assistant settings", () => {
 test("activity uses a validated stable cursor and asks the RPC for one extra row", () => {
   const cursor = getAppointmentAssistantActivityCursor({
     activity_before: "2026-08-21T12:00:00.000Z",
+    activity_before_source: "audit_log",
     activity_before_id: "c1000000-0000-4000-8000-000000000001"
   });
   assert.deepEqual(cursor, {
     occurredAt: "2026-08-21T12:00:00.000Z",
+    eventSource: "audit_log",
     eventId: "c1000000-0000-4000-8000-000000000001"
   });
   assert.equal(getAppointmentAssistantActivityCursor({ activity_before: "bad", activity_before_id: "bad" }), null);
@@ -74,7 +76,7 @@ test("activity uses a validated stable cursor and asks the RPC for one extra row
 test("0028 hardens settings, appointments and safe activity without exposing secrets", () => {
   assert.match(migration, /foreign key \(clinic_id, patient_id\)[\s\S]+references public\.patients\(clinic_id, id\)/i);
   assert.match(migration, /revoke all privileges on table public\.appointments from public, anon, authenticated[\s\S]+grant select, insert, update on table public\.appointments to authenticated/i);
-  assert.match(migration, /protect_appointment_relations[\s\S]+security invoker[\s\S]+new\.clinic_id is distinct from old\.clinic_id[\s\S]+new\.patient_id is distinct from old\.patient_id/i);
+  assert.match(migration, /protect_appointment_integrity[\s\S]+security invoker[\s\S]+new\.clinic_id is distinct from old\.clinic_id[\s\S]+new\.patient_id is distinct from old\.patient_id/i);
   assert.match(migration, /revoke all privileges on table public\.bot_settings from public, anon, authenticated/i);
   assert.match(migration, /grant select on table public\.bot_settings to authenticated/i);
   assert.match(migration, /save_appointment_assistant_settings_for_current_user[\s\S]+has_clinic_role\(p_clinic_id, array\['owner', 'admin'\]\)[\s\S]+clinic_has_write_entitlement/i);
@@ -83,11 +85,12 @@ test("0028 hardens settings, appointments and safe activity without exposing sec
   const activityResult = migration.match(/list_appointment_assistant_activity_for_current_user[\s\S]+?returns table \(([\s\S]+?)\)\nlanguage sql/i)?.[1] ?? "";
   assert.ok(activityResult);
   assert.doesNotMatch(activityResult, /metadata|message|patient_response|provider_message_id|secret/i);
+  assert.doesNotMatch(activityResult, /appointment_title|channel|delivery_status/i);
 });
 
 test("channel status is derived server-side without returning provider configuration", () => {
   assert.match(server, /getInvitationEmailConfiguration\(\)/);
-  assert.match(server, /configuration\.state === "ready" \? "connected" : "not_configured"/);
+  assert.match(server, /emailCalendarConfigured: configuration\.state === "ready"/);
   assert.doesNotMatch(page, /RESEND_API_KEY|SUPABASE_SERVICE_ROLE_KEY|provider_message_id/);
   assert.match(page, /No ejecuta recordatorios programados/);
 });

@@ -38,13 +38,25 @@ create index audit_logs_appointment_timeline_idx
 revoke all privileges on table public.appointments from public, anon, authenticated;
 grant select, insert, update on table public.appointments to authenticated;
 
-create or replace function public.protect_appointment_relations()
+create or replace function public.protect_appointment_integrity()
 returns trigger
 language plpgsql
 security invoker
 set search_path = public, pg_temp
 as $$
+declare
+  v_clinic_timezone text;
+  v_appointment_date date;
+  v_clinic_today date;
 begin
+  if tg_op = 'INSERT' then
+    if new.status <> 'scheduled' then
+      raise exception 'New appointments must start in scheduled status.' using errcode = '42501';
+    end if;
+
+    return new;
+  end if;
+
   if new.id is distinct from old.id
     or new.clinic_id is distinct from old.clinic_id
     or new.patient_id is distinct from old.patient_id
@@ -52,15 +64,74 @@ begin
     raise exception 'Appointment tenant and patient relationships are immutable.' using errcode = '42501';
   end if;
 
+  if old.status = 'completed' and (
+    new.starts_at is distinct from old.starts_at
+    or new.ends_at is distinct from old.ends_at
+  ) then
+    raise exception 'Completed appointment schedules are immutable.' using errcode = '42501';
+  end if;
+
+  if new.status is distinct from old.status then
+    if not (case old.status
+      when 'scheduled' then new.status in ('confirmed', 'waiting', 'completed', 'cancelled')
+      when 'confirmed' then new.status in ('waiting', 'completed', 'cancelled')
+      when 'waiting' then new.status in ('completed', 'cancelled')
+      when 'cancelled' then new.status = 'scheduled'
+      else false
+    end) then
+      raise exception 'Appointment status transition is not allowed.' using errcode = '42501';
+    end if;
+
+    if old.status = 'cancelled' then
+      if not public.has_clinic_role(new.clinic_id, array['owner', 'admin']) then
+        raise exception 'Only clinic owners and admins can restore appointments.' using errcode = '42501';
+      end if;
+
+      if new.doctor_id is null or exists (
+        select 1
+        from public.appointments as conflicting
+        where conflicting.clinic_id = new.clinic_id
+          and conflicting.doctor_id = new.doctor_id
+          and conflicting.id <> new.id
+          and conflicting.status <> 'cancelled'
+          and conflicting.starts_at < new.ends_at
+          and conflicting.ends_at > new.starts_at
+      ) then
+        raise exception 'Appointment cannot be restored without an available doctor.' using errcode = '23505';
+      end if;
+    end if;
+
+    if new.status = 'completed' and new.starts_at > now() then
+      raise exception 'Future appointments cannot be completed.' using errcode = '42501';
+    end if;
+
+    if new.status in ('confirmed', 'waiting') then
+      select clinic.timezone into strict v_clinic_timezone
+      from public.clinics as clinic
+      where clinic.id = new.clinic_id;
+
+      v_appointment_date := (new.starts_at at time zone v_clinic_timezone)::date;
+      v_clinic_today := (now() at time zone v_clinic_timezone)::date;
+
+      if new.status = 'confirmed' and v_appointment_date < v_clinic_today then
+        raise exception 'Past appointments cannot be confirmed.' using errcode = '42501';
+      end if;
+
+      if new.status = 'waiting' and v_appointment_date <> v_clinic_today then
+        raise exception 'Appointments can enter waiting only on their clinic-local date.' using errcode = '42501';
+      end if;
+    end if;
+  end if;
+
   return new;
 end;
 $$;
 
-revoke all on function public.protect_appointment_relations() from public, anon, authenticated;
+revoke all on function public.protect_appointment_integrity() from public, anon, authenticated;
 
-create trigger appointments_protect_relations
-before update on public.appointments
-for each row execute function public.protect_appointment_relations();
+create trigger appointments_protect_integrity
+before insert or update on public.appointments
+for each row execute function public.protect_appointment_integrity();
 
 revoke all privileges on table public.bot_settings from public, anon, authenticated;
 grant select on table public.bot_settings to authenticated;
@@ -139,7 +210,7 @@ end;
 $$;
 
 revoke all on function public.save_appointment_assistant_settings_for_current_user(uuid, boolean, integer, time, time)
-  from public, anon;
+  from public, anon, authenticated;
 grant execute on function public.save_appointment_assistant_settings_for_current_user(uuid, boolean, integer, time, time)
   to authenticated;
 
@@ -149,6 +220,10 @@ comment on function public.save_appointment_assistant_settings_for_current_user(
 -- bot_logs has no production writer. Removing direct access prevents clients from
 -- manufacturing conversation or reminder history while the table remains for compatibility.
 revoke all privileges on table public.bot_logs from public, anon, authenticated;
+
+-- Appointment audit rows are generated by the trigger below. Other legitimate
+-- audit writers use the service-role client or their own guarded definer RPC.
+revoke all privileges on table public.audit_logs from public, anon, authenticated;
 
 create or replace function public.audit_appointment_schedule_change()
 returns trigger
@@ -197,6 +272,7 @@ for each row execute function public.audit_appointment_schedule_change();
 create or replace function public.list_appointment_assistant_activity_for_current_user(
   p_clinic_id uuid,
   p_before_occurred_at timestamptz default null,
+  p_before_event_source text default null,
   p_before_event_id uuid default null,
   p_limit integer default 11
 )
@@ -206,9 +282,6 @@ returns table (
   action text,
   appointment_id uuid,
   patient_name text,
-  appointment_title text,
-  channel text,
-  delivery_status text,
   occurred_at timestamptz
 )
 language sql
@@ -227,9 +300,6 @@ as $$
       'appointment_created'::text as action,
       appointment.id as appointment_id,
       patient.full_name as patient_name,
-      appointment.title as appointment_title,
-      null::text as channel,
-      null::text as delivery_status,
       appointment.created_at as occurred_at
     from authorized_clinic
     join public.appointments as appointment using (clinic_id)
@@ -245,9 +315,6 @@ as $$
       log.action,
       appointment.id,
       patient.full_name,
-      appointment.title,
-      null::text,
-      null::text,
       log.created_at
     from authorized_clinic
     join public.audit_logs as log using (clinic_id)
@@ -275,9 +342,6 @@ as $$
       end,
       appointment.id,
       patient.full_name,
-      appointment.title,
-      invitation.channel,
-      invitation.delivery_status,
       coalesce(invitation.sent_at, invitation.last_attempted_at, invitation.updated_at)
     from authorized_clinic
     join public.appointment_invites as invitation using (clinic_id)
@@ -297,27 +361,26 @@ as $$
     event.action,
     event.appointment_id,
     event.patient_name,
-    event.appointment_title,
-    event.channel,
-    event.delivery_status,
     event.occurred_at
   from safe_events as event
   where (
-    (p_before_occurred_at is null and p_before_event_id is null)
+    (p_before_occurred_at is null and p_before_event_source is null and p_before_event_id is null)
     or (
       p_before_occurred_at is not null
+      and p_before_event_source in ('appointment', 'audit_log', 'calendar_email')
       and p_before_event_id is not null
-      and (event.occurred_at, event.event_id) < (p_before_occurred_at, p_before_event_id)
+      and (event.occurred_at, event.event_source, event.event_id)
+        < (p_before_occurred_at, p_before_event_source, p_before_event_id)
     )
   )
-  order by event.occurred_at desc, event.event_id desc
+  order by event.occurred_at desc, event.event_source desc, event.event_id desc
   limit least(greatest(coalesce(p_limit, 11), 1), 51);
 $$;
 
-revoke all on function public.list_appointment_assistant_activity_for_current_user(uuid, timestamptz, uuid, integer)
-  from public, anon;
-grant execute on function public.list_appointment_assistant_activity_for_current_user(uuid, timestamptz, uuid, integer)
+revoke all on function public.list_appointment_assistant_activity_for_current_user(uuid, timestamptz, text, uuid, integer)
+  from public, anon, authenticated;
+grant execute on function public.list_appointment_assistant_activity_for_current_user(uuid, timestamptz, text, uuid, integer)
   to authenticated;
 
-comment on function public.list_appointment_assistant_activity_for_current_user(uuid, timestamptz, uuid, integer) is
+comment on function public.list_appointment_assistant_activity_for_current_user(uuid, timestamptz, text, uuid, integer) is
   'Tenant-authorized, presentation-safe appointment activity cursor. It exposes no audit metadata, messages, responses, provider ids or secrets.';

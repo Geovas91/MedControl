@@ -14,6 +14,7 @@ export type AppointmentAssistantSettingsInput = {
 
 export type AppointmentAssistantSearchParams = {
   activity_before?: string | string[];
+  activity_before_source?: string | string[];
   activity_before_id?: string | string[];
   saved?: string | string[];
   settings_error?: string | string[];
@@ -32,13 +33,25 @@ function canonicalUuid(value: string | undefined) {
 
 export function getAppointmentAssistantActivityCursor(searchParams: AppointmentAssistantSearchParams) {
   const occurredAt = singleValue(searchParams.activity_before);
+  const eventSource = singleValue(searchParams.activity_before_source);
   const eventId = singleValue(searchParams.activity_before_id);
 
-  if (!occurredAt || !eventId || !canonicalUuid(eventId) || !Number.isFinite(Date.parse(occurredAt))) {
+  if (
+    !occurredAt ||
+    !eventSource ||
+    !["appointment", "audit_log", "calendar_email"].includes(eventSource) ||
+    !eventId ||
+    !canonicalUuid(eventId) ||
+    !Number.isFinite(Date.parse(occurredAt))
+  ) {
     return null;
   }
 
-  return { occurredAt: new Date(occurredAt).toISOString(), eventId };
+  return {
+    occurredAt: new Date(occurredAt).toISOString(),
+    eventSource: eventSource as "appointment" | "audit_log" | "calendar_email",
+    eventId
+  };
 }
 
 export function hasAppointmentAssistantSavedMessage(searchParams: AppointmentAssistantSearchParams) {

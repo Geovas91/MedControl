@@ -32,9 +32,6 @@ type ActivityRpcRow = {
   action: string;
   appointment_id: string;
   patient_name: string;
-  appointment_title: string;
-  channel: string | null;
-  delivery_status: string | null;
   occurred_at: string;
 };
 
@@ -44,6 +41,7 @@ type AssistantRpcClient = {
     args: {
       p_clinic_id: string;
       p_before_occurred_at: string | null;
+      p_before_event_source: string | null;
       p_before_event_id: string | null;
       p_limit: number;
     }
@@ -66,7 +64,6 @@ export type AppointmentAssistantActivity = {
   action: string;
   appointmentId: string;
   patientName: string;
-  appointmentTitle: string;
   occurredAt: string;
 };
 
@@ -84,9 +81,13 @@ export type AppointmentAssistantData = {
   settings: Pick<BotSettingsRow, "enabled" | "reminder_hours_before" | "quiet_hours_start" | "quiet_hours_end"> | null;
   canManageSettings: boolean;
   canWriteSettings: boolean;
-  emailCalendarChannel: "connected" | "not_configured";
+  emailCalendarConfigured: boolean;
   activity: AppointmentAssistantActivity[];
-  activityNextCursor: { occurredAt: string; eventId: string } | null;
+  activityNextCursor: {
+    occurredAt: string;
+    eventSource: ActivityRpcRow["event_source"];
+    eventId: string;
+  } | null;
   activityHasPrevious: boolean;
 };
 
@@ -163,6 +164,7 @@ export async function getAppointmentAssistantForActiveTenant(
     {
       p_clinic_id: clinicId,
       p_before_occurred_at: cursor?.occurredAt ?? null,
+      p_before_event_source: cursor?.eventSource ?? null,
       p_before_event_id: cursor?.eventId ?? null,
       p_limit: APPOINTMENT_ASSISTANT_ACTIVITY_PAGE_SIZE + 1
     }
@@ -228,18 +230,21 @@ export async function getAppointmentAssistantForActiveTenant(
       settings: settingsResult.data as AppointmentAssistantData["settings"],
       canManageSettings,
       canWriteSettings: Boolean(entitlements && canCreateWithEntitlements(entitlements)),
-      emailCalendarChannel: configuration.state === "ready" ? "connected" : "not_configured",
+      emailCalendarConfigured: configuration.state === "ready",
       activity: visibleActivity.map((event) => ({
         id: event.event_id,
         source: event.event_source,
         action: event.action,
         appointmentId: event.appointment_id,
         patientName: event.patient_name,
-        appointmentTitle: event.appointment_title,
         occurredAt: event.occurred_at
       })),
       activityNextCursor: hasMoreActivity && lastActivity
-        ? { occurredAt: lastActivity.occurred_at, eventId: lastActivity.event_id }
+        ? {
+            occurredAt: lastActivity.occurred_at,
+            eventSource: lastActivity.event_source,
+            eventId: lastActivity.event_id
+          }
         : null,
       activityHasPrevious: Boolean(cursor)
     }
