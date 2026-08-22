@@ -98,6 +98,38 @@ export async function saveGoogleCalendarIntegration(input: {
   return { data: result.data as { id: string } | null, error: result.error };
 }
 
+export async function activateGoogleCalendarIntegrationWithExistingSecret(input: {
+  integrationId: string;
+  clinicId: string;
+  userId: string;
+  expectedEncryptedRefreshToken: string;
+  scopes: string[];
+  connectedAt: string;
+}) {
+  const result = await createAdminClient().from("calendar_integrations").update({
+    provider_calendar_id: "primary",
+    calendar_name: "Calendario principal",
+    sync_direction: "clinicontrol_to_provider",
+    access_token_encrypted: null,
+    token_expires_at: null,
+    scopes: input.scopes,
+    status: "connected",
+    connected_at: input.connectedAt,
+    revoked_at: null,
+    last_error_code: null
+  } as never)
+    .eq("id", input.integrationId)
+    .eq("clinic_id", input.clinicId)
+    .eq("user_id", input.userId)
+    .eq("provider", "google")
+    .eq("refresh_token_encrypted", input.expectedEncryptedRefreshToken)
+    .eq("token_encryption_version", 1)
+    .in("status", ["connected", "failed"])
+    .select("id")
+    .maybeSingle();
+  return { data: result.data as { id: string } | null, error: result.error };
+}
+
 export async function getGoogleCalendarIntegration(clinicId: string, userId: string) {
   const result = await createAdminClient().from("calendar_integrations").select(integrationColumns)
     .eq("clinic_id", clinicId).eq("user_id", userId).eq("provider", "google").maybeSingle();

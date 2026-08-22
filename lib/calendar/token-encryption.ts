@@ -40,3 +40,16 @@ export function decryptCalendarRefreshToken(envelope: string, key: Buffer) {
     throw new Error("Calendar token envelope is invalid.");
   }
 }
+
+export function canReuseEncryptedCalendarRefreshToken(
+  envelope: string | null,
+  encryptionVersion: number | null,
+  key: Buffer
+) {
+  if (!envelope || encryptionVersion !== 1) return false;
+  try {
+    return decryptCalendarRefreshToken(envelope, key).length > 0;
+  } catch {
+    return false;
+  }
+}

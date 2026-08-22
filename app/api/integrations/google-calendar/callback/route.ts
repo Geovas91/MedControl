@@ -1,25 +1,28 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getPublicAppOrigin } from "@/lib/auth/public-origin";
 import {
+  buildGoogleCalendarSettingsRedirectPath,
   hashGoogleCalendarOAuthState,
   isValidGoogleAuthorizationCode,
   isValidGoogleCalendarOAuthState
 } from "@/lib/calendar/google-oauth";
-import { encryptCalendarRefreshToken } from "@/lib/calendar/token-encryption";
+import { canReuseEncryptedCalendarRefreshToken, encryptCalendarRefreshToken } from "@/lib/calendar/token-encryption";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { getGoogleCalendarConfiguration } from "@/lib/server/google-calendar-config";
+import { getGoogleCalendarConfiguration, getGoogleCalendarRedirectOrigin } from "@/lib/server/google-calendar-config";
 import { getGoogleCalendarSessionHash } from "@/lib/server/google-calendar-session";
 import { exchangeGoogleCalendarAuthorizationCode, revokeGoogleCalendarToken } from "@/lib/server/google-calendar-provider";
 import {
   auditGoogleCalendarEvent,
+  activateGoogleCalendarIntegrationWithExistingSecret,
   consumeGoogleCalendarOAuthState,
+  getGoogleCalendarIntegration,
   saveGoogleCalendarIntegration
 } from "@/lib/server/google-calendar-store";
 import { getRuntimePublicSiteUrl } from "@/lib/server/public-site-url";
 
 function settingsRedirect(request: NextRequest, outcome: string) {
-  const origin = getPublicAppOrigin(request, getRuntimePublicSiteUrl());
-  return NextResponse.redirect(new URL(`/dashboard/settings/integrations?google=${outcome}`, origin));
+  const origin = getGoogleCalendarRedirectOrigin() ?? getPublicAppOrigin(request, getRuntimePublicSiteUrl());
+  return NextResponse.redirect(new URL(buildGoogleCalendarSettingsRedirectPath(outcome), origin));
 }
 
 export async function GET(request: NextRequest) {
@@ -58,17 +61,34 @@ export async function GET(request: NextRequest) {
     if (exchanged.refreshTokenToRevoke) await revokeGoogleCalendarToken(exchanged.refreshTokenToRevoke);
     return settingsRedirect(request, "exchange_failed");
   }
-  const encryptedRefreshToken = encryptCalendarRefreshToken(exchanged.refreshToken, configuration.encryptionKey);
-  const saved = await saveGoogleCalendarIntegration({
-    clinicId: context.tenant.clinic.id,
-    userId: context.user.id,
-    encryptedRefreshToken,
-    scopes: exchanged.scopes,
-    connectedAt: now
-  });
+  const saved = exchanged.refreshToken
+    ? await saveGoogleCalendarIntegration({
+        clinicId: context.tenant.clinic.id,
+        userId: context.user.id,
+        encryptedRefreshToken: encryptCalendarRefreshToken(exchanged.refreshToken, configuration.encryptionKey),
+        scopes: exchanged.scopes,
+        connectedAt: now
+      })
+    : await (async () => {
+        const existingResult = await getGoogleCalendarIntegration(context.tenant.clinic.id, context.user.id);
+        const existing = existingResult.data;
+        if (existingResult.error || !existing || !canReuseEncryptedCalendarRefreshToken(
+          existing.refresh_token_encrypted,
+          existing.token_encryption_version,
+          configuration.encryptionKey
+        )) return { data: null, error: null };
+        return activateGoogleCalendarIntegrationWithExistingSecret({
+          integrationId: existing.id,
+          clinicId: context.tenant.clinic.id,
+          userId: context.user.id,
+          expectedEncryptedRefreshToken: existing.refresh_token_encrypted!,
+          scopes: exchanged.scopes,
+          connectedAt: now
+        });
+      })();
   if (saved.error || !saved.data) {
-    await revokeGoogleCalendarToken(exchanged.refreshToken);
-    return settingsRedirect(request, "error");
+    if (exchanged.refreshToken) await revokeGoogleCalendarToken(exchanged.refreshToken);
+    return settingsRedirect(request, exchanged.refreshToken ? "error" : "reconsent_required");
   }
   await auditGoogleCalendarEvent({
     clinicId: context.tenant.clinic.id,

@@ -91,13 +91,12 @@ export async function disconnectOwnGoogleCalendarIntegration() {
   if (!integration) return { state: "success" as const };
 
   const configuration = getGoogleCalendarConfiguration();
-  if (integration.refresh_token_encrypted && configuration.state !== "ready") return { state: "error" as const };
   if (configuration.state === "ready" && integration.refresh_token_encrypted) {
     try {
       const refreshToken = decryptCalendarRefreshToken(integration.refresh_token_encrypted, configuration.encryptionKey);
-      if (!await revokeGoogleCalendarToken(refreshToken)) return { state: "error" as const };
+      await revokeGoogleCalendarToken(refreshToken);
     } catch {
-      // Local deletion remains authoritative even when the provider token is already invalid.
+      // Revocation is best-effort; local invalidation remains authoritative.
     }
   }
   const cleared = await clearGoogleCalendarIntegration({

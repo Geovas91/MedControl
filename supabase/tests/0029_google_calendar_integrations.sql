@@ -38,6 +38,9 @@ insert into public.calendar_integrations(
 insert into public.google_calendar_oauth_states(clinic_id, user_id, state_hash, session_hash, expires_at)
 values ('e2000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000002', repeat('a', 64), repeat('b', 64), now() + interval '10 minutes');
 
+insert into public.google_calendar_oauth_states(clinic_id, user_id, state_hash, session_hash, created_at, expires_at)
+values ('e2000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000002', repeat('c', 64), repeat('d', 64), now() - interval '20 minutes', now() - interval '10 minutes');
+
 insert into public.google_calendar_events(
   id, clinic_id, appointment_id, integration_id, doctor_user_id,
   google_event_id, appointment_version, sync_status, last_synced_at
@@ -54,6 +57,8 @@ insert into public.google_calendar_events(
 );
 
 do $$
+declare
+  affected integer;
 begin
   if exists (
     select 1 from information_schema.role_table_grants
@@ -93,6 +98,72 @@ begin
       'public.list_google_calendar_integration_status_for_current_user(uuid)', 'EXECUTE') then
     raise exception 'Safe integration status RPC grants are incorrect';
   end if;
+
+  with consumed as (
+    update public.google_calendar_oauth_states set consumed_at = now()
+    where state_hash = repeat('a', 64)
+      and clinic_id = 'e2000000-0000-4000-8000-000000000002'
+      and user_id = 'e1000000-0000-4000-8000-000000000002'
+      and session_hash = repeat('b', 64)
+      and consumed_at is null and expires_at > now()
+    returning 1
+  ) select count(*) into affected from consumed;
+  if affected <> 0 then raise exception 'OAuth state crossed tenant boundary'; end if;
+
+  with consumed as (
+    update public.google_calendar_oauth_states set consumed_at = now()
+    where state_hash = repeat('a', 64)
+      and clinic_id = 'e2000000-0000-4000-8000-000000000001'
+      and user_id = 'e1000000-0000-4000-8000-000000000001'
+      and session_hash = repeat('b', 64)
+      and consumed_at is null and expires_at > now()
+    returning 1
+  ) select count(*) into affected from consumed;
+  if affected <> 0 then raise exception 'OAuth state crossed user boundary'; end if;
+
+  with consumed as (
+    update public.google_calendar_oauth_states set consumed_at = now()
+    where state_hash = repeat('a', 64)
+      and clinic_id = 'e2000000-0000-4000-8000-000000000001'
+      and user_id = 'e1000000-0000-4000-8000-000000000002'
+      and session_hash = repeat('e', 64)
+      and consumed_at is null and expires_at > now()
+    returning 1
+  ) select count(*) into affected from consumed;
+  if affected <> 0 then raise exception 'OAuth state crossed session boundary'; end if;
+
+  with consumed as (
+    update public.google_calendar_oauth_states set consumed_at = now()
+    where state_hash = repeat('c', 64)
+      and clinic_id = 'e2000000-0000-4000-8000-000000000001'
+      and user_id = 'e1000000-0000-4000-8000-000000000002'
+      and session_hash = repeat('d', 64)
+      and consumed_at is null and expires_at > now()
+    returning 1
+  ) select count(*) into affected from consumed;
+  if affected <> 0 then raise exception 'Expired OAuth state was consumed'; end if;
+
+  with consumed as (
+    update public.google_calendar_oauth_states set consumed_at = now()
+    where state_hash = repeat('a', 64)
+      and clinic_id = 'e2000000-0000-4000-8000-000000000001'
+      and user_id = 'e1000000-0000-4000-8000-000000000002'
+      and session_hash = repeat('b', 64)
+      and consumed_at is null and expires_at > now()
+    returning 1
+  ) select count(*) into affected from consumed;
+  if affected <> 1 then raise exception 'Valid OAuth state was not consumed exactly once'; end if;
+
+  with consumed as (
+    update public.google_calendar_oauth_states set consumed_at = now()
+    where state_hash = repeat('a', 64)
+      and clinic_id = 'e2000000-0000-4000-8000-000000000001'
+      and user_id = 'e1000000-0000-4000-8000-000000000002'
+      and session_hash = repeat('b', 64)
+      and consumed_at is null and expires_at > now()
+    returning 1
+  ) select count(*) into affected from consumed;
+  if affected <> 0 then raise exception 'Consumed OAuth state was reused'; end if;
 
   begin
     insert into public.calendar_integrations(

@@ -12,7 +12,9 @@ https://www.googleapis.com/auth/calendar.events.owned
 
 Este scope permite crear, modificar y borrar eventos en calendarios propiedad del usuario. No se solicitan Gmail, Contacts, Drive, Meet, Calendar completo, calendar list ni lectura de identidad/email. La aplicación usa el identificador especial `primary`, por lo que no necesita consultar la lista de calendarios.
 
-El flujo Authorization Code ocurre sólo en el servidor con `access_type=offline`, `prompt=consent`, state aleatorio de un solo uso ligado a usuario, clínica y hash de la sesión autenticada, y redirect URI exacto. El refresh token se cifra con AES-256-GCM; el access token sólo existe en memoria durante cada operación.
+El flujo Authorization Code ocurre sólo en el servidor con `access_type=offline`, `prompt=consent`, `include_granted_scopes=true`, state aleatorio de un solo uso ligado a usuario, clínica y hash de la sesión autenticada, y redirect URI exacto. `offline` solicita un refresh token; `consent` fuerza una pantalla de consentimiento para maximizar que Google lo entregue al conectar o reconectar; `include_granted_scopes` conserva autorización incremental sin solicitar scopes adicionales. La respuesta se valida igualmente contra el único scope permitido.
+
+Google puede omitir `refresh_token` en autorizaciones posteriores. En ese caso sólo se conserva un secreto existente si pertenece al mismo usuario/clínica, usa la versión de cifrado soportada, descifra correctamente y la fila continúa en estado reutilizable. La actualización compara el ciphertext esperado en una sola sentencia para no resucitar un secreto desconectado concurrentemente. Sin secreto válido, la integración no se marca conectada y se solicita nuevo consentimiento. Un refresh token nuevo reemplaza el anterior mediante un único UPSERT.
 
 Referencias oficiales:
 
@@ -48,6 +50,10 @@ CALENDAR_TOKEN_ENCRYPTION_KEY=
 ```
 
 `CALENDAR_TOKEN_ENCRYPTION_KEY` debe ser una clave aleatoria de 32 bytes codificada en base64 y administrada por el secret manager del entorno. No reutilizar el client secret ni una key de Supabase. Este repositorio no genera ni contiene valores reales. Si falta cualquier variable o la key no mide exactamente 32 bytes, conectar y sincronizar fallan de forma segura.
+
+### Limitación de rotación en v1
+
+`token_encryption_version=1` identifica el formato AES-256-GCM, no una versión de clave ni un KMS. La aplicación acepta una sola `CALENDAR_TOKEN_ENCRYPTION_KEY`; por tanto, cambiarla directamente hace que los tokens anteriores fallen cerrado y requieran reconexión. Para una rotación planificada se debe mantener la clave anterior hasta desconectar/reconectar todas las integraciones, o ejecutar una migración controlada server-side que descifre con la clave anterior y vuelva a cifrar con la nueva antes del cambio. V1 no implementa dual-key ni rotación automática y no debe presentarse como si lo hiciera.
 
 ## Sincronización y fallos
 

@@ -1,19 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   GOOGLE_CALENDAR_OAUTH_STATE_TTL_MS,
+  buildGoogleCalendarSettingsRedirectPath,
   buildGoogleCalendarAuthorizationUrl,
   createGoogleCalendarOAuthState as createOAuthState
 } from "@/lib/calendar/google-oauth";
 import { getPublicAppOrigin } from "@/lib/auth/public-origin";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { getGoogleCalendarConfiguration } from "@/lib/server/google-calendar-config";
+import { getGoogleCalendarConfiguration, getGoogleCalendarRedirectOrigin } from "@/lib/server/google-calendar-config";
 import { getGoogleCalendarSessionHash } from "@/lib/server/google-calendar-session";
 import { createGoogleCalendarOAuthState } from "@/lib/server/google-calendar-store";
 import { getRuntimePublicSiteUrl } from "@/lib/server/public-site-url";
 
 function settingsRedirect(request: NextRequest, outcome: string) {
-  const origin = getPublicAppOrigin(request, getRuntimePublicSiteUrl());
-  return NextResponse.redirect(new URL(`/dashboard/settings/integrations?google=${outcome}`, origin));
+  const origin = getGoogleCalendarRedirectOrigin() ?? getPublicAppOrigin(request, getRuntimePublicSiteUrl());
+  return NextResponse.redirect(new URL(buildGoogleCalendarSettingsRedirectPath(outcome), origin));
 }
 
 export async function GET(request: NextRequest) {

@@ -3,10 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   GOOGLE_CALENDAR_SCOPE,
+  buildGoogleCalendarSettingsRedirectPath,
   buildGoogleCalendarAuthorizationUrl,
   createGoogleCalendarOAuthState,
   hashGoogleCalendarSessionBinding,
   hashGoogleCalendarOAuthState,
+  parseGoogleCalendarTokenExchange,
   isValidGoogleAuthorizationCode,
   isValidGoogleCalendarOAuthState
 } from "../../lib/calendar/google-oauth.ts";
@@ -14,11 +16,13 @@ import {
   buildGoogleCalendarEventId,
   buildGoogleCalendarEventPayload,
   classifyGoogleCalendarFailure,
+  isValidGoogleWritableEventId,
   shouldSyncGoogleCalendarEvent
 } from "../../lib/calendar/google-event.ts";
 import {
   decryptCalendarRefreshToken,
   encryptCalendarRefreshToken,
+  canReuseEncryptedCalendarRefreshToken,
   parseCalendarTokenEncryptionKey
 } from "../../lib/calendar/token-encryption.ts";
 
@@ -29,6 +33,7 @@ const integrationServer = readFileSync("lib/server/google-calendar-integration.t
 const syncServer = readFileSync("lib/server/appointment-google-calendar.ts", "utf8");
 const page = readFileSync("app/dashboard/settings/integrations/page.tsx", "utf8");
 const provider = readFileSync("lib/server/google-calendar-provider.ts", "utf8");
+const store = readFileSync("lib/server/google-calendar-store.ts", "utf8");
 
 test("OAuth state is unpredictable, one-way hashed and strictly validated", () => {
   const first = createGoogleCalendarOAuthState();
@@ -51,6 +56,7 @@ test("authorization URL requests only owned calendar events and offline server a
   assert.equal(url.searchParams.get("scope"), GOOGLE_CALENDAR_SCOPE);
   assert.equal(url.searchParams.get("access_type"), "offline");
   assert.equal(url.searchParams.get("prompt"), "consent");
+  assert.equal(url.searchParams.get("include_granted_scopes"), "true");
   assert.equal(url.searchParams.get("state"), state);
   assert.doesNotMatch(url.toString(), /gmail|contacts|drive|meet|calendar\.readonly/i);
 });
@@ -62,12 +68,63 @@ test("refresh token encryption uses authenticated encryption and rejects tamperi
   assert.equal(parseCalendarTokenEncryptionKey(Buffer.alloc(31).toString("base64")), null);
   assert.equal(parseCalendarTokenEncryptionKey(`${encodedKey.slice(0, -1)}!`), null);
   const encrypted = encryptCalendarRefreshToken("refresh-token-test-only", key);
+  const encryptedAgain = encryptCalendarRefreshToken("refresh-token-test-only", key);
+  assert.notEqual(encrypted, encryptedAgain);
+  assert.notEqual(encrypted.split(".")[1], encryptedAgain.split(".")[1]);
+  assert.match(encrypted, /^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
   assert.doesNotMatch(encrypted, /refresh-token-test-only/);
   assert.equal(decryptCalendarRefreshToken(encrypted, key), "refresh-token-test-only");
   const parts = encrypted.split(".");
+  assert.equal(Buffer.from(parts[1]!, "base64url").length, 12);
+  assert.equal(Buffer.from(parts[3]!, "base64url").length, 16);
   parts[2] = `${parts[2]!.startsWith("A") ? "B" : "A"}${parts[2]!.slice(1)}`;
   assert.throws(() => decryptCalendarRefreshToken(parts.join("."), key));
+  const invalidTag = encrypted.split(".");
+  invalidTag[3] = `${invalidTag[3]!.startsWith("A") ? "B" : "A"}${invalidTag[3]!.slice(1)}`;
+  assert.throws(() => decryptCalendarRefreshToken(invalidTag.join("."), key));
+  const invalidIv = encrypted.split(".");
+  invalidIv[1] = Buffer.alloc(11).toString("base64url");
+  assert.throws(() => decryptCalendarRefreshToken(invalidIv.join("."), key));
   assert.throws(() => decryptCalendarRefreshToken(encrypted, Buffer.alloc(32, 8)));
+  assert.equal(canReuseEncryptedCalendarRefreshToken(encrypted, 1, key), true);
+  assert.equal(canReuseEncryptedCalendarRefreshToken(encrypted, 2, key), false);
+  assert.equal(canReuseEncryptedCalendarRefreshToken(null, 1, key), false);
+});
+
+test("refresh-token callback decisions cover first connect, reuse, unusable state and replacement", () => {
+  const key = Buffer.alloc(32, 9);
+  const first = parseGoogleCalendarTokenExchange({
+    responseOk: true,
+    body: { access_token: "access-first", refresh_token: "refresh-first", scope: GOOGLE_CALENDAR_SCOPE }
+  });
+  assert.equal(first.ok, true);
+  assert.ok(first.ok && first.refreshToken);
+  const encryptedFirst = encryptCalendarRefreshToken(first.refreshToken, key);
+  assert.equal(decryptCalendarRefreshToken(encryptedFirst, key), "refresh-first");
+
+  const later = parseGoogleCalendarTokenExchange({
+    responseOk: true,
+    body: { access_token: "access-later", scope: GOOGLE_CALENDAR_SCOPE }
+  });
+  assert.equal(later.ok, true);
+  if (later.ok) assert.equal(later.refreshToken, null);
+  assert.equal(canReuseEncryptedCalendarRefreshToken(encryptedFirst, 1, key), true);
+  assert.equal(canReuseEncryptedCalendarRefreshToken(null, 1, key), false);
+  assert.equal(canReuseEncryptedCalendarRefreshToken(encryptedFirst, null, key), false);
+
+  const replacement = parseGoogleCalendarTokenExchange({
+    responseOk: true,
+    body: { access_token: "access-new", refresh_token: "refresh-new", scope: GOOGLE_CALENDAR_SCOPE }
+  });
+  assert.ok(replacement.ok && replacement.refreshToken);
+  const encryptedReplacement = encryptCalendarRefreshToken(replacement.refreshToken, key);
+  assert.notEqual(encryptedReplacement, encryptedFirst);
+  assert.equal(decryptCalendarRefreshToken(encryptedReplacement, key), "refresh-new");
+
+  assert.equal(parseGoogleCalendarTokenExchange({
+    responseOk: true,
+    body: { access_token: "access", refresh_token: "", scope: GOOGLE_CALENDAR_SCOPE }
+  }).ok, false);
 });
 
 test("Google event payload is neutral and contains no clinical or patient data", () => {
@@ -86,8 +143,12 @@ test("Google event payload is neutral and contains no clinical or patient data",
 
 test("event relation is deterministically idempotent by integration and appointment", () => {
   const one = buildGoogleCalendarEventId("i1", "a1");
+  assert.equal(isValidGoogleWritableEventId(one), true);
+  assert.match(one, /^[0-9a-v]+$/);
+  assert.equal(one.length, 32);
   assert.equal(one, buildGoogleCalendarEventId("i1", "a1"));
   assert.notEqual(one, buildGoogleCalendarEventId("i2", "a1"));
+  assert.notEqual(one, buildGoogleCalendarEventId("i1", "a2"));
   assert.equal(shouldSyncGoogleCalendarEvent({ appointmentVersion: "v1", status: "synced" }, "v1", "synced"), false);
   assert.equal(shouldSyncGoogleCalendarEvent({ appointmentVersion: "v1", status: "failed" }, "v1", "synced"), true);
   assert.equal(shouldSyncGoogleCalendarEvent({ appointmentVersion: "v1", status: "synced" }, "v2", "synced"), true);
@@ -98,8 +159,21 @@ test("callback consumes tenant/user-bound state before server-side exchange", ()
   assert.match(callbackRoute, /consumeGoogleCalendarOAuthState\([\s\S]+clinicId: context\.tenant\.clinic\.id[\s\S]+userId: context\.user\.id[\s\S]+sessionHash/);
   const callbackBody = callbackRoute.slice(callbackRoute.indexOf("export async function GET"));
   assert.ok(callbackBody.indexOf("consumeGoogleCalendarOAuthState") < callbackBody.indexOf("exchangeGoogleCalendarAuthorizationCode"));
-  assert.doesNotMatch(callbackRoute, /logger|console\.|access_token|refresh_token/);
+  assert.doesNotMatch(callbackRoute, /logger|console\./);
+  assert.doesNotMatch(callbackRoute, /searchParams\.get\(["'](?:access_token|refresh_token)["']\)/);
   assert.match(connectRoute, /createGoogleCalendarOAuthState[\s\S]+context\.tenant\.clinic\.id[\s\S]+context\.user\.id/);
+  assert.match(callbackRoute, /canReuseEncryptedCalendarRefreshToken/);
+  assert.match(callbackRoute, /activateGoogleCalendarIntegrationWithExistingSecret/);
+  assert.match(callbackRoute, /reconsent_required/);
+});
+
+test("callback redirects only to a fixed local path on a server-controlled origin", () => {
+  assert.match(callbackRoute, /getGoogleCalendarRedirectOrigin\(\) \?\? getPublicAppOrigin/);
+  assert.match(callbackRoute, /buildGoogleCalendarSettingsRedirectPath\(outcome\)/);
+  assert.equal(buildGoogleCalendarSettingsRedirectPath("connected"), "/dashboard/settings/integrations?google=connected");
+  assert.equal(buildGoogleCalendarSettingsRedirectPath("https://evil.example"), "/dashboard/settings/integrations?google=error");
+  assert.doesNotMatch(callbackRoute, /searchParams\.get\(["'](?:redirect|returnTo|next)["']\)/);
+  assert.doesNotMatch(callbackRoute, /new URL\([^\n]*(?:state|code)/);
 });
 
 test("permissions allow only owner admin and doctor to connect their own account", () => {
@@ -117,13 +191,23 @@ test("permissions allow only owner admin and doctor to connect their own account
   assert.doesNotMatch(safeProjection, /token|scope|provider_calendar_id|google_event_id/i);
 });
 
-test("disconnect is ownership-bound, revokes first and then removes the local secret", () => {
+test("disconnect is ownership-bound and invalidates locally even when provider revocation fails", () => {
   const disconnectBody = integrationServer.slice(
     integrationServer.indexOf("export async function disconnectOwnGoogleCalendarIntegration")
   );
   assert.match(disconnectBody, /getGoogleCalendarIntegration\(context\.tenant\.clinic\.id, context\.user\.id\)/);
   assert.ok(disconnectBody.indexOf("revokeGoogleCalendarToken") < disconnectBody.indexOf("clearGoogleCalendarIntegration"));
+  assert.doesNotMatch(disconnectBody, /if \(!await revokeGoogleCalendarToken\([^\n]+return/);
   assert.match(disconnectBody, /clinicId: context\.tenant\.clinic\.id[\s\S]+userId: context\.user\.id/);
+  assert.match(syncServer, /integration\.status !== "connected"/);
+  const clearBody = store.slice(store.indexOf("export async function clearGoogleCalendarIntegration"), store.indexOf("export async function auditGoogleCalendarEvent"));
+  assert.doesNotMatch(clearBody, /appointments|google_calendar_events|\.delete\(/);
+});
+
+test("callback replaces a new secret atomically and never overwrites with a missing one", () => {
+  assert.match(store, /upsert\([\s\S]+onConflict: "clinic_id,user_id,provider"/);
+  assert.match(store, /activateGoogleCalendarIntegrationWithExistingSecret[\s\S]+\.eq\("refresh_token_encrypted", input\.expectedEncryptedRefreshToken\)/);
+  assert.doesNotMatch(callbackRoute, /encryptedRefreshToken:\s*(?:null|exchanged\.refreshToken)/);
 });
 
 test("migration removes all client grants and makes tenant relations structural", () => {

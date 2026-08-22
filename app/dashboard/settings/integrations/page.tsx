@@ -15,6 +15,7 @@ const messages: Record<string, { tone: "success" | "error"; text: string }> = {
   invalid_callback: { tone: "error", text: "El callback de Google no es válido." },
   invalid_state: { tone: "error", text: "La autorización expiró o no pertenece a esta sesión y clínica." },
   exchange_failed: { tone: "error", text: "Google no entregó una autorización válida. Intenta conectar nuevamente." },
+  reconsent_required: { tone: "error", text: "Google no entregó un refresh token utilizable. Autoriza nuevamente el acceso para reconectar." },
   unavailable: { tone: "error", text: "La integración no está configurada en este entorno." },
   forbidden: { tone: "error", text: "Tu rol no permite conectar una cuenta de calendario." },
   error: { tone: "error", text: "No fue posible completar la operación de calendario." }

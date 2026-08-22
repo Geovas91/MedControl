@@ -38,8 +38,14 @@ export function isSafeGoogleEventId(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && value.length <= 1024 && !/[\u0000-\u001f\u007f]/.test(value);
 }
 
+export function isValidGoogleWritableEventId(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-v]{5,1024}$/.test(value);
+}
+
 export function buildGoogleCalendarEventId(integrationId: string, appointmentId: string, generation = "initial") {
-  return createHash("sha256").update(`${integrationId}:${appointmentId}:${generation}`, "utf8").digest("hex").slice(0, 32);
+  const eventId = createHash("sha256").update(`${integrationId}:${appointmentId}:${generation}`, "utf8").digest("hex").slice(0, 32);
+  if (!isValidGoogleWritableEventId(eventId)) throw new Error("Generated Google event id is invalid.");
+  return eventId;
 }
 
 export function shouldSyncGoogleCalendarEvent(

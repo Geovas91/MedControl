@@ -4,20 +4,11 @@ import {
   GOOGLE_CALENDAR_REVOCATION_ENDPOINT,
   GOOGLE_CALENDAR_SCOPE,
   GOOGLE_CALENDAR_TOKEN_ENDPOINT,
-  hasRequiredGoogleCalendarScope,
-  parseGrantedGoogleCalendarScopes
+  parseGoogleCalendarTokenExchange
 } from "@/lib/calendar/google-oauth";
 import { classifyGoogleCalendarFailure, isSafeGoogleEventId, type GoogleCalendarEventPayload } from "@/lib/calendar/google-event";
 
 type FetchImplementation = typeof fetch;
-
-type GoogleTokenSuccess = {
-  access_token?: unknown;
-  refresh_token?: unknown;
-  expires_in?: unknown;
-  scope?: unknown;
-  token_type?: unknown;
-};
 
 async function readJson(response: Response) {
   try {
@@ -25,12 +16,6 @@ async function readJson(response: Response) {
   } catch {
     return null;
   }
-}
-
-function accessTokenFrom(value: unknown) {
-  if (!value || typeof value !== "object") return null;
-  const token = (value as GoogleTokenSuccess).access_token;
-  return typeof token === "string" && token.length > 0 && token.length <= 8192 ? token : null;
 }
 
 export async function exchangeGoogleCalendarAuthorizationCode(input: {
@@ -59,20 +44,7 @@ export async function exchangeGoogleCalendarAuthorizationCode(input: {
   } catch {
     return { ok: false as const, code: "exchange_failed", refreshTokenToRevoke: null };
   }
-  const body = await readJson(response);
-  const accessToken = accessTokenFrom(body);
-  const refreshToken = body && typeof body === "object" ? (body as GoogleTokenSuccess).refresh_token : null;
-  const scopes = parseGrantedGoogleCalendarScopes(body && typeof body === "object" ? (body as GoogleTokenSuccess).scope : null);
-
-  if (!response.ok || !accessToken || typeof refreshToken !== "string" || refreshToken.length === 0 || refreshToken.length > 8192 || !hasRequiredGoogleCalendarScope(scopes)) {
-    return {
-      ok: false as const,
-      code: response.ok ? "invalid_token_response" : "exchange_failed",
-      refreshTokenToRevoke: typeof refreshToken === "string" && refreshToken.length > 0 && refreshToken.length <= 8192 ? refreshToken : null
-    };
-  }
-
-  return { ok: true as const, accessToken, refreshToken, scopes };
+  return parseGoogleCalendarTokenExchange({ responseOk: response.ok, body: await readJson(response) });
 }
 
 export async function refreshGoogleCalendarAccessToken(input: {
@@ -99,8 +71,10 @@ export async function refreshGoogleCalendarAccessToken(input: {
   } catch {
     return { ok: false as const, code: "refresh_failed" };
   }
-  const accessToken = accessTokenFrom(await readJson(response));
-  if (!response.ok || !accessToken) {
+  const body = await readJson(response);
+  const accessToken = body && typeof body === "object" ? (body as { access_token?: unknown }).access_token : null;
+  const validAccessToken = typeof accessToken === "string" && accessToken.length > 0 && accessToken.length <= 8192;
+  if (!response.ok || !validAccessToken) {
     return { ok: false as const, code: response.status === 400 || response.status === 401 ? "reconnect_required" : "refresh_failed" };
   }
   return { ok: true as const, accessToken };
