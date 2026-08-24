@@ -37,7 +37,7 @@ export async function listAppointmentsForClinic(clinicId: string) {
 
   return supabase
     .from("appointments")
-    .select("*, patients(full_name)")
+    .select("*, patients!appointments_clinic_patient_fk(full_name)")
     .eq("clinic_id", clinicId)
     .order("starts_at", { ascending: true });
 }

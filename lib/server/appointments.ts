@@ -157,7 +157,7 @@ export async function getAppointmentAgendaForActiveTenant(
   const appointmentQuery = supabase
     .from("appointments")
     .select(
-      "id, patient_id, doctor_id, title, appointment_type, location, meeting_url, starts_at, ends_at, status, patients!inner(id, full_name, clinic_id)"
+      "id, patient_id, doctor_id, title, appointment_type, location, meeting_url, starts_at, ends_at, status, patients!appointments_clinic_patient_fk!inner(id, full_name, clinic_id)"
     )
     .eq("clinic_id", clinicId)
     .eq("patients.clinic_id", clinicId)
