@@ -81,9 +81,10 @@ No hardcodear valores reales en archivos versionados. Configurar estas variables
 | `PAYPAL_BASIC_PLAN_ID` | Privada/server env | Sí para probar Básico | Plan ID sandbox de CliniControl Básico. |
 | `PAYPAL_PLUS_PLAN_ID` | Privada/server env | Sí para probar Plus | Plan ID sandbox de CliniControl Plus. |
 | `PAYPAL_PRO_PLAN_ID` | Privada/server env | Sí para probar Pro | Plan ID sandbox de CliniControl Pro. |
-| `GOOGLE_CLIENT_ID` | Privada/server env | No | Placeholder. Integraciones Google están demo/proximamente. |
-| `GOOGLE_CLIENT_SECRET` | Privada server-side | No | Placeholder. No usar credenciales productivas todavía. |
-| `GOOGLE_REDIRECT_URI` | Privada/server env | No | Placeholder. No hay OAuth real. |
+| `GOOGLE_CALENDAR_CLIENT_ID` | Privada/server env | No | Cliente OAuth web exclusivo para Google Calendar. |
+| `GOOGLE_CALENDAR_CLIENT_SECRET` | Privada server-side | No | Secret del cliente OAuth de Calendar. |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | Privada/server env | No | Callback exacto por entorno. |
+| `CALENDAR_TOKEN_ENCRYPTION_KEY` | Privada/server env | No | Clave aleatoria de 32 bytes en base64 para AES-256-GCM. |
 | `TWILIO_ACCOUNT_SID` | Privada server-side | No | Placeholder. Mensajería real no implementada. |
 | `TWILIO_AUTH_TOKEN` | Privada server-side | No | Placeholder. No usar credenciales productivas todavía. |
 | `TWILIO_MESSAGING_SERVICE_SID` | Privada/server env | No | Placeholder. Mensajería real no implementada. |
@@ -246,8 +247,8 @@ Confirmar antes de publicar:
 - No se invita a usar datos reales.
 - Los datos mock no se presentan como operación real.
 - `/consent/sign/[token]` no muestra el flujo legal demo por defecto.
-- Integraciones de calendario están marcadas como demo/proximamente.
-- No se usan tokens reales de calendario.
+- Google Calendar permanece deshabilitado si faltan sus cuatro variables server-only; si se habilita para validación controlada, usar un proyecto OAuth y usuarios de prueba de staging.
+- Los refresh tokens quedan cifrados y nunca deben copiarse a logs, capturas o reportes.
 - El botón/flujo PayPal sigue en sandbox.
 
 ## Qué NO Hacer en Staging
