@@ -142,7 +142,7 @@ export async function getAppointmentAssistantForActiveTenant(
     .in("status", ["scheduled", "confirmed", "waiting"]);
   const upcomingQuery = supabase
     .from("appointments")
-    .select("id, title, starts_at, status, patients!inner(full_name, clinic_id)")
+    .select("id, title, starts_at, status, patients!appointments_clinic_patient_fk!inner(full_name, clinic_id)")
     .eq("clinic_id", clinicId)
     .eq("patients.clinic_id", clinicId)
     .gte("starts_at", now)

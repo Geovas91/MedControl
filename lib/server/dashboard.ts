@@ -74,7 +74,9 @@ export async function getDashboardOverview(): Promise<DashboardOverviewResult> {
       .eq("clinic_id", tenant.clinic.id),
     supabase
       .from("appointments")
-      .select("id, starts_at, title, appointment_type, status, patients!inner(full_name, clinic_id)")
+      .select(
+        "id, starts_at, title, appointment_type, status, patients!appointments_clinic_patient_fk!inner(full_name, clinic_id)"
+      )
       .eq("clinic_id", tenant.clinic.id)
       .eq("patients.clinic_id", tenant.clinic.id)
       .gte("starts_at", dayRange.startIso)
