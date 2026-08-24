@@ -129,16 +129,16 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         </p>
       ) : null}
 
-      <section className="mb-5 border-y border-slate-200 bg-white py-4">
+      <section className="surface-card mb-5 p-4 sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha de la agenda</p>
             <h2 className="mt-1 text-lg font-bold capitalize text-ink">
               {formatAppointmentDateLabel(data.query.date)}
             </h2>
-            <p className="mt-1 text-xs text-slate-500">{timeZone}</p>
+            <p className="mt-1 break-words text-xs text-slate-500">{timeZone}</p>
           </div>
-          <nav className="grid grid-cols-3 gap-2" aria-label="Navegación por fecha">
+          <nav className="grid w-full grid-cols-3 gap-2 md:w-auto" aria-label="Navegación por fecha">
             <Link
               href={buildAppointmentAgendaHref(data.query, previousDate)}
               className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
