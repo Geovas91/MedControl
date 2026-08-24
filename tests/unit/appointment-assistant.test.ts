@@ -82,7 +82,7 @@ test("0028 hardens settings, appointments and safe activity without exposing sec
   assert.match(migration, /save_appointment_assistant_settings_for_current_user[\s\S]+has_clinic_role\(p_clinic_id, array\['owner', 'admin'\]\)[\s\S]+clinic_has_write_entitlement/i);
   assert.match(migration, /revoke all privileges on table public\.bot_logs from public, anon, authenticated/i);
   assert.match(migration, /list_appointment_assistant_activity_for_current_user[\s\S]+array\['owner', 'admin', 'doctor', 'assistant'\]/i);
-  const activityResult = migration.match(/list_appointment_assistant_activity_for_current_user[\s\S]+?returns table \(([\s\S]+?)\)\nlanguage sql/i)?.[1] ?? "";
+  const activityResult = migration.match(/list_appointment_assistant_activity_for_current_user[\s\S]+?returns table \(([\s\S]+?)\)\r?\nlanguage sql/i)?.[1] ?? "";
   assert.ok(activityResult);
   assert.doesNotMatch(activityResult, /metadata|message|patient_response|provider_message_id|secret/i);
   assert.doesNotMatch(activityResult, /appointment_title|channel|delivery_status/i);

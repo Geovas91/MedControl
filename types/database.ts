@@ -691,6 +691,11 @@ export type Database = {
           token_expires_at: Timestamp | null;
           last_sync_at: Timestamp | null;
           status: Database["public"]["Enums"]["calendar_integration_status"];
+          scopes: string[];
+          connected_at: Timestamp | null;
+          revoked_at: Timestamp | null;
+          last_error_code: string | null;
+          token_encryption_version: number | null;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -707,6 +712,11 @@ export type Database = {
           token_expires_at?: Timestamp | null;
           last_sync_at?: Timestamp | null;
           status?: Database["public"]["Enums"]["calendar_integration_status"];
+          scopes?: string[];
+          connected_at?: Timestamp | null;
+          revoked_at?: Timestamp | null;
+          last_error_code?: string | null;
+          token_encryption_version?: number | null;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
@@ -890,6 +900,16 @@ export type Database = {
           related_consent_id: string | null;
           actor_name: string | null;
           occurred_at: Timestamp;
+        }>;
+      };
+      list_google_calendar_integration_status_for_current_user: {
+        Args: { p_clinic_id: string };
+        Returns: Array<{
+          user_id: string;
+          status: Database["public"]["Enums"]["calendar_integration_status"];
+          connected_at: Timestamp | null;
+          last_sync_at: Timestamp | null;
+          last_error_code: string | null;
         }>;
       };
       is_platform_admin: {

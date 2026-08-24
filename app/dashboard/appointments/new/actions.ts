@@ -8,6 +8,7 @@ import {
 } from "@/lib/appointments/create";
 import { createAppointmentForActiveTenant } from "@/lib/server/create-appointment";
 import { deliverAppointmentCalendarEmail } from "@/lib/server/appointment-calendar-email";
+import { syncAppointmentGoogleCalendar } from "@/lib/server/appointment-google-calendar";
 
 export async function createAppointmentAction(
   _previousState: AppointmentFormState,
@@ -43,13 +44,20 @@ export async function createAppointmentAction(
     };
   }
 
-  const calendarEmail = await deliverAppointmentCalendarEmail({
-    appointmentId: result.appointmentId,
-    method: "REQUEST",
-    reason: "created",
-    operationKey: result.operationKey,
-    appointmentVersion: result.appointmentVersion
-  });
+  const [calendarEmail] = await Promise.all([
+    deliverAppointmentCalendarEmail({
+      appointmentId: result.appointmentId,
+      method: "REQUEST",
+      reason: "created",
+      operationKey: result.operationKey,
+      appointmentVersion: result.appointmentVersion
+    }),
+    syncAppointmentGoogleCalendar({
+      appointmentId: result.appointmentId,
+      appointmentVersion: result.appointmentVersion,
+      operation: "upsert"
+    })
+  ]);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/appointments");
