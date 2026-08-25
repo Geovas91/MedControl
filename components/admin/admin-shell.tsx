@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 const adminNavItems = [
   { href: "/admin", label: "Resumen", icon: LayoutDashboard },
   { href: "/admin/clinics", label: "Clínicas", icon: Building2 },
-  { href: "/admin/doctors", label: "Médicos", icon: UsersRound },
+  { href: "/admin/doctors", label: "Usuarios", icon: UsersRound },
   { href: "/admin/subscriptions", label: "Suscripciones", icon: CreditCard }
 ];
 
