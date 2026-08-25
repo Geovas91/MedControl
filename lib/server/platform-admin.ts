@@ -30,7 +30,7 @@ type ClinicLookupRow = Pick<ClinicRow, "id" | "name" | "tenant_type">;
 type MembershipSummaryRow = Pick<MembershipRow, "id" | "clinic_id" | "user_id" | "role" | "status" | "created_at">;
 type ProfileSummaryRow = Pick<ProfileRow, "id" | "full_name" | "email">;
 type SubscriptionSummaryRow = Pick<SubscriptionRow, "clinic_id" | "plan_id" | "status">;
-type SubscriptionAdminRow = Pick<SubscriptionRow, "id" | "clinic_id" | "plan_id" | "status" | "billing_provider" | "provider_subscription_id" | "current_period_end" | "cancel_at_period_end" | "created_at">;
+type SubscriptionAdminRow = Pick<SubscriptionRow, "id" | "clinic_id" | "plan_id" | "status" | "billing_provider" | "current_period_end" | "cancel_at_period_end" | "created_at">;
 
 type AdminDataResult<T> = { state: "ready"; data: T } | { state: "error"; data: null };
 
@@ -358,7 +358,7 @@ export async function getPlatformAdminSubscriptions(query: AdminSubscriptionQuer
   const total = countResult.count ?? 0;
   const page = clampAdminPage(query.page, total);
   const { from, to } = getAdminPageRange(page);
-  let rowsQuery = admin.from("clinic_subscriptions").select("id, clinic_id, plan_id, status, billing_provider, provider_subscription_id, current_period_end, cancel_at_period_end, created_at");
+  let rowsQuery = admin.from("clinic_subscriptions").select("id, clinic_id, plan_id, status, billing_provider, current_period_end, cancel_at_period_end, created_at");
   if (query.plan) rowsQuery = rowsQuery.eq("plan_id", query.plan);
   if (query.status) rowsQuery = rowsQuery.eq("status", query.status);
   if (query.provider) rowsQuery = rowsQuery.eq("billing_provider", query.provider);
@@ -371,16 +371,25 @@ export async function getPlatformAdminSubscriptions(query: AdminSubscriptionQuer
 
   const subscriptions = (rowsResult.data ?? []) as SubscriptionAdminRow[];
   const clinicIds = Array.from(new Set(subscriptions.map((subscription) => subscription.clinic_id)));
-  const clinicsResult = clinicIds.length
-    ? await admin.from("clinics").select("id, name, tenant_type").in("id", clinicIds)
-    : { data: [], error: null };
+  const paypalSubscriptionIds = subscriptions
+    .filter((subscription) => subscription.billing_provider === "paypal")
+    .map((subscription) => subscription.id);
+  const [clinicsResult, providerBackedResult] = await Promise.all([
+    clinicIds.length
+      ? admin.from("clinics").select("id, name, tenant_type").in("id", clinicIds)
+      : Promise.resolve({ data: [], error: null }),
+    paypalSubscriptionIds.length
+      ? admin.from("clinic_subscriptions").select("id").in("id", paypalSubscriptionIds).not("provider_subscription_id", "is", null)
+      : Promise.resolve({ data: [], error: null })
+  ]);
 
-  if (clinicsResult.error) {
-    queryFailed("platform_admin_subscriptions", [clinicsResult.error.code]);
+  if (clinicsResult.error || providerBackedResult.error) {
+    queryFailed("platform_admin_subscriptions", [clinicsResult.error?.code, providerBackedResult.error?.code]);
     return { state: "error", data: null };
   }
 
   const clinicsById = new Map(((clinicsResult.data ?? []) as ClinicLookupRow[]).map((clinic) => [clinic.id, clinic]));
+  const providerBackedIds = new Set(((providerBackedResult.data ?? []) as Array<{ id: string }>).map((subscription) => subscription.id));
 
   return {
     state: "ready",
@@ -394,7 +403,7 @@ export async function getPlatformAdminSubscriptions(query: AdminSubscriptionQuer
           tenantType: clinic?.tenant_type ?? "customer",
           planId: subscription.plan_id,
           status: subscription.status,
-          providerLabel: getBillingProviderLabel(subscription.billing_provider, Boolean(subscription.provider_subscription_id)),
+          providerLabel: getBillingProviderLabel(subscription.billing_provider, providerBackedIds.has(subscription.id)),
           currentPeriodEnd: subscription.current_period_end,
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
           createdAt: subscription.created_at
