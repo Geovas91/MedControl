@@ -1,7 +1,5 @@
 "use server";
 
-import { createVerifiedDoctorReview, isReviewRating } from "@/lib/server/reviews";
-
 type ReviewFormState = {
   error?: string;
   message?: string;
@@ -24,27 +22,4 @@ export async function submitVerifiedDoctorReviewAction(
   }
 
   return { error: "El flujo público de reseñas estará disponible cuando exista el enlace seguro para pacientes." };
-}
-
-export async function createVerifiedDoctorReviewForTrustedFlow({
-  doctorPublicProfileId,
-  appointmentId,
-  patientId,
-  rating
-}: {
-  doctorPublicProfileId: string;
-  appointmentId: string;
-  patientId: string;
-  rating: number;
-}) {
-  if (!isReviewRating(rating)) {
-    return { data: null, error: new Error("La calificación debe estar entre 1 y 5 estrellas.") };
-  }
-
-  return createVerifiedDoctorReview({
-    doctorPublicProfileId,
-    appointmentId,
-    patientId,
-    rating
-  });
 }

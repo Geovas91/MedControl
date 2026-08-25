@@ -1,0 +1,25 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+const reviewActions = readFileSync("app/reviews/actions.ts", "utf8");
+const reviewServer = readFileSync("lib/server/reviews.ts", "utf8");
+const settingsPage = readFileSync("app/dashboard/settings/page.tsx", "utf8");
+const plans = readFileSync("config/plans.ts", "utf8");
+
+test("reviews do not expose a service-role trusted-flow Server Action", () => {
+  assert.doesNotMatch(reviewActions, /TrustedFlow|createVerifiedDoctorReview/);
+  assert.doesNotMatch(reviewServer, /createAdminClient|create_verified_doctor_review/);
+  assert.match(reviewActions, /signed, expiring patient review-token flow/);
+});
+
+test("settings only presents configuration destinations backed by real routes", () => {
+  assert.match(settingsPage, /href: "\/dashboard\/settings\/clinical-templates"/);
+  assert.match(settingsPage, /href: "\/dashboard\/members"/);
+  assert.match(settingsPage, /href: "\/dashboard\/settings\/integrations"/);
+  assert.doesNotMatch(settingsPage, /Perfil de clínica|Notificaciones|Controles de privacidad|próximas fases/);
+});
+
+test("commercial plans do not promise unfinished review or reminder automation", () => {
+  assert.doesNotMatch(plans, /Reseñas verificadas|Bot premium|Recordatorios avanzados|Reportes ampliados|Configuración avanzada de horarios/);
+});

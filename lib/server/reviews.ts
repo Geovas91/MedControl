@@ -2,18 +2,9 @@ import "server-only";
 
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import type { DoctorReview, DoctorReviewSummary, ReviewRating } from "@/types/reviews";
 
-type ReviewRowsResult = Promise<{ data: DoctorReview[] | null; error: PostgrestError | null }>;
-
-type ReviewSelectBuilder = {
-  eq(column: string, value: string | boolean): ReviewSelectBuilder;
-  order(column: string, options: { ascending: boolean }): ReviewRowsResult;
-};
-
 type ReviewTableClient = {
-  select(columns: "*"): ReviewSelectBuilder;
   update(values: { is_visible: boolean }): {
     eq(column: "id", value: string): Promise<{ error: PostgrestError | null }>;
   };
@@ -39,23 +30,6 @@ type ReviewRpcClient = {
       | null;
     error: PostgrestError | null;
   }>;
-  rpc(
-    fn: "can_create_doctor_review_for_completed_appointment",
-    args: {
-      target_doctor_public_profile_id: string;
-      target_appointment_id: string;
-      target_patient_id: string;
-    }
-  ): Promise<{ data: boolean | null; error: PostgrestError | null }>;
-  rpc(
-    fn: "create_verified_doctor_review_for_completed_appointment",
-    args: {
-      target_doctor_public_profile_id: string;
-      target_appointment_id: string;
-      target_patient_id: string;
-      target_rating: number;
-    }
-  ): Promise<{ data: string | null; error: PostgrestError | null }>;
 };
 
 type ReviewsSupabaseClient = {
@@ -90,22 +64,6 @@ export function summarizeDoctorReviews(reviews: Pick<DoctorReview, "rating">[]):
     averageRating: reviewCount > 0 ? Math.round((total / reviewCount) * 10) / 10 : null,
     reviewCount,
     ratingBreakdown
-  };
-}
-
-export async function getDoctorReviewsForProfile(doctorPublicProfileId: string) {
-  const supabase = (await createClient()) as unknown as ReviewsSupabaseClient;
-  const { data, error } = await supabase
-    .from("doctor_reviews")
-    .select("*")
-    .eq("doctor_public_profile_id", doctorPublicProfileId)
-    .eq("is_verified", true)
-    .eq("is_visible", true)
-    .order("created_at", { ascending: false });
-
-  return {
-    data: data ?? [],
-    error
   };
 }
 
@@ -148,49 +106,6 @@ export async function getDoctorReviewSummaries(doctorPublicProfileIds: string[])
   );
 
   return Object.fromEntries(entries) as Record<string, DoctorReviewSummary>;
-}
-
-export async function canCreateReviewForAppointment({
-  doctorPublicProfileId,
-  appointmentId,
-  patientId
-}: {
-  doctorPublicProfileId: string;
-  appointmentId: string;
-  patientId: string;
-}) {
-  const supabase = createAdminClient() as unknown as ReviewsSupabaseClient;
-  const { data, error } = await supabase.rpc("can_create_doctor_review_for_completed_appointment", {
-    target_doctor_public_profile_id: doctorPublicProfileId,
-    target_appointment_id: appointmentId,
-    target_patient_id: patientId
-  });
-
-  return {
-    canCreate: data === true,
-    error
-  };
-}
-
-export async function createVerifiedDoctorReview({
-  doctorPublicProfileId,
-  appointmentId,
-  patientId,
-  rating
-}: {
-  doctorPublicProfileId: string;
-  appointmentId: string;
-  patientId: string;
-  rating: ReviewRating;
-}) {
-  const supabase = createAdminClient() as unknown as ReviewsSupabaseClient;
-
-  return supabase.rpc("create_verified_doctor_review_for_completed_appointment", {
-    target_doctor_public_profile_id: doctorPublicProfileId,
-    target_appointment_id: appointmentId,
-    target_patient_id: patientId,
-    target_rating: rating
-  });
 }
 
 export async function hideDoctorReview(reviewId: string) {
