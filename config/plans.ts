@@ -44,8 +44,6 @@ const sharedFeatures = [
   "Consentimientos básicos",
   "Acceso al directorio médico público",
   "Perfil público para médicos",
-  "Reseñas verificadas por estrellas",
-  "Sin comentarios escritos en reseñas",
   "Suscripción mensual vía PayPal",
   "Soporte base"
 ] as const;
@@ -92,7 +90,6 @@ export const commercialPlans = [
       "Plantillas basadas en especialidad",
       "Consentimientos básicos",
       "Registro y consulta de pagos",
-      "Reseñas verificadas por estrellas",
       "Suscripción mensual vía PayPal",
       "Soporte por correo"
     ],
@@ -131,7 +128,6 @@ export const commercialPlans = [
       "Reportes básicos de citas y pagos",
       "Invitaciones de calendario",
       "Perfil público para cada médico",
-      "Reseñas verificadas por médico",
       "Suscripción mensual vía PayPal",
       "Soporte prioritario"
     ],
@@ -146,7 +142,7 @@ export const commercialPlans = [
   {
     id: "pro",
     name: "CliniControl Pro",
-    description: "Para clínicas en crecimiento que requieren roles avanzados, reportes ampliados y automatización operativa.",
+    description: "Para clínicas en crecimiento que requieren ampliar su equipo y coordinar la operación clínica.",
     monthlyPriceMxn: 1299,
     currency: "MXN",
     billingPeriod: "month",
@@ -166,12 +162,7 @@ export const commercialPlans = [
       "Plantillas basadas en especialidad",
       "Consentimientos personalizados",
       "Registro y consulta de pagos",
-      "Reportes ampliados de citas y pagos",
-      "Bot premium de confirmación de citas",
-      "Recordatorios avanzados",
-      "Configuración avanzada de horarios",
       "Perfil público para cada médico",
-      "Reseñas verificadas por médico",
       "Suscripción mensual vía PayPal",
       "Soporte preferente",
       "Sujeto a uso razonable"

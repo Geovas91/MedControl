@@ -1,4 +1,4 @@
-import { Bell, Building2, ClipboardList, Plug, ShieldCheck, UserRoundCog } from "lucide-react";
+import { ClipboardList, Plug, UserRoundCog } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { getOnboardingStatus } from "@/lib/onboarding";
@@ -12,28 +12,14 @@ const settings = [
     href: "/dashboard/settings/clinical-templates"
   },
   {
-    title: "Perfil de clínica",
-    description: "Nombre comercial, dirección, teléfono y datos básicos de recepción.",
-    icon: Building2
-  },
-  {
     title: "Acceso del equipo",
     description: "Roles de médicos y personal administrativo dentro de la clínica.",
-    icon: UserRoundCog
-  },
-  {
-    title: "Notificaciones",
-    description: "Recordatorios de citas y alertas de pagos para próximas fases.",
-    icon: Bell
-  },
-  {
-    title: "Controles de privacidad",
-    description: "Bitácoras, exportación de datos y ajustes de seguridad para flujos clínicos.",
-    icon: ShieldCheck
+    icon: UserRoundCog,
+    href: "/dashboard/members"
   },
   {
     title: "Integraciones",
-    description: "Sincronización de calendario, invitaciones ICS y proveedores de mensajería en preparación.",
+    description: "Conexión personal con Google Calendar e invitaciones de calendario para citas.",
     icon: Plug,
     href: "/dashboard/settings/integrations"
   }
@@ -58,7 +44,7 @@ export default async function SettingsPage() {
     <>
       <PageHeader
         title="Configuración"
-        description="Área de configuración del espacio clínico. Los servicios externos todavía no están conectados."
+        description="Administra las opciones disponibles para el espacio clínico y sus integraciones."
       />
 
       {planContext.data ? (
