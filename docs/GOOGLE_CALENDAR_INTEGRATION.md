@@ -2,6 +2,14 @@
 
 CliniControl sincroniza de forma unidireccional las citas hacia el calendario principal del médico asignado. La relación es por `(clinic_id, user_id)`: una misma persona puede autorizar calendarios distintos por clínica y owner/admin sólo obtiene un resumen sin tokens. CliniControl sigue siendo la fuente primaria.
 
+## Entitlement y downgrade
+
+Google Calendar está disponible únicamente en Plus y Pro con una suscripción efectiva `active` o `trialing` vigente. Básico muestra la capacidad bloqueada y no puede iniciar OAuth, completar el callback, conectar, reconectar ni sincronizar aunque invoque directamente una ruta.
+
+El callback vuelve a consultar el entitlement antes del intercambio y otra vez antes de guardar o reactivar el secreto. Si una clínica inicia OAuth en Plus y baja a Básico antes del callback, no queda una integración operativa.
+
+Un downgrade conserva la fila y el refresh token cifrado, pero toda sincronización se detiene antes de leer o desencriptar el token. No se alteran citas ni se eliminan eventos de Google y no hay revocación automática. Si la clínica vuelve a Plus o Pro, puede recuperar el uso mientras el token continúe válido. Owner, admin o doctor pueden desconectar explícitamente una integración propia durante el downgrade; en Básico esa operación sólo invalida el secreto local y no lo carga para llamar al proveedor.
+
 ## Alcance OAuth
 
 La integración usa un cliente OAuth 2.0 de tipo **Web application** separado de Supabase Auth/Google Login. Solicita exactamente:

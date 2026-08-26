@@ -8,6 +8,7 @@ import {
 } from "@/lib/calendar/google-oauth";
 import { canReuseEncryptedCalendarRefreshToken, encryptCalendarRefreshToken } from "@/lib/calendar/token-encryption";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canUseFeature, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { getGoogleCalendarConfiguration, getGoogleCalendarRedirectOrigin } from "@/lib/server/google-calendar-config";
 import { getGoogleCalendarSessionHash } from "@/lib/server/google-calendar-session";
 import { exchangeGoogleCalendarAuthorizationCode, revokeGoogleCalendarToken } from "@/lib/server/google-calendar-provider";
@@ -38,6 +39,10 @@ export async function GET(request: NextRequest) {
   if (context.state !== "ready" || !["owner", "admin", "doctor"].includes(context.tenant.membership.role)) {
     return settingsRedirect(request, "forbidden");
   }
+  const callbackEntitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  if (callbackEntitlements.state !== "ready") return settingsRedirect(request, "subscription_required");
+  if (!planIncludesFeature(callbackEntitlements, "google_calendar")) return settingsRedirect(request, "upgrade_required");
+  if (!canUseFeature(callbackEntitlements, "google_calendar")) return settingsRedirect(request, "subscription_required");
   const configuration = getGoogleCalendarConfiguration();
   if (configuration.state !== "ready") return settingsRedirect(request, "unavailable");
   const sessionHash = await getGoogleCalendarSessionHash();
@@ -60,6 +65,16 @@ export async function GET(request: NextRequest) {
   if (!exchanged.ok) {
     if (exchanged.refreshTokenToRevoke) await revokeGoogleCalendarToken(exchanged.refreshTokenToRevoke);
     return settingsRedirect(request, "exchange_failed");
+  }
+  const persistedEntitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  if (persistedEntitlements.state !== "ready") {
+    return settingsRedirect(request, "subscription_required");
+  }
+  if (!canUseFeature(persistedEntitlements, "google_calendar")) {
+    return settingsRedirect(
+      request,
+      planIncludesFeature(persistedEntitlements, "google_calendar") ? "subscription_required" : "upgrade_required"
+    );
   }
   const saved = exchanged.refreshToken
     ? await saveGoogleCalendarIntegration({

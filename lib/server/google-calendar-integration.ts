@@ -2,12 +2,14 @@ import "server-only";
 
 import { decryptCalendarRefreshToken } from "@/lib/calendar/token-encryption";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canUseFeature, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { getGoogleCalendarConfiguration } from "@/lib/server/google-calendar-config";
 import { revokeGoogleCalendarToken } from "@/lib/server/google-calendar-provider";
 import {
   auditGoogleCalendarEvent,
   clearGoogleCalendarIntegration,
-  getGoogleCalendarIntegration
+  getGoogleCalendarIntegration,
+  getGoogleCalendarIntegrationIdentity
 } from "@/lib/server/google-calendar-store";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +31,10 @@ type SafeStatusClient = {
 export type GoogleCalendarIntegrationPageData = {
   role: "owner" | "admin" | "doctor" | "assistant";
   configurationReady: boolean;
+  planIncludesGoogleCalendar: boolean;
+  canUseGoogleCalendar: boolean;
   canConnectOwn: boolean;
+  hasOwnDisconnectableIntegration: boolean;
   own: {
     status: "connected" | "disconnected" | "expired" | "failed";
     connectedAt: string | null;
@@ -44,10 +49,23 @@ export async function getGoogleCalendarIntegrationPageData() {
   if (context.state !== "ready") return { state: context.state as "unauthenticated" | "no_active_membership" | "error", data: null };
   const role = context.tenant.membership.role;
   const canConnectOwn = role === "owner" || role === "admin" || role === "doctor";
+  const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  if (entitlements.state !== "ready") return { state: "error" as const, data: null };
+  const planIncludesGoogleCalendar = planIncludesFeature(entitlements, "google_calendar");
+  const canUseGoogleCalendar = canUseFeature(entitlements, "google_calendar");
   if (!canConnectOwn) {
     return {
       state: "ready" as const,
-      data: { role, configurationReady: getGoogleCalendarConfiguration().state === "ready", canConnectOwn: false, own: null, clinicSummary: null }
+      data: {
+        role,
+        configurationReady: getGoogleCalendarConfiguration().state === "ready",
+        planIncludesGoogleCalendar,
+        canUseGoogleCalendar,
+        canConnectOwn: false,
+        hasOwnDisconnectableIntegration: false,
+        own: null,
+        clinicSummary: null
+      }
     };
   }
   const statusResult = await (await createClient() as unknown as SafeStatusClient).rpc(
@@ -56,9 +74,11 @@ export async function getGoogleCalendarIntegrationPageData() {
   );
   if (statusResult.error) return { state: "error" as const, data: null };
   const statuses = statusResult.data ?? [];
-  const own = statuses.find((item) => item.user_id === context.user.id) ?? null;
+  const ownStatus = statuses.find((item) => item.user_id === context.user.id) ?? null;
+  const hasOwnDisconnectableIntegration = Boolean(ownStatus && ownStatus.status !== "disconnected");
+  const own = canUseGoogleCalendar ? ownStatus : null;
   let clinicSummary: GoogleCalendarIntegrationPageData["clinicSummary"] = null;
-  if (role === "owner" || role === "admin") {
+  if (canUseGoogleCalendar && (role === "owner" || role === "admin")) {
     clinicSummary = {
       connected: statuses.filter((item) => item.status === "connected").length,
       requiresReconnect: statuses.filter((item) => item.status === "expired" || item.status === "failed").length
@@ -69,7 +89,10 @@ export async function getGoogleCalendarIntegrationPageData() {
     data: {
       role,
       configurationReady: getGoogleCalendarConfiguration().state === "ready",
+      planIncludesGoogleCalendar,
+      canUseGoogleCalendar,
       canConnectOwn,
+      hasOwnDisconnectableIntegration,
       own: own ? {
         status: own.status,
         connectedAt: own.connected_at,
@@ -85,22 +108,29 @@ export async function disconnectOwnGoogleCalendarIntegration() {
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state };
   if (!["owner", "admin", "doctor"].includes(context.tenant.membership.role)) return { state: "forbidden" as const };
-  const integrationResult = await getGoogleCalendarIntegration(context.tenant.clinic.id, context.user.id);
-  const integration = integrationResult.data;
-  if (integrationResult.error) return { state: "error" as const };
-  if (!integration) return { state: "success" as const };
+  const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  const canUseGoogleCalendar = canUseFeature(entitlements, "google_calendar");
+  const identityResult = await getGoogleCalendarIntegrationIdentity(context.tenant.clinic.id, context.user.id);
+  const identity = identityResult.data;
+  if (identityResult.error) return { state: "error" as const };
+  if (!identity) return { state: "success" as const };
 
   const configuration = getGoogleCalendarConfiguration();
-  if (configuration.state === "ready" && integration.refresh_token_encrypted) {
+  if (canUseGoogleCalendar && configuration.state === "ready") {
+    const integrationResult = await getGoogleCalendarIntegration(context.tenant.clinic.id, context.user.id);
+    const integration = integrationResult.data;
+    if (integrationResult.error) return { state: "error" as const };
     try {
-      const refreshToken = decryptCalendarRefreshToken(integration.refresh_token_encrypted, configuration.encryptionKey);
-      await revokeGoogleCalendarToken(refreshToken);
+      if (integration?.refresh_token_encrypted) {
+        const refreshToken = decryptCalendarRefreshToken(integration.refresh_token_encrypted, configuration.encryptionKey);
+        await revokeGoogleCalendarToken(refreshToken);
+      }
     } catch {
       // Revocation is best-effort; local invalidation remains authoritative.
     }
   }
   const cleared = await clearGoogleCalendarIntegration({
-    integrationId: integration.id,
+    integrationId: identity.id,
     clinicId: context.tenant.clinic.id,
     userId: context.user.id,
     status: "disconnected",
@@ -111,7 +141,7 @@ export async function disconnectOwnGoogleCalendarIntegration() {
   await auditGoogleCalendarEvent({
     clinicId: context.tenant.clinic.id,
     actorUserId: context.user.id,
-    entityId: integration.id,
+    entityId: identity.id,
     action: "calendar_disconnected",
     metadata: { provider: "google" }
   });

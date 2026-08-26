@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getPlanEntitlements, type PlanEntitlements, type PlanFeature } from "@/config/plans";
 import { logger } from "@/lib/logger";
 import { getClinicSubscription } from "@/lib/supabase/subscriptions";
 import type { ClinicSubscription, PlanId } from "@/types/subscriptions";
@@ -9,6 +10,7 @@ export type ClinicEntitlements = {
   subscription: ClinicSubscription;
   persistedStatus: ClinicSubscription["status"];
   effectiveStatus: EffectiveSubscriptionAccess;
+  plan: PlanEntitlements;
   canUseClinicalWorkspace: boolean;
   canManageMembers: boolean;
   readOnlyReason: string | null;
@@ -58,6 +60,7 @@ export async function getClinicEntitlements(clinicId: string): Promise<ClinicEnt
       subscription,
       persistedStatus: subscription.status,
       effectiveStatus,
+      plan: getPlanEntitlements(subscription.plan_id),
       canUseClinicalWorkspace: hasActiveAccess || isPastDue,
       canManageMembers: hasActiveAccess,
       readOnlyReason: hasActiveAccess
@@ -73,6 +76,14 @@ export async function getClinicEntitlements(clinicId: string): Promise<ClinicEnt
 
 export function canCreateWithEntitlements(result: ClinicEntitlementsResult) {
   return result.state === "ready" && (result.entitlements.effectiveStatus === "active" || result.entitlements.effectiveStatus === "trialing");
+}
+
+export function planIncludesFeature(result: ClinicEntitlementsResult, feature: PlanFeature) {
+  return result.state === "ready" && result.entitlements.plan.features[feature];
+}
+
+export function canUseFeature(result: ClinicEntitlementsResult, feature: PlanFeature) {
+  return canCreateWithEntitlements(result) && planIncludesFeature(result, feature);
 }
 
 export function getEntitlementNotice(result: ClinicEntitlementsResult) {
