@@ -7,6 +7,7 @@ import {
 } from "@/lib/calendar/google-oauth";
 import { getPublicAppOrigin } from "@/lib/auth/public-origin";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canUseFeature, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { getGoogleCalendarConfiguration, getGoogleCalendarRedirectOrigin } from "@/lib/server/google-calendar-config";
 import { getGoogleCalendarSessionHash } from "@/lib/server/google-calendar-session";
 import { createGoogleCalendarOAuthState } from "@/lib/server/google-calendar-store";
@@ -25,6 +26,10 @@ export async function GET(request: NextRequest) {
   if (context.state !== "ready" || !["owner", "admin", "doctor"].includes(context.tenant.membership.role)) {
     return settingsRedirect(request, "forbidden");
   }
+  const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
+  if (entitlements.state !== "ready") return settingsRedirect(request, "subscription_required");
+  if (!planIncludesFeature(entitlements, "google_calendar")) return settingsRedirect(request, "upgrade_required");
+  if (!canUseFeature(entitlements, "google_calendar")) return settingsRedirect(request, "subscription_required");
   const configuration = getGoogleCalendarConfiguration();
   if (configuration.state !== "ready") return settingsRedirect(request, "unavailable");
   const sessionHash = await getGoogleCalendarSessionHash();

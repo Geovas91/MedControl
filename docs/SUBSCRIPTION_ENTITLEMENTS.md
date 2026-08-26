@@ -8,7 +8,18 @@ El estado persistido se conserva como `persistedStatus`. El acceso se calcula co
 
 Los límites comerciales existentes de médicos siguen centralizados en `config/plans.ts` y la RPC existente los valida al agregar miembros. No se agregaron límites de pacientes ni precios nuevos. Las suscripciones SaaS continúan separadas de `public.payments`, que contiene sólo pagos paciente-clínica.
 
+Las capacidades por plan también se declaran de forma tipada en `config/plans.ts`. `google_calendar` está excluida de Básico e incluida en Plus y Pro. `canUseFeature` exige a la vez que el plan incluya la capacidad y que la suscripción permita escritura efectiva; los permisos de rol y el tenant se validan adicionalmente en cada flujo servidor.
+
 Las guardas se aplican en las funciones servidoras y la RPC de miembros, además de ocultar controles de gestión en la interfaz. Pendiente: una política aprobada para expiración/cancelación y una fuente productiva de cambios de estado validada por PayPal.
+
+## Backlog comercial fuera de este cambio
+
+- Alinear la promesa de Básico sin usuarios administrativos adicionales con el enforcement de invitaciones.
+- Definir si las invitaciones ICS deben limitarse por plan antes de cambiar su comportamiento actual.
+- Convertir las diferencias textuales entre consentimientos básicos, por paciente y personalizados en capacidades definidas antes de aplicar gating.
+- Definir técnicamente qué añade la gestión avanzada de roles de Pro antes de diferenciar permisos.
+
+Estos puntos se documentan como inconsistencias preexistentes; el entitlement de Google Calendar no cambia su comportamiento.
 
 ## Matriz manual
 

@@ -8,6 +8,7 @@ import {
 import { decryptCalendarRefreshToken } from "@/lib/calendar/token-encryption";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canUseFeature, getClinicEntitlements } from "@/lib/server/entitlements";
 import { getGoogleCalendarConfiguration } from "@/lib/server/google-calendar-config";
 import {
   createGoogleCalendarEvent,
@@ -142,6 +143,7 @@ export async function syncAppointmentGoogleCalendar(input: {
     const context = await getActiveTenantContext();
     if (context.state !== "ready" || !["owner", "admin", "doctor"].includes(context.tenant.membership.role)) return "disabled";
     const clinicId = context.tenant.clinic.id;
+    if (!canUseFeature(await getClinicEntitlements(clinicId), "google_calendar")) return "disabled";
     const supabase = await createClient();
     const appointmentResult = await supabase.from("appointments")
       .select("id, doctor_id, starts_at, ends_at, status, updated_at")

@@ -4,6 +4,12 @@ export type BillingType = "subscription";
 export type BillingPeriod = "month";
 export type PlanCurrency = "MXN";
 export type PaypalPlanEnvKey = "PAYPAL_BASIC_PLAN_ID" | "PAYPAL_PLUS_PLAN_ID" | "PAYPAL_PRO_PLAN_ID";
+export type PlanFeature = "google_calendar";
+
+export type PlanEntitlements = {
+  doctorLimit: DoctorPlanLimit;
+  features: Record<PlanFeature, boolean>;
+};
 
 export type CommercialPlan = {
   id: PlanId;
@@ -127,6 +133,7 @@ export const commercialPlans = [
       "Registro y consulta de pagos",
       "Reportes básicos de citas y pagos",
       "Invitaciones de calendario",
+      "Integración con Google Calendar",
       "Perfil público para cada médico",
       "Suscripción mensual vía PayPal",
       "Soporte prioritario"
@@ -180,11 +187,11 @@ export const commercialPlans = [
 
 export const commonCommercialFeatures = [...sharedFeatures];
 
-const doctorLimitsByPlan = {
-  basic: 1,
-  plus: 5,
-  pro: null
-} satisfies Record<PlanId, DoctorPlanLimit>;
+const planEntitlements = {
+  basic: { doctorLimit: 1, features: { google_calendar: false } },
+  plus: { doctorLimit: 5, features: { google_calendar: true } },
+  pro: { doctorLimit: null, features: { google_calendar: true } }
+} satisfies Record<PlanId, PlanEntitlements>;
 
 export function getPlanById(planId: PlanId) {
   return commercialPlans.find((plan) => plan.id === planId) ?? null;
@@ -195,7 +202,15 @@ export function isPlanId(value: string): value is PlanId {
 }
 
 export function getDoctorLimitForPlan(planId: PlanId): DoctorPlanLimit {
-  return doctorLimitsByPlan[planId];
+  return getPlanEntitlements(planId).doctorLimit;
+}
+
+export function getPlanEntitlements(planId: PlanId): PlanEntitlements {
+  return planEntitlements[planId];
+}
+
+export function planIncludesFeature(planId: PlanId, feature: PlanFeature) {
+  return getPlanEntitlements(planId).features[feature];
 }
 
 export function canAddDoctorToPlan(planId: PlanId, currentDoctorCount: number) {

@@ -136,6 +136,15 @@ export async function getGoogleCalendarIntegration(clinicId: string, userId: str
   return { data: result.data as StoredGoogleCalendarIntegration | null, error: result.error };
 }
 
+export async function getGoogleCalendarIntegrationIdentity(clinicId: string, userId: string) {
+  const result = await createAdminClient().from("calendar_integrations").select("id, status")
+    .eq("clinic_id", clinicId).eq("user_id", userId).eq("provider", "google").maybeSingle();
+  return {
+    data: result.data as Pick<StoredGoogleCalendarIntegration, "id" | "status"> | null,
+    error: result.error
+  };
+}
+
 export async function clearGoogleCalendarIntegration(input: {
   integrationId: string;
   clinicId: string;

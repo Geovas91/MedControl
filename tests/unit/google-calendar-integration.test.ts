@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { getPlanEntitlements, planIncludesFeature } from "../../config/plans.ts";
 import {
   GOOGLE_CALENDAR_SCOPE,
   buildGoogleCalendarSettingsRedirectPath,
@@ -34,6 +35,19 @@ const syncServer = readFileSync("lib/server/appointment-google-calendar.ts", "ut
 const page = readFileSync("app/dashboard/settings/integrations/page.tsx", "utf8");
 const provider = readFileSync("lib/server/google-calendar-provider.ts", "utf8");
 const store = readFileSync("lib/server/google-calendar-store.ts", "utf8");
+const entitlementsServer = readFileSync("lib/server/entitlements.ts", "utf8");
+const plans = readFileSync("config/plans.ts", "utf8");
+
+test("Google Calendar is a typed Basic false, Plus true, Pro true entitlement", () => {
+  assert.equal(planIncludesFeature("basic", "google_calendar"), false);
+  assert.equal(planIncludesFeature("plus", "google_calendar"), true);
+  assert.equal(planIncludesFeature("pro", "google_calendar"), true);
+  assert.equal(getPlanEntitlements("basic").doctorLimit, 1);
+  assert.equal(getPlanEntitlements("plus").doctorLimit, 5);
+  assert.equal(getPlanEntitlements("pro").doctorLimit, null);
+  assert.match(entitlementsServer, /canUseFeature[\s\S]+canCreateWithEntitlements[\s\S]+planIncludesFeature/);
+  assert.match(plans, /"Integración con Google Calendar"/);
+});
 
 test("OAuth state is unpredictable, one-way hashed and strictly validated", () => {
   const first = createGoogleCalendarOAuthState();
@@ -167,6 +181,22 @@ test("callback consumes tenant/user-bound state before server-side exchange", ()
   assert.match(callbackRoute, /reconsent_required/);
 });
 
+test("connect and callback enforce the feature before provider work and callback revalidates before persistence", () => {
+  const connectBody = connectRoute.slice(connectRoute.indexOf("export async function GET"));
+  const callbackBody = callbackRoute.slice(callbackRoute.indexOf("export async function GET"));
+  assert.ok(connectBody.indexOf("getClinicEntitlements") < connectBody.indexOf("createGoogleCalendarOAuthState"));
+  assert.ok(connectBody.indexOf("canUseFeature") < connectBody.indexOf("buildGoogleCalendarAuthorizationUrl"));
+  assert.ok(connectBody.indexOf("getGoogleCalendarConfiguration") < connectBody.indexOf("createGoogleCalendarOAuthState"));
+  assert.ok(callbackBody.indexOf("callbackEntitlements") < callbackBody.indexOf("consumeGoogleCalendarOAuthState"));
+  assert.ok(callbackBody.indexOf("callbackEntitlements") < callbackBody.indexOf("exchangeGoogleCalendarAuthorizationCode"));
+  assert.ok(callbackBody.indexOf("persistedEntitlements") > callbackBody.indexOf("exchangeGoogleCalendarAuthorizationCode"));
+  assert.ok(callbackBody.indexOf("persistedEntitlements") < callbackBody.indexOf("saveGoogleCalendarIntegration"));
+  assert.ok(callbackBody.indexOf("persistedEntitlements") < callbackBody.indexOf("activateGoogleCalendarIntegrationWithExistingSecret"));
+  assert.match(callbackBody, /planIncludesFeature\(persistedEntitlements, "google_calendar"\) \? "subscription_required" : "upgrade_required"/);
+  const persistenceGuard = callbackBody.slice(callbackBody.indexOf("const persistedEntitlements"), callbackBody.indexOf("const saved"));
+  assert.doesNotMatch(persistenceGuard, /revokeGoogleCalendarToken/);
+});
+
 test("callback redirects only to a fixed local path on a server-controlled origin", () => {
   assert.match(callbackRoute, /getGoogleCalendarRedirectOrigin\(\) \?\? getPublicAppOrigin/);
   assert.match(callbackRoute, /buildGoogleCalendarSettingsRedirectPath\(outcome\)/);
@@ -178,6 +208,9 @@ test("callback redirects only to a fixed local path on a server-controlled origi
 
 test("permissions allow only owner admin and doctor to connect their own account", () => {
   assert.match(integrationServer, /\["owner", "admin", "doctor"\]\.includes/);
+  assert.match(connectRoute, /\["owner", "admin", "doctor"\]\.includes/);
+  assert.match(callbackRoute, /\["owner", "admin", "doctor"\]\.includes/);
+  assert.match(syncServer, /\["owner", "admin", "doctor"\]\.includes/);
   assert.match(integrationServer, /getGoogleCalendarIntegration\(context\.tenant\.clinic\.id, context\.user\.id\)/);
   assert.match(page, /El rol assistant no conecta ni administra cuentas de médicos/);
   const pageLoader = integrationServer.slice(
@@ -186,6 +219,8 @@ test("permissions allow only owner admin and doctor to connect their own account
   );
   assert.doesNotMatch(pageLoader, /refresh_token_encrypted|access_token|provider_calendar_id|google_event_id/i);
   assert.match(integrationServer, /list_google_calendar_integration_status_for_current_user/);
+  assert.match(connectRoute, /clinicId: context\.tenant\.clinic\.id[\s\S]+userId: context\.user\.id/);
+  assert.match(callbackRoute, /clinicId: context\.tenant\.clinic\.id[\s\S]+userId: context\.user\.id/);
   const safeProjection = migration.match(/list_google_calendar_integration_status_for_current_user[\s\S]+?returns table \(([\s\S]+?)\)\r?\nlanguage sql/i)?.[1] ?? "";
   assert.ok(safeProjection);
   assert.doesNotMatch(safeProjection, /token|scope|provider_calendar_id|google_event_id/i);
@@ -199,9 +234,26 @@ test("disconnect is ownership-bound and invalidates locally even when provider r
   assert.ok(disconnectBody.indexOf("revokeGoogleCalendarToken") < disconnectBody.indexOf("clearGoogleCalendarIntegration"));
   assert.doesNotMatch(disconnectBody, /if \(!await revokeGoogleCalendarToken\([^\n]+return/);
   assert.match(disconnectBody, /clinicId: context\.tenant\.clinic\.id[\s\S]+userId: context\.user\.id/);
+  assert.match(disconnectBody, /getGoogleCalendarIntegrationIdentity\(context\.tenant\.clinic\.id, context\.user\.id\)/);
+  assert.match(disconnectBody, /if \(canUseGoogleCalendar && configuration\.state === "ready"\)[\s\S]+getGoogleCalendarIntegration/);
+  const identityBody = store.slice(store.indexOf("export async function getGoogleCalendarIntegrationIdentity"), store.indexOf("export async function clearGoogleCalendarIntegration"));
+  assert.match(identityBody, /select\("id, status"\)/);
+  assert.doesNotMatch(identityBody, /refresh_token_encrypted/);
   assert.match(syncServer, /integration\.status !== "connected"/);
   const clearBody = store.slice(store.indexOf("export async function clearGoogleCalendarIntegration"), store.indexOf("export async function auditGoogleCalendarEvent"));
   assert.doesNotMatch(clearBody, /appointments|google_calendar_events|\.delete\(/);
+});
+
+test("Basic and inactive subscriptions stop sync before token or provider access", () => {
+  const syncBody = syncServer.slice(syncServer.indexOf("export async function syncAppointmentGoogleCalendar"));
+  const entitlementGuard = syncBody.indexOf("canUseFeature(await getClinicEntitlements(clinicId), \"google_calendar\")");
+  assert.ok(entitlementGuard > -1);
+  assert.ok(entitlementGuard < syncBody.indexOf("listStoredGoogleCalendarEvents"));
+  assert.ok(entitlementGuard < syncBody.indexOf("getGoogleCalendarIntegration(clinicId, doctorUserId)"));
+  assert.ok(entitlementGuard < syncBody.indexOf("accessTokenFor(integration"));
+  assert.ok(entitlementGuard < syncBody.indexOf("createGoogleCalendarEvent"));
+  assert.ok(entitlementGuard < syncBody.indexOf("updateGoogleCalendarEvent"));
+  assert.ok(entitlementGuard < syncBody.indexOf("deleteStoredEvent"));
 });
 
 test("callback replaces a new secret atomically and never overwrites with a missing one", () => {
@@ -239,4 +291,8 @@ test("visible integrations page has no mock, demo or coming-soon calendar UI", (
   assert.match(page, /Conectar Google Calendar/);
   assert.match(page, /Desconectar mi cuenta/);
   assert.match(page, /Requiere reconexión/);
+  assert.match(page, /Disponible en Plus y Pro/);
+  assert.match(page, /hasOwnDisconnectableIntegration/);
+  assert.match(page, /data\.planIncludesGoogleCalendar && data\.canUseGoogleCalendar && !data\.configurationReady/);
+  assert.match(page, /requestedMessageKey === "connected" && !data\.canUseGoogleCalendar/);
 });
