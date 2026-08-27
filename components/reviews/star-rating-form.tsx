@@ -6,10 +6,10 @@ import { submitVerifiedDoctorReviewAction } from "@/app/reviews/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 
 type StarRatingFormProps = {
-  reviewToken?: string;
+  reviewToken: string;
 };
 
-export function StarRatingForm({ reviewToken = "" }: StarRatingFormProps) {
+export function StarRatingForm({ reviewToken }: StarRatingFormProps) {
   const [state, formAction] = useActionState(submitVerifiedDoctorReviewAction, {});
 
   return (
@@ -17,7 +17,7 @@ export function StarRatingForm({ reviewToken = "" }: StarRatingFormProps) {
       <input type="hidden" name="review_token" value={reviewToken} />
       <div>
         <h2 className="font-bold text-ink">Califica tu atención</h2>
-        <p className="mt-1 text-sm text-slate-500">Solo estrellas. No se solicitan comentarios ni datos médicos.</p>
+        <p className="mt-1 text-sm text-slate-500">El comentario es opcional. No incluyas información médica o sensible.</p>
       </div>
       <fieldset className="flex gap-2" aria-label="Calificación por estrellas">
         {[1, 2, 3, 4, 5].map((rating) => (
@@ -28,9 +28,14 @@ export function StarRatingForm({ reviewToken = "" }: StarRatingFormProps) {
           </label>
         ))}
       </fieldset>
+      <div>
+        <label htmlFor="review-comment" className="text-sm font-semibold text-ink">Comentario opcional</label>
+        <textarea id="review-comment" name="comment" maxLength={1000} rows={5} className="mt-2 w-full rounded-md border border-slate-300 p-3 text-sm" placeholder="Cuéntanos brevemente sobre tu experiencia." />
+        <p className="mt-1 text-xs text-slate-500">Máximo 1000 caracteres. El comentario podrá mostrarse públicamente.</p>
+      </div>
       {state.error ? <p className="rounded-md bg-rose-50 p-3 text-sm text-rose-700">{state.error}</p> : null}
       {state.message ? <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{state.message}</p> : null}
-      <AuthSubmitButton idleLabel="Enviar reseña" pendingLabel="Enviando reseña..." />
+      {!state.message ? <AuthSubmitButton idleLabel="Enviar reseña" pendingLabel="Enviando reseña..." /> : null}
     </form>
   );
 }

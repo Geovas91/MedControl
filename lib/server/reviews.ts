@@ -2,7 +2,7 @@ import "server-only";
 
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import type { DoctorReview, DoctorReviewSummary, ReviewRating } from "@/types/reviews";
+import type { DoctorReview, DoctorReviewSummary, PublicDoctorReview, PublicReviewInvitation, ReviewRating } from "@/types/reviews";
 
 type ReviewTableClient = {
   update(values: { is_visible: boolean }): {
@@ -112,4 +112,28 @@ export async function hideDoctorReview(reviewId: string) {
   const supabase = (await createClient()) as unknown as ReviewsSupabaseClient;
 
   return supabase.from("doctor_reviews").update({ is_visible: false }).eq("id", reviewId);
+}
+
+type PublicReviewsRpcClient = {
+  rpc(name: "list_public_doctor_reviews", args: { p_doctor_public_profile_id: string; p_limit: number }): Promise<{ data: PublicDoctorReview[] | null; error: PostgrestError | null }>;
+  rpc(name: "get_public_review_invitation", args: { p_token: string }): Promise<{ data: Array<{ invitation_status: PublicReviewInvitation["status"]; doctor_display_name: string | null; clinic_name: string | null }> | null; error: PostgrestError | null }>;
+  rpc(name: "submit_verified_review", args: { p_token: string; p_rating: number; p_comment: string | null }): Promise<{ data: boolean | null; error: PostgrestError | null }>;
+};
+
+export async function getPublicDoctorReviews(doctorPublicProfileId: string, limit = 10) {
+  const supabase = (await createClient()) as unknown as PublicReviewsRpcClient;
+  const { data, error } = await supabase.rpc("list_public_doctor_reviews", { p_doctor_public_profile_id: doctorPublicProfileId, p_limit: Math.min(Math.max(limit, 1), 20) });
+  return { data: data ?? [], error };
+}
+
+export async function getPublicReviewInvitation(token: string) {
+  const supabase = (await createClient()) as unknown as PublicReviewsRpcClient;
+  const { data, error } = await supabase.rpc("get_public_review_invitation", { p_token: token });
+  const row = data?.[0];
+  return { data: row ? { status: row.invitation_status, doctorDisplayName: row.doctor_display_name, clinicName: row.clinic_name } : null, error };
+}
+
+export async function submitPublicVerifiedReview(input: { token: string; rating: number; comment: string | null }) {
+  const supabase = (await createClient()) as unknown as PublicReviewsRpcClient;
+  return supabase.rpc("submit_verified_review", { p_token: input.token, p_rating: input.rating, p_comment: input.comment });
 }

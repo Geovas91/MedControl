@@ -22,10 +22,11 @@ type AppointmentDetailRow = Pick<
   | "created_at"
 >;
 
-type PatientRelation = { id: string; full_name: string };
+type PatientRelation = { id: string; full_name: string; email: string | null };
 type DoctorRelation = { display_name: string };
 
 export type AppointmentDetailData = {
+  currentUserId: string;
   tenant: ActiveTenant;
   appointment: AppointmentDetailRow;
   patient: PatientRelation | null;
@@ -82,7 +83,7 @@ export async function getAppointmentDetailForActiveTenant(
   const [patientResult, doctorResult] = await Promise.all([
     supabase
       .from("patients")
-      .select("id, full_name")
+      .select("id, full_name, email")
       .eq("id", appointment.patient_id)
       .eq("clinic_id", clinicId)
       .maybeSingle(),
@@ -110,6 +111,7 @@ export async function getAppointmentDetailForActiveTenant(
   return {
     state: "ready",
     data: {
+      currentUserId: context.user.id,
       tenant: context.tenant,
       appointment,
       patient: (patientResult.data as PatientRelation | null) ?? null,

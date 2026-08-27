@@ -276,7 +276,10 @@ export type Database = {
           clinic_id: string;
           appointment_id: string;
           patient_id: string;
+          invitation_id: string | null;
+          doctor_user_id: string | null;
           rating: number;
+          comment: string | null;
           is_verified: boolean;
           is_visible: boolean;
           created_at: Timestamp;
@@ -288,13 +291,55 @@ export type Database = {
           clinic_id: string;
           appointment_id: string;
           patient_id: string;
+          invitation_id?: string | null;
+          doctor_user_id?: string | null;
           rating: number;
+          comment?: string | null;
           is_verified?: boolean;
           is_visible?: boolean;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
         Update: Partial<Database["public"]["Tables"]["doctor_reviews"]["Insert"]>;
+      };
+      review_invitations: {
+        Row: {
+          id: string;
+          clinic_id: string;
+          patient_id: string;
+          appointment_id: string;
+          doctor_user_id: string;
+          doctor_public_profile_id: string;
+          token_hash: string;
+          expires_at: Timestamp;
+          used_at: Timestamp | null;
+          revoked_at: Timestamp | null;
+          delivery_status: "pending" | "sent" | "failed";
+          email_sent_at: Timestamp | null;
+          generation: number;
+          created_by: string;
+          created_at: Timestamp;
+          updated_at: Timestamp;
+        };
+        Insert: {
+          id?: string;
+          clinic_id: string;
+          patient_id: string;
+          appointment_id: string;
+          doctor_user_id: string;
+          doctor_public_profile_id: string;
+          token_hash: string;
+          expires_at: Timestamp;
+          used_at?: Timestamp | null;
+          revoked_at?: Timestamp | null;
+          delivery_status?: "pending" | "sent" | "failed";
+          email_sent_at?: Timestamp | null;
+          generation?: number;
+          created_by: string;
+          created_at?: Timestamp;
+          updated_at?: Timestamp;
+        };
+        Update: Partial<Database["public"]["Tables"]["review_invitations"]["Insert"]>;
       };
       patients: {
         Row: {
@@ -1088,6 +1133,38 @@ export type Database = {
           target_patient_id: string;
         };
         Returns: boolean;
+      };
+      issue_review_invitation_for_current_user: {
+        Args: { p_clinic_id: string; p_appointment_id: string };
+        Returns: Array<{ invitation_id: string; raw_token: string; expires_at: Timestamp; invitation_status: string }>;
+      };
+      revoke_review_invitation_for_current_user: {
+        Args: { p_clinic_id: string; p_appointment_id: string };
+        Returns: boolean;
+      };
+      get_review_invitation_status_for_current_user: {
+        Args: { p_clinic_id: string; p_appointment_id: string };
+        Returns: Array<{ invitation_id: string; invitation_status: string; expires_at: Timestamp; email_sent_at: Timestamp | null }>;
+      };
+      get_review_email_context_for_current_user: {
+        Args: { p_clinic_id: string; p_appointment_id: string; p_token: string };
+        Returns: Array<{ invitation_id: string; patient_email: string | null; clinic_name: string; doctor_display_name: string; expires_at: Timestamp }>;
+      };
+      record_review_email_result_for_current_user: {
+        Args: { p_clinic_id: string; p_appointment_id: string; p_token: string; p_sent: boolean; p_error_code?: string | null };
+        Returns: boolean;
+      };
+      get_public_review_invitation: {
+        Args: { p_token: string };
+        Returns: Array<{ invitation_status: string; doctor_display_name: string | null; clinic_name: string | null }>;
+      };
+      submit_verified_review: {
+        Args: { p_token: string; p_rating: number; p_comment?: string | null };
+        Returns: boolean;
+      };
+      list_public_doctor_reviews: {
+        Args: { p_doctor_public_profile_id: string; p_limit?: number };
+        Returns: Array<{ rating: number; comment: string | null; created_at: Timestamp }>;
       };
       get_public_doctor_review_summary: {
         Args: { target_doctor_public_profile_id: string };

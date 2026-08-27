@@ -89,7 +89,7 @@ Reglas globales:
 - Todos incluyen registro y consulta de pagos.
 - Todos incluyen directorio médico público.
 - Todos incluyen perfil público para médicos.
-- Todos incluyen reseñas verificadas solo por estrellas.
+- Todos incluyen reseñas verificadas vinculadas a citas completadas, con calificación y comentario opcional.
 - No se permiten comentarios escritos en reseñas.
 - Todos están preparados para suscripción mensual vía PayPal.
 

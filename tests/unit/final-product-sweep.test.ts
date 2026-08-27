@@ -7,10 +7,11 @@ const reviewServer = readFileSync("lib/server/reviews.ts", "utf8");
 const settingsPage = readFileSync("app/dashboard/settings/page.tsx", "utf8");
 const plans = readFileSync("config/plans.ts", "utf8");
 
-test("reviews do not expose a service-role trusted-flow Server Action", () => {
+test("reviews use the token-only public flow without a service-role Server Action", () => {
   assert.doesNotMatch(reviewActions, /TrustedFlow|createVerifiedDoctorReview/);
   assert.doesNotMatch(reviewServer, /createAdminClient|create_verified_doctor_review/);
-  assert.match(reviewActions, /signed, expiring patient review-token flow/);
+  assert.match(reviewActions, /submitPublicVerifiedReview/);
+  assert.match(reviewActions, /reviewToken, rating, comment/);
 });
 
 test("settings only presents configuration destinations backed by real routes", () => {

@@ -29,6 +29,10 @@ import { canEditAppointments } from "@/lib/appointments/edit";
 import { getAppointmentStatusLabel } from "@/lib/appointments/query";
 import { getAvailableAppointmentStatusActions } from "@/lib/appointments/status";
 import { getAppointmentDetailForActiveTenant } from "@/lib/server/appointment-detail";
+import { getReviewInvitationStatus } from "@/lib/server/review-invitations";
+import { ReviewInvitationControls } from "@/components/appointments/review-invitation-controls";
+import { issueReviewInvitationAction, revokeReviewInvitationAction, sendReviewInvitationEmailAction } from "./actions";
+import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +108,7 @@ export default async function AppointmentDetailPage({
     );
   }
 
-  const { appointment, patient, doctor, tenant } = result.data;
+  const { appointment, patient, doctor, tenant, currentUserId } = result.data;
   const timeZone = tenant.clinic.timezone;
   const dateTime = formatAppointmentDetailDateTime(appointment.starts_at, appointment.ends_at, timeZone);
   const agendaHref = getAppointmentDetailAgendaHref(dateTime.localDate);
@@ -118,6 +122,9 @@ export default async function AppointmentDetailPage({
     timeZone,
     hasAssignedDoctor: Boolean(appointment.doctor_id)
   });
+  const canRequestReviewByRole = appointment.status === "completed" && (tenant.membership.role === "owner" || tenant.membership.role === "admin" || (tenant.membership.role === "doctor" && appointment.doctor_id === currentUserId));
+  const canRequestReview = canRequestReviewByRole && canCreateWithEntitlements(await getClinicEntitlements(tenant.clinic.id));
+  const reviewStatus = canRequestReview ? await getReviewInvitationStatus(appointment.id, tenant.clinic.id) : { data: null };
 
   return (
     <>
@@ -238,6 +245,13 @@ export default async function AppointmentDetailPage({
         currentStatus={appointment.status}
         actions={statusActions}
       />
+      {canRequestReview ? <ReviewInvitationControls
+        issueAction={issueReviewInvitationAction.bind(null, appointment.id)}
+        emailAction={sendReviewInvitationEmailAction.bind(null, appointment.id)}
+        revokeAction={revokeReviewInvitationAction.bind(null, appointment.id)}
+        initialStatus={reviewStatus.data?.invitation_status ?? null}
+        patientHasEmail={Boolean(patient?.email)}
+      /> : null}
     </>
   );
 }
