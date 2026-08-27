@@ -1,4 +1,4 @@
-import { Bot, Clock3, LockKeyhole } from "lucide-react";
+import { Bot, Clock3, LockKeyhole, Mail, Star } from "lucide-react";
 import { saveAppointmentAssistantSettingsAction } from "@/app/dashboard/bot/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ export function AppointmentAssistantSettings({
           <div>
             <h2 className="font-bold text-ink">Configuración interna</h2>
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              Guarda preferencias para una automatización futura. Esta configuración no programa ni envía recordatorios por sí sola.
+              Controla el motor persistente de email para esta clínica. Todas las automatizaciones inician desactivadas.
             </p>
           </div>
         </div>
@@ -54,8 +54,16 @@ export function AppointmentAssistantSettings({
 
       <form action={saveAppointmentAssistantSettingsAction} className="mt-5 grid gap-4">
         <label className="flex min-h-11 items-center justify-between gap-4 rounded-[var(--radius-md)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-semibold text-ink">
-          Habilitar estas reglas guardadas
+          Activar Asistente de Agenda
           <input name="enabled" type="checkbox" defaultChecked={settings?.enabled ?? false} disabled={!canWrite} className="h-5 w-5 rounded border-slate-300" />
+        </label>
+        <label className="flex min-h-11 items-center justify-between gap-4 rounded-[var(--radius-md)] border border-slate-200 px-4 py-3 text-sm font-semibold text-ink">
+          <span className="flex items-center gap-2"><Mail className="h-4 w-4 text-clinic" />Recordatorios por email</span>
+          <input name="reminder_enabled" type="checkbox" defaultChecked={settings?.reminder_enabled ?? false} disabled={!canWrite} className="h-5 w-5 rounded border-slate-300" />
+        </label>
+        <label className="flex min-h-11 items-center justify-between gap-4 rounded-[var(--radius-md)] border border-slate-200 px-4 py-3 text-sm font-semibold text-ink">
+          <span className="flex items-center gap-2"><Star className="h-4 w-4 text-clinic" />Solicitudes automáticas de reseña</span>
+          <input name="review_request_enabled" type="checkbox" defaultChecked={settings?.review_request_enabled ?? false} disabled={!canWrite} className="h-5 w-5 rounded border-slate-300" />
         </label>
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="Anticipación preferida (horas)" htmlFor="reminder_hours_before">
@@ -70,7 +78,7 @@ export function AppointmentAssistantSettings({
         </div>
         <p className="flex gap-2 rounded-[var(--radius-md)] bg-amber-50 p-3 text-sm leading-6 text-amber-900">
           <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
-          La ventana y el horario silencioso quedan almacenados, pero actualmente no existe un scheduler de recordatorios que los ejecute.
+          Los recordatorios se programan respetando la zona horaria y esta ventana silenciosa. Las solicitudes de reseña sólo se crean al completar una cita elegible.
         </p>
         <div className="flex justify-end">
           <Button type="submit" disabled={!canWrite}>Guardar configuración</Button>

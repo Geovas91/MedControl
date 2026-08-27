@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, CalendarClock, CalendarDays, CheckCircle2, Mail, MessageSquareOff, Settings2 } from "lucide-react";
+import { Activity, CalendarClock, CalendarDays, CheckCircle2, Mail, MessageSquareOff, Settings2, Star } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AppointmentAssistantSettings } from "@/components/bot/appointment-assistant-settings";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -44,6 +44,17 @@ function statusVariant(status: AppointmentStatus) {
   return "teal" as const;
 }
 
+const jobLabels: Record<string, string> = {
+  reminder_email: "Recordatorio por email",
+  review_request_email: "Solicitud de reseña"
+};
+
+function schedulerLabel(lastCompletedAt: string | null | undefined, status: string | null | undefined) {
+  if (!process.env.APPOINTMENT_AUTOMATION_CRON_SECRET) return "Configuración incompleta";
+  if (!lastCompletedAt || Date.now() - Date.parse(lastCompletedAt) > 5 * 60_000) return "Sin señal";
+  return status === "ok" ? "Scheduler OK" : "Sin señal";
+}
+
 function Unavailable({ title, description }: { title: string; description: string }) {
   return (
     <>
@@ -84,9 +95,9 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="flex items-center gap-2 font-bold text-ink"><Settings2 className="h-5 w-5 text-clinic" />Estado del asistente</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">CliniControl puede resumir la agenda, guardar preferencias y mostrar eventos reales. No existe un chatbot ni un proceso automático de recordatorios activo.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Motor persistente para recordatorios por email y solicitudes verificadas de reseña. No es un chatbot y no procesa conversaciones.</p>
           </div>
-          <Badge variant={data.settings?.enabled ? "green" : "slate"}>{data.settings?.enabled ? "Preferencias habilitadas" : "Sin automatización activa"}</Badge>
+          <Badge variant={data.settings?.enabled ? "green" : "slate"}>{data.settings?.enabled ? "Asistente activo" : "Asistente inactivo"}</Badge>
         </div>
       </section>
 
@@ -96,6 +107,14 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         <StatCard label="Confirmadas hoy" value={`${data.totals.confirmed}`} detail="Estado confirmado en la agenda real" icon={<CheckCircle2 className="h-5 w-5" />} />
         <StatCard label="Completadas hoy" value={`${data.totals.completed}`} detail="Atenciones finalizadas en la fecha local" icon={<Activity className="h-5 w-5" />} />
       </div>
+
+      <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label="Estado operacional">
+        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Scheduler</p><p className="mt-2 font-bold text-ink">{schedulerLabel(data.automationScheduler?.last_completed_at, data.automationScheduler?.last_status)}</p><p className="mt-1 text-xs text-slate-500">Último heartbeat: {data.automationScheduler?.last_started_at ? dateTime(data.automationScheduler.last_started_at, data.tenant.clinic.timezone) : "sin ejecuciones"}</p></div>
+        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recordatorios</p><p className="mt-2 font-bold text-ink">{data.settings?.enabled && data.settings.reminder_enabled ? "ON" : "OFF"}</p></div>
+        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reviews automáticas</p><p className="mt-2 font-bold text-ink">{data.settings?.enabled && data.settings.review_request_enabled ? "ON" : "OFF"}</p></div>
+        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Google Calendar</p><p className="mt-2 font-bold text-ink">{data.googleCalendarAvailable ? "Disponible" : "Disponible en Plus y Pro"}</p></div>
+        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Provider email</p><p className="mt-2 font-bold text-ink">{data.emailCalendarConfigured ? "Listo" : "No configurado"}</p></div>
+      </section>
 
       <section className="surface-card mt-5 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -126,15 +145,31 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
           <div className="mt-4 grid gap-3">
             <div className="rounded-[var(--radius-md)] border border-slate-200 p-4">
               <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 font-semibold text-ink"><Mail className="h-4 w-4 text-clinic" />Email</span><Badge variant={data.emailCalendarConfigured ? "green" : "slate"}>{data.emailCalendarConfigured ? "Canal conectado" : "No configurado"}</Badge></div>
-              <p className="mt-2 text-sm leading-6 text-slate-500">El canal existente envía invitaciones ICS al crear o cambiar citas. No ejecuta recordatorios programados.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">El mismo provider entrega invitaciones ICS históricas, recordatorios programados y solicitudes de reseña.</p>
             </div>
             <div className="rounded-[var(--radius-md)] border border-slate-200 p-4">
               <div className="flex items-center gap-2 font-semibold text-ink"><MessageSquareOff className="h-4 w-4 text-slate-500" />WhatsApp y SMS</div>
-              <p className="mt-2 text-sm leading-6 text-slate-500">No hay un proveedor conectado. Los canales externos estarán disponibles cuando se configure una integración real.</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">No configurado. Esta versión no envía mensajes por estos canales.</p>
             </div>
           </div>
         </section>
       </div>
+
+      <section className="surface-card mt-5 p-5">
+        <h2 className="flex items-center gap-2 font-bold text-ink"><Star className="h-5 w-5 text-clinic" />Jobs recientes y próximos</h2>
+        <p className="mt-1 text-sm text-slate-500">Estado operativo seguro; los jobs no almacenan destinatarios, mensajes ni datos clínicos.</p>
+        <div className="mt-4 grid gap-3">
+          {data.automationJobs.length ? data.automationJobs.map((job) => (
+            <article key={job.job_id} className="rounded-[var(--radius-md)] border border-slate-200 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><p className="font-semibold text-ink">{jobLabels[job.job_type] ?? "Automatización"}</p><Link href={`/dashboard/appointments/${job.appointment_id}`} className="mt-1 inline-flex text-sm font-semibold text-clinic hover:underline">Ver cita</Link></div>
+                <Badge variant={job.job_status === "succeeded" ? "green" : job.job_status === "failed" || job.job_status === "retry_pending" ? "amber" : "slate"}>{job.job_status}</Badge>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">Programado: {dateTime(job.scheduled_for, data.tenant.clinic.timezone)} · intento {job.attempts}/{job.max_attempts}{job.last_error_code ? ` · ${job.last_error_code}` : ""}</p>
+            </article>
+          )) : <p className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-5 text-center text-sm text-slate-500">No hay jobs registrados para esta clínica.</p>}
+        </div>
+      </section>
 
       <section className="surface-card mt-5 p-5">
         <div>
