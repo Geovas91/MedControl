@@ -7,9 +7,11 @@ type ClinicMemberRole = Database["public"]["Enums"]["clinic_member_role"];
 
 export type AppointmentAssistantSettingsInput = {
   enabled: boolean;
+  reminderEnabled: boolean;
   reminderHoursBefore: number;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
+  reviewRequestEnabled: boolean;
 };
 
 export type AppointmentAssistantSearchParams = {
@@ -78,8 +80,10 @@ export function parseAppointmentAssistantSettings(formData: FormData): Appointme
 
   return {
     enabled: formData.get("enabled") === "on",
+    reminderEnabled: formData.get("reminder_enabled") === "on",
     reminderHoursBefore: hours,
     quietHoursStart,
-    quietHoursEnd
+    quietHoursEnd,
+    reviewRequestEnabled: formData.get("review_request_enabled") === "on"
   };
 }

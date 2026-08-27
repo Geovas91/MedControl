@@ -35,7 +35,36 @@ type ActivityRpcRow = {
   occurred_at: string;
 };
 
+type AutomationDashboardRow = {
+  job_id: string;
+  job_type: "reminder_email" | "review_request_email";
+  job_status: string;
+  scheduled_for: string;
+  attempts: number;
+  max_attempts: number;
+  last_error_code: string | null;
+  appointment_id: string;
+  last_scheduler_started_at: string | null;
+  last_scheduler_completed_at: string | null;
+  last_scheduler_status: string | null;
+};
+
+type AutomationSchedulerRow = {
+  last_started_at: string | null;
+  last_completed_at: string | null;
+  last_status: string | null;
+  last_claimed: number;
+  last_succeeded: number;
+  last_skipped: number;
+  last_failed: number;
+  assistant_enabled: boolean;
+  reminder_enabled: boolean;
+  review_request_enabled: boolean;
+};
+
 type AssistantRpcClient = {
+  rpc(fn: "get_appointment_automation_scheduler_status_for_current_user", args: { p_clinic_id: string }): Promise<{ data: AutomationSchedulerRow[] | null; error: { code?: string } | null }>;
+  rpc(fn: "get_appointment_automation_dashboard_for_current_user", args: { p_clinic_id: string; p_limit: number }): Promise<{ data: AutomationDashboardRow[] | null; error: { code?: string } | null }>;
   rpc(
     fn: "list_appointment_assistant_activity_for_current_user",
     args: {
@@ -51,9 +80,11 @@ type AssistantRpcClient = {
     args: {
       p_clinic_id: string;
       p_enabled: boolean;
+      p_reminder_enabled: boolean;
       p_reminder_hours_before: number;
       p_quiet_hours_start: string | null;
       p_quiet_hours_end: string | null;
+      p_review_request_enabled: boolean;
     }
   ): Promise<{ data: unknown; error: { code?: string } | null }>;
 };
@@ -78,10 +109,16 @@ export type AppointmentAssistantData = {
     startsAt: string;
     status: AppointmentStatus;
   }>;
-  settings: Pick<BotSettingsRow, "enabled" | "reminder_hours_before" | "quiet_hours_start" | "quiet_hours_end"> | null;
+  settings: Pick<BotSettingsRow, "enabled" | "reminder_enabled" | "reminder_hours_before" | "quiet_hours_start" | "quiet_hours_end" | "review_request_enabled"> | null;
   canManageSettings: boolean;
   canWriteSettings: boolean;
   emailCalendarConfigured: boolean;
+  googleCalendarAvailable: boolean;
+  automationJobs: AutomationDashboardRow[];
+  automationScheduler: AutomationSchedulerRow | null;
+  assistantEnabled: boolean;
+  reminderEnabled: boolean;
+  reviewRequestEnabled: boolean;
   activity: AppointmentAssistantActivity[];
   activityNextCursor: {
     occurredAt: string;
@@ -154,11 +191,11 @@ export async function getAppointmentAssistantForActiveTenant(
   const settingsQuery = canManageSettings
     ? supabase
         .from("bot_settings")
-        .select("enabled, reminder_hours_before, quiet_hours_start, quiet_hours_end")
+        .select("enabled, reminder_enabled, reminder_hours_before, quiet_hours_start, quiet_hours_end, review_request_enabled")
         .eq("clinic_id", clinicId)
         .maybeSingle()
     : Promise.resolve({ data: null, error: null });
-  const entitlementsPromise = canManageSettings ? getClinicEntitlements(clinicId) : Promise.resolve(null);
+  const entitlementsPromise = getClinicEntitlements(clinicId);
   const activityQuery = (supabase as unknown as AssistantRpcClient).rpc(
     "list_appointment_assistant_activity_for_current_user",
     {
@@ -169,15 +206,23 @@ export async function getAppointmentAssistantForActiveTenant(
       p_limit: APPOINTMENT_ASSISTANT_ACTIVITY_PAGE_SIZE + 1
     }
   );
+  const automationQuery = (supabase as unknown as AssistantRpcClient).rpc(
+    "get_appointment_automation_dashboard_for_current_user", { p_clinic_id: clinicId, p_limit: 10 }
+  );
+  const schedulerQuery = (supabase as unknown as AssistantRpcClient).rpc(
+    "get_appointment_automation_scheduler_status_for_current_user", { p_clinic_id: clinicId }
+  );
 
-  const [todayResult, upcomingCountResult, upcomingResult, settingsResult, entitlements, activityResult] =
+  const [todayResult, upcomingCountResult, upcomingResult, settingsResult, entitlements, activityResult, automationResult, schedulerResult] =
     await Promise.all([
       todayQuery,
       upcomingCountQuery,
       upcomingQuery,
       settingsQuery,
       entitlementsPromise,
-      activityQuery
+      activityQuery,
+      automationQuery,
+      schedulerQuery
     ]);
 
   if (
@@ -185,7 +230,9 @@ export async function getAppointmentAssistantForActiveTenant(
     upcomingCountResult.error ||
     upcomingResult.error ||
     settingsResult.error ||
-    activityResult.error
+    activityResult.error ||
+    automationResult.error ||
+    schedulerResult.error
   ) {
     logger.error("Appointment assistant data query failed", {
       component: "appointment_assistant",
@@ -213,6 +260,8 @@ export async function getAppointmentAssistantForActiveTenant(
   const visibleActivity = activityRows.slice(0, APPOINTMENT_ASSISTANT_ACTIVITY_PAGE_SIZE);
   const lastActivity = visibleActivity.at(-1);
   const configuration = getInvitationEmailConfiguration();
+  const automationScheduler = ((schedulerResult.data ?? []) as AutomationSchedulerRow[])[0] ?? null;
+  const safeSettings = settingsResult.data as AppointmentAssistantData["settings"];
 
   return {
     state: "ready",
@@ -227,10 +276,16 @@ export async function getAppointmentAssistantForActiveTenant(
         startsAt: appointment.starts_at,
         status: appointment.status
       })),
-      settings: settingsResult.data as AppointmentAssistantData["settings"],
+      settings: safeSettings,
       canManageSettings,
       canWriteSettings: Boolean(entitlements && canCreateWithEntitlements(entitlements)),
       emailCalendarConfigured: configuration.state === "ready",
+      googleCalendarAvailable: Boolean(entitlements && entitlements.state === "ready" && entitlements.entitlements.plan.features.google_calendar),
+      automationJobs: (automationResult.data ?? []) as AutomationDashboardRow[],
+      automationScheduler,
+      assistantEnabled: safeSettings?.enabled ?? automationScheduler?.assistant_enabled ?? false,
+      reminderEnabled: safeSettings?.reminder_enabled ?? automationScheduler?.reminder_enabled ?? false,
+      reviewRequestEnabled: safeSettings?.review_request_enabled ?? automationScheduler?.review_request_enabled ?? false,
       activity: visibleActivity.map((event) => ({
         id: event.event_id,
         source: event.event_source,
@@ -270,9 +325,11 @@ export async function saveAppointmentAssistantSettingsForActiveTenant(
     {
       p_clinic_id: context.tenant.clinic.id,
       p_enabled: input.enabled,
+      p_reminder_enabled: input.reminderEnabled,
       p_reminder_hours_before: input.reminderHoursBefore,
       p_quiet_hours_start: input.quietHoursStart,
-      p_quiet_hours_end: input.quietHoursEnd
+      p_quiet_hours_end: input.quietHoursEnd,
+      p_review_request_enabled: input.reviewRequestEnabled
     }
   );
 

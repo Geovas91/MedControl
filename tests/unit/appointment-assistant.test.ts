@@ -26,7 +26,7 @@ test("visible bot route is honestly named and contains no simulated conversation
   assert.match(page, /title="Asistente de agenda"/);
   assert.match(navigation, /href: "\/dashboard\/bot", label: "Asistente"/);
   assert.doesNotMatch(page, /Demo conectado|Respuesta:|Responde 1|patientResponse/i);
-  assert.match(page, /No existe un chatbot ni un proceso automático de recordatorios activo/);
+  assert.match(page, /No es un chatbot y no procesa conversaciones/);
 });
 
 test("settings parser accepts only explicit bounded internal preferences", () => {
@@ -37,9 +37,11 @@ test("settings parser accepts only explicit bounded internal preferences", () =>
   valid.set("quiet_hours_end", "08:00");
   assert.deepEqual(parseAppointmentAssistantSettings(valid), {
     enabled: true,
+    reminderEnabled: false,
     reminderHoursBefore: 24,
     quietHoursStart: "20:00",
-    quietHoursEnd: "08:00"
+    quietHoursEnd: "08:00",
+    reviewRequestEnabled: false
   });
 
   valid.set("reminder_hours_before", "169");
@@ -94,7 +96,7 @@ test("channel status is derived server-side without returning provider configura
   assert.match(server, /getInvitationEmailConfiguration\(\)/);
   assert.match(server, /emailCalendarConfigured: configuration\.state === "ready"/);
   assert.doesNotMatch(page, /RESEND_API_KEY|SUPABASE_SERVICE_ROLE_KEY|provider_message_id/);
-  assert.match(page, /No ejecuta recordatorios programados/);
+  assert.match(page, /recordatorios programados y solicitudes de reseña/);
 });
 
 test("the production assistant has no mock appointment bot dependency", () => {
