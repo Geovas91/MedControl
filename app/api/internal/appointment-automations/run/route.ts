@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAuthorizedAutomationCron } from "@/lib/appointment-automations";
+import { executeAppointmentAutomationEndpoint, isAuthorizedAutomationCron } from "@/lib/appointment-automations";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +11,6 @@ export async function POST(request: Request) {
   }
   // Load service-role code only after authenticating the caller.
   const { runAppointmentAutomations } = await import("@/lib/server/appointment-automation-runner");
-  try {
-    return NextResponse.json(await runAppointmentAutomations(), { headers: { "Cache-Control": "no-store" } });
-  } catch {
-    return NextResponse.json({ error: "run_failed" }, { status: 500, headers: { "Cache-Control": "no-store" } });
-  }
+  const result = await executeAppointmentAutomationEndpoint(runAppointmentAutomations);
+  return NextResponse.json(result.body, { status: result.status, headers: { "Cache-Control": "no-store" } });
 }
