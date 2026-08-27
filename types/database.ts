@@ -821,6 +821,7 @@ export type Database = {
           id: string;
           clinic_id: string;
           enabled: boolean;
+          reminder_enabled: boolean;
           channel: string;
           reminder_hours_before: number;
           quiet_hours_start: string | null;
@@ -828,6 +829,7 @@ export type Database = {
           max_reminders_per_patient: number;
           message_template: string | null;
           escalation_behavior: string;
+          review_request_enabled: boolean;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -835,6 +837,7 @@ export type Database = {
           id?: string;
           clinic_id: string;
           enabled?: boolean;
+          reminder_enabled?: boolean;
           channel?: string;
           reminder_hours_before?: number;
           quiet_hours_start?: string | null;
@@ -842,6 +845,7 @@ export type Database = {
           max_reminders_per_patient?: number;
           message_template?: string | null;
           escalation_behavior?: string;
+          review_request_enabled?: boolean;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };
