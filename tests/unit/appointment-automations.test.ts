@@ -12,9 +12,16 @@ test("cron authorization rejects absent, short and non-equal secrets", () => {
   const secret = "0123456789abcdefghijklmnop";
   assert.equal(isAuthorizedAutomationCron(secret, secret), true);
   assert.equal(isAuthorizedAutomationCron(null, secret), false);
+  assert.equal(isAuthorizedAutomationCron(secret, undefined), false);
+  assert.equal(isAuthorizedAutomationCron("", secret), false);
   assert.equal(isAuthorizedAutomationCron("short", "short"), false);
   assert.equal(isAuthorizedAutomationCron(`${secret}x`, secret), false);
+  assert.equal(isAuthorizedAutomationCron(`${secret}, ${secret}`, secret), false);
+  assert.match(route, /export async function POST/);
+  assert.doesNotMatch(route, /export async function GET|request\.json\(|request\.text\(|clinic_id|job_id|appointment_id/);
   assert.match(route, /await import\("@\/lib\/server\/appointment-automation-runner"\)/);
+  assert.ok(route.indexOf("isAuthorizedAutomationCron") < route.indexOf("await import"));
+  assert.doesNotMatch(route, /logger|console\.|authorization.*(?:warn|error|info)/i);
 });
 
 test("retry policy is bounded and delivery uncertainty is not retried", () => {
@@ -36,6 +43,9 @@ test("0031 has persistent locking, tenant-safe dedupe, no client reads and quiet
   assert.match(migration, /foreign key \(clinic_id, appointment_id\)[\s\S]+appointments\(clinic_id, id\)/i);
   assert.match(migration, /for update skip locked/i);
   assert.match(migration, /lease_expires_at/);
+  assert.match(migration, /lease_expires_at > clock_timestamp\(\)/i);
+  assert.match(migration, /attempts >= expired\.max_attempts/i);
+  assert.match(migration, /last_error_code = 'lease_expired'/i);
   assert.match(migration, /unique \(clinic_id, dedupe_key\)/i);
   assert.match(migration, /revoke all privileges on table public\.appointment_automation_jobs from public, anon, authenticated/i);
   assert.match(migration, /calculate_appointment_reminder_at[\s\S]+at time zone p_timezone/i);
@@ -48,6 +58,7 @@ test("review automation issues once and never retries after plaintext issuance",
   assert.match(migration, /automation_job_id/);
   assert.match(runner, /Never retry or regenerate after issuance/);
   assert.match(runner, /review-automation-\$\{invitation\.invitation_id\}/);
+  assert.match(runner, /Recheck once more before the provider call/);
 });
 
 test("reminder content is neutral and logs do not receive PHI", () => {

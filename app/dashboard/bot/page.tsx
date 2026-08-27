@@ -97,7 +97,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
             <h2 className="flex items-center gap-2 font-bold text-ink"><Settings2 className="h-5 w-5 text-clinic" />Estado del asistente</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Motor persistente para recordatorios por email y solicitudes verificadas de reseña. No es un chatbot y no procesa conversaciones.</p>
           </div>
-          <Badge variant={data.settings?.enabled ? "green" : "slate"}>{data.settings?.enabled ? "Asistente activo" : "Asistente inactivo"}</Badge>
+          <Badge variant={data.assistantEnabled ? "green" : "slate"}>{data.assistantEnabled ? "Asistente activo" : "Asistente inactivo"}</Badge>
         </div>
       </section>
 
@@ -110,8 +110,8 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
 
       <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label="Estado operacional">
         <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Scheduler</p><p className="mt-2 font-bold text-ink">{schedulerLabel(data.automationScheduler?.last_completed_at, data.automationScheduler?.last_status)}</p><p className="mt-1 text-xs text-slate-500">Último heartbeat: {data.automationScheduler?.last_started_at ? dateTime(data.automationScheduler.last_started_at, data.tenant.clinic.timezone) : "sin ejecuciones"}</p></div>
-        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recordatorios</p><p className="mt-2 font-bold text-ink">{data.settings?.enabled && data.settings.reminder_enabled ? "ON" : "OFF"}</p></div>
-        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reviews automáticas</p><p className="mt-2 font-bold text-ink">{data.settings?.enabled && data.settings.review_request_enabled ? "ON" : "OFF"}</p></div>
+        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recordatorios</p><p className="mt-2 font-bold text-ink">{data.assistantEnabled && data.reminderEnabled ? "ON" : "OFF"}</p></div>
+        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reviews automáticas</p><p className="mt-2 font-bold text-ink">{data.assistantEnabled && data.reviewRequestEnabled ? "ON" : "OFF"}</p></div>
         <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Google Calendar</p><p className="mt-2 font-bold text-ink">{data.googleCalendarAvailable ? "Disponible" : "Disponible en Plus y Pro"}</p></div>
         <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Provider email</p><p className="mt-2 font-bold text-ink">{data.emailCalendarConfigured ? "Listo" : "No configurado"}</p></div>
       </section>

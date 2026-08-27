@@ -46,7 +46,7 @@ insert into public.appointment_automation_jobs(
 commit;
 
 begin;
-select extensions.plan(25);
+select extensions.plan(42);
 
 select extensions.is(
   (select count(*)::integer from public.appointment_automation_jobs where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email'),
@@ -59,9 +59,20 @@ select extensions.is(
 
 select extensions.ok(
   public.calculate_appointment_reminder_at(
-    timestamptz '2026-09-02 15:00:00+00', 'America/Mexico_City', 1, time '20:00', time '08:00'
+    timestamptz '2026-09-02 16:00:00+00', 'America/Mexico_City', 4, time '20:00', time '08:00'
   ) = timestamptz '2026-09-02 14:00:00+00',
   'quiet hours move a reminder to clinic-local quiet end'
+);
+select extensions.is(
+  public.calculate_appointment_reminder_at(
+    timestamptz '2026-03-08 15:00:00+00', 'America/New_York', 4, time '22:00', time '08:00'
+  ), timestamptz '2026-03-08 12:00:00+00', 'quiet-hour calculation follows the timezone DST transition'
+);
+select extensions.ok(
+  public.calculate_appointment_reminder_at(
+    timestamptz '2026-09-03 05:00:00+00', 'America/Mexico_City', 0, time '20:00', time '08:00'
+  ) > timestamptz '2026-09-03 05:30:00+00',
+  'a near appointment during quiet hours is recognized as too late to schedule safely'
 );
 
 update public.appointments set starts_at=starts_at + interval '2 hours', ends_at=ends_at + interval '2 hours'
@@ -87,6 +98,86 @@ select extensions.ok(
   exists(select 1 from public.appointment_automation_jobs where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'),
   'restore creates a fresh reminder generation'
 );
+
+create temporary table race_jobs(name text primary key, id uuid not null);
+insert into race_jobs values ('cancel', (
+  select id from public.appointment_automation_jobs
+  where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'
+  order by generation desc limit 1
+));
+update public.appointment_automation_jobs set status='processing', attempts=1, locked_at=now(),
+  lease_expires_at=now()+interval '1 minute', locked_by='race_cancel_test'
+where id=(select id from race_jobs where name='cancel');
+update public.appointments set status='cancelled' where id='f4000000-0000-4000-8000-000000000001';
+select extensions.is((select status from public.appointment_automation_jobs where id=(select id from race_jobs where name='cancel')), 'cancelled', 'cancel after claim cancels the owned reminder');
+select extensions.is((select count(*)::integer from public.get_appointment_automation_context((select id from race_jobs where name='cancel'),'race_cancel_test')), 0, 'cancelled reminder fails the final provider preflight');
+
+update public.appointments set status='scheduled' where id='f4000000-0000-4000-8000-000000000001';
+insert into race_jobs values ('reschedule', (
+  select id from public.appointment_automation_jobs
+  where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'
+  order by generation desc limit 1
+));
+update public.appointment_automation_jobs set status='processing', attempts=1, locked_at=now(),
+  lease_expires_at=now()+interval '1 minute', locked_by='race_reschedule_test'
+where id=(select id from race_jobs where name='reschedule');
+update public.appointments set starts_at=starts_at+interval '1 hour', ends_at=ends_at+interval '1 hour'
+where id='f4000000-0000-4000-8000-000000000001';
+select extensions.is((select status from public.appointment_automation_jobs where id=(select id from race_jobs where name='reschedule')), 'cancelled', 'reschedule after claim cancels generation N');
+select extensions.is((select count(*)::integer from public.get_appointment_automation_context((select id from race_jobs where name='reschedule'),'race_reschedule_test')), 0, 'obsolete generation N fails the final provider preflight');
+select extensions.is((select count(*)::integer from public.appointment_automation_jobs where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'), 1, 'reschedule race leaves exactly one pending generation N+1');
+
+insert into race_jobs values ('settings', (
+  select id from public.appointment_automation_jobs
+  where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'
+  order by generation desc limit 1
+));
+update public.appointment_automation_jobs set status='processing', attempts=1, locked_at=now(),
+  lease_expires_at=now()+interval '1 minute', locked_by='race_settings_test'
+where id=(select id from race_jobs where name='settings');
+update public.bot_settings set enabled=false where clinic_id='f2000000-0000-4000-8000-000000000001';
+select extensions.is((select status from public.appointment_automation_jobs where id=(select id from race_jobs where name='settings')), 'cancelled', 'disabling settings after claim cancels the reminder');
+select extensions.is((select count(*)::integer from public.get_appointment_automation_context((select id from race_jobs where name='settings'),'race_settings_test')), 0, 'disabled settings fail the final provider preflight');
+update public.bot_settings set enabled=true where clinic_id='f2000000-0000-4000-8000-000000000001';
+
+insert into race_jobs values ('subscription', (
+  select id from public.appointment_automation_jobs
+  where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'
+  order by generation desc limit 1
+));
+update public.appointment_automation_jobs set status='processing', attempts=1, locked_at=now(),
+  lease_expires_at=now()+interval '1 minute', locked_by='race_subscription_test'
+where id=(select id from race_jobs where name='subscription');
+update public.clinic_subscriptions set status='inactive' where clinic_id='f2000000-0000-4000-8000-000000000001';
+select extensions.ok(exists(select 1 from public.get_appointment_automation_context((select id from race_jobs where name='subscription'),'race_subscription_test') where not valid_subscription), 'subscription downgrade after claim is visible before provider call');
+update public.clinic_subscriptions set status='active' where clinic_id='f2000000-0000-4000-8000-000000000001';
+update public.bot_settings set reminder_hours_before=25 where clinic_id='f2000000-0000-4000-8000-000000000001';
+select extensions.is((select count(*)::integer from public.appointment_automation_jobs where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'), 1, 'configuration change rebuilds exactly one pending reminder generation');
+
+insert into race_jobs values ('lease', (
+  select id from public.appointment_automation_jobs
+  where appointment_id='f4000000-0000-4000-8000-000000000001' and type='reminder_email' and status='pending'
+  order by generation desc limit 1
+));
+update public.appointment_automation_jobs set status='processing', attempts=1, locked_at=now()-interval '11 minutes',
+  lease_expires_at=now()-interval '10 minutes', locked_by='expired_worker_test'
+where id=(select id from race_jobs where name='lease');
+select extensions.is(public.finish_appointment_automation_job((select id from race_jobs where name='lease'),'expired_worker_test','succeeded',null,null), false, 'worker cannot finalize after its lease expires');
+select extensions.ok(exists(select 1 from public.claim_due_appointment_automation_jobs('replacement_worker_test',1,60) where id=(select id from race_jobs where name='lease')), 'expired lease is claimed by a replacement worker');
+select extensions.is(public.finish_appointment_automation_job((select id from race_jobs where name='lease'),'expired_worker_test','succeeded',null,null), false, 'old worker cannot finalize after replacement claim');
+select public.finish_appointment_automation_job((select id from race_jobs where name='lease'),'replacement_worker_test','succeeded',null,null);
+
+update public.clinics set timezone='Invalid/Test_Zone' where id='f2000000-0000-4000-8000-000000000001';
+insert into public.appointments(id, clinic_id, patient_id, doctor_id, title, starts_at, ends_at)
+values ('f4000000-0000-4000-8000-000000000005','f2000000-0000-4000-8000-000000000001',
+  'f3000000-0000-4000-8000-000000000001','f1000000-0000-4000-8000-000000000002',
+  'Invalid timezone fixture',now()+interval '6 days',now()+interval '6 days 1 hour');
+select extensions.ok(exists(select 1 from public.appointments where id='f4000000-0000-4000-8000-000000000005')
+  and not exists(select 1 from public.appointment_automation_jobs where appointment_id='f4000000-0000-4000-8000-000000000005'),
+  'invalid clinic timezone fails closed for automation without blocking the appointment');
+update public.clinics set timezone='America/Mexico_City' where id='f2000000-0000-4000-8000-000000000001';
+select extensions.ok(exists(select 1 from public.appointment_automation_jobs where appointment_id='f4000000-0000-4000-8000-000000000005' and status='pending'),
+  'restoring a valid timezone rebuilds the pending reminder');
 
 update public.appointments set status='completed' where id='f4000000-0000-4000-8000-000000000003';
 select extensions.is(
@@ -166,6 +257,14 @@ select extensions.ok(public.finish_appointment_automation_job(
   'f5000000-0000-4000-8000-000000000001', 'max_attempt_test', 'retry', 'timeout', now()+interval '5 minutes'
 ), 'max-attempt finalization succeeds');
 select extensions.is((select status from public.appointment_automation_jobs where id='f5000000-0000-4000-8000-000000000001'), 'failed', 'max attempts becomes terminal failed');
+
+insert into public.appointment_automation_jobs(id, clinic_id, appointment_id, type, source_version, scheduled_for,
+  next_attempt_at, status, attempts, max_attempts, dedupe_key, locked_at, lease_expires_at, locked_by)
+values ('f5000000-0000-4000-8000-000000000002','f2000000-0000-4000-8000-000000000002',
+  'f4000000-0000-4000-8000-000000000002','reminder_email',now(),now(),now(),'processing',1,1,
+  'max-expired-fixture',now()-interval '2 minutes',now()-interval '1 minute','dead_worker_test');
+select count(*) from public.claim_due_appointment_automation_jobs('terminalizer_test',1,60);
+select extensions.ok(exists(select 1 from public.appointment_automation_jobs where id='f5000000-0000-4000-8000-000000000002' and status='failed' and last_error_code='lease_expired'), 'expired processing job at max attempts becomes terminal failed');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'f1000000-0000-4000-8000-000000000003', true);

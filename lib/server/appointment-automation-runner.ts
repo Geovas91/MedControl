@@ -43,6 +43,11 @@ function validSharedPreflight(job: Job, context: Context) {
     && Boolean(context.doctor_display_name);
 }
 
+async function loadCurrentContext(client: RpcClient, job: Job, workerId: string) {
+  const lookup = await client.rpc("get_appointment_automation_context", { p_job_id: job.id, p_worker_id: workerId });
+  return lookup.error ? null : rows<Context>(lookup.data)[0] ?? null;
+}
+
 async function processReminder(client: RpcClient, job: Job, context: Context, workerId: string) {
   if (!validSharedPreflight(job, context) || !context.reminder_enabled
     || !["scheduled", "confirmed", "waiting"].includes(context.appointment_status)
@@ -55,12 +60,20 @@ async function processReminder(client: RpcClient, job: Job, context: Context, wo
     await finish(client, job, workerId, "skipped", "provider_unavailable");
     return "skipped" as const;
   }
+  // Final gate after claim and provider readiness: appointment/settings/subscription may have changed.
+  const current = await loadCurrentContext(client, job, workerId);
+  if (!current || !validSharedPreflight(job, current) || !current.reminder_enabled
+    || !["scheduled", "confirmed", "waiting"].includes(current.appointment_status)
+    || Date.parse(current.starts_at) <= Date.now()) {
+    await finish(client, job, workerId, "skipped", "preflight_changed");
+    return "skipped" as const;
+  }
   const message = buildAppointmentReminderEmail({
-    clinicName: context.clinic_name, doctorDisplayName: context.doctor_display_name!,
-    startsAt: context.starts_at, timeZone: context.clinic_timezone
+    clinicName: current.clinic_name, doctorDisplayName: current.doctor_display_name!,
+    startsAt: current.starts_at, timeZone: current.clinic_timezone
   });
   const delivery = await sendWithResend(configuration, {
-    to: context.patient_email!, ...message, replyTo: configuration.replyTo,
+    to: current.patient_email!, ...message, replyTo: configuration.replyTo,
     idempotencyKey: `appointment-reminder-${job.id}`
   });
   if (delivery.ok) {
@@ -89,13 +102,21 @@ async function processReview(client: RpcClient, job: Job, context: Context, work
     await finish(client, job, workerId, "skipped", "invitation_unavailable");
     return "skipped" as const;
   }
+  // Issuance itself revalidates completed/profile/subscription/settings/email in SQL.
+  // Recheck once more before the provider call; if state changed, keep the invitation for manual recovery.
+  const current = await loadCurrentContext(client, job, workerId);
+  if (!current || !validSharedPreflight(job, current) || !current.review_request_enabled
+    || current.appointment_status !== "completed") {
+    await finish(client, job, workerId, "skipped", "preflight_changed");
+    return "skipped" as const;
+  }
   const reviewUrl = buildReviewUrl(getAppBaseUrl(), invitation.raw_token);
   const message = buildReviewInvitationEmail({
-    clinicName: context.clinic_name, doctorDisplayName: context.doctor_display_name!,
-    expiresAt: invitation.expires_at, timeZone: context.clinic_timezone, reviewUrl
+    clinicName: current.clinic_name, doctorDisplayName: current.doctor_display_name!,
+    expiresAt: invitation.expires_at, timeZone: current.clinic_timezone, reviewUrl
   });
   const delivery = await sendWithResend(configuration, {
-    to: context.patient_email!, ...message, replyTo: configuration.replyTo,
+    to: current.patient_email!, ...message, replyTo: configuration.replyTo,
     idempotencyKey: `review-automation-${invitation.invitation_id}`
   });
   await client.rpc("record_review_email_result_for_automation", {
@@ -122,9 +143,8 @@ export async function runAppointmentAutomations(): Promise<AutomationRunCounters
     counters.claimed = jobs.length;
     for (const job of jobs) {
       try {
-        const lookup = await client.rpc("get_appointment_automation_context", { p_job_id: job.id, p_worker_id: workerId });
-        const context = rows<Context>(lookup.data)[0];
-        if (lookup.error || !context) {
+        const context = await loadCurrentContext(client, job, workerId);
+        if (!context) {
           await finish(client, job, workerId, "skipped", "context_unavailable");
           counters.skipped += 1;
           continue;

@@ -57,6 +57,9 @@ type AutomationSchedulerRow = {
   last_succeeded: number;
   last_skipped: number;
   last_failed: number;
+  assistant_enabled: boolean;
+  reminder_enabled: boolean;
+  review_request_enabled: boolean;
 };
 
 type AssistantRpcClient = {
@@ -113,6 +116,9 @@ export type AppointmentAssistantData = {
   googleCalendarAvailable: boolean;
   automationJobs: AutomationDashboardRow[];
   automationScheduler: AutomationSchedulerRow | null;
+  assistantEnabled: boolean;
+  reminderEnabled: boolean;
+  reviewRequestEnabled: boolean;
   activity: AppointmentAssistantActivity[];
   activityNextCursor: {
     occurredAt: string;
@@ -254,6 +260,8 @@ export async function getAppointmentAssistantForActiveTenant(
   const visibleActivity = activityRows.slice(0, APPOINTMENT_ASSISTANT_ACTIVITY_PAGE_SIZE);
   const lastActivity = visibleActivity.at(-1);
   const configuration = getInvitationEmailConfiguration();
+  const automationScheduler = ((schedulerResult.data ?? []) as AutomationSchedulerRow[])[0] ?? null;
+  const safeSettings = settingsResult.data as AppointmentAssistantData["settings"];
 
   return {
     state: "ready",
@@ -268,13 +276,16 @@ export async function getAppointmentAssistantForActiveTenant(
         startsAt: appointment.starts_at,
         status: appointment.status
       })),
-      settings: settingsResult.data as AppointmentAssistantData["settings"],
+      settings: safeSettings,
       canManageSettings,
       canWriteSettings: Boolean(entitlements && canCreateWithEntitlements(entitlements)),
       emailCalendarConfigured: configuration.state === "ready",
       googleCalendarAvailable: Boolean(entitlements && entitlements.state === "ready" && entitlements.entitlements.plan.features.google_calendar),
       automationJobs: (automationResult.data ?? []) as AutomationDashboardRow[],
-      automationScheduler: ((schedulerResult.data ?? []) as AutomationSchedulerRow[])[0] ?? null,
+      automationScheduler,
+      assistantEnabled: safeSettings?.enabled ?? automationScheduler?.assistant_enabled ?? false,
+      reminderEnabled: safeSettings?.reminder_enabled ?? automationScheduler?.reminder_enabled ?? false,
+      reviewRequestEnabled: safeSettings?.review_request_enabled ?? automationScheduler?.review_request_enabled ?? false,
       activity: visibleActivity.map((event) => ({
         id: event.event_id,
         source: event.event_source,

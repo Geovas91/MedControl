@@ -3,7 +3,11 @@
 
 alter table public.bot_settings
   add column reminder_enabled boolean not null default false,
-  add column review_request_enabled boolean not null default false;
+  add column review_request_enabled boolean not null default false,
+  add constraint bot_settings_reminder_hours_v1_check check (reminder_hours_before between 1 and 168),
+  add constraint bot_settings_quiet_hours_pair_v1_check check (
+    (quiet_hours_start is null) = (quiet_hours_end is null)
+  );
 
 drop function public.save_appointment_assistant_settings_for_current_user(uuid, boolean, integer, time, time);
 
@@ -149,7 +153,7 @@ revoke all privileges on table public.appointment_automation_scheduler_state fro
 create function public.clinic_has_effective_automation_subscription_internal(p_clinic_id uuid)
 returns boolean
 language sql
-security definer
+security invoker
 set search_path = public, pg_temp
 stable
 as $$
@@ -181,8 +185,9 @@ declare
   v_date date;
   v_time time;
 begin
-  if p_quiet_start is null or p_quiet_end is null or p_quiet_start = p_quiet_end then return v_candidate; end if;
+  -- Resolve the tenant timezone even when quiet hours are disabled so invalid configuration fails closed.
   v_local := v_candidate at time zone p_timezone;
+  if p_quiet_start is null or p_quiet_end is null or p_quiet_start = p_quiet_end then return v_candidate; end if;
   v_date := v_local::date;
   v_time := v_local::time;
   if p_quiet_start < p_quiet_end and v_time >= p_quiet_start and v_time < p_quiet_end then
@@ -238,8 +243,16 @@ begin
     select coalesce(max(job.generation), 0) + 1 into v_generation
     from public.appointment_automation_jobs job
     where job.clinic_id = new.clinic_id and job.appointment_id = new.id and job.type = 'reminder_email';
-    v_schedule := public.calculate_appointment_reminder_at(new.starts_at, v_timezone,
-      v_settings.reminder_hours_before, v_settings.quiet_hours_start, v_settings.quiet_hours_end);
+    begin
+      v_schedule := public.calculate_appointment_reminder_at(new.starts_at, v_timezone,
+        v_settings.reminder_hours_before, v_settings.quiet_hours_start, v_settings.quiet_hours_end);
+      -- A late-created appointment must not enqueue an immediate attempt inside quiet hours.
+      v_schedule := public.calculate_appointment_reminder_at(greatest(v_schedule, clock_timestamp()), v_timezone,
+        0, v_settings.quiet_hours_start, v_settings.quiet_hours_end);
+    exception when invalid_parameter_value then
+      -- Invalid tenant timezone fails closed for automation without blocking the clinical mutation.
+      return new;
+    end;
     if v_schedule < new.starts_at then
       insert into public.appointment_automation_jobs (
         clinic_id, appointment_id, type, source_version, generation,
@@ -270,6 +283,100 @@ create trigger appointments_enqueue_automation_jobs
 after insert or update on public.appointments
 for each row execute function public.enqueue_appointment_automation_jobs();
 
+create function public.rebuild_clinic_reminder_jobs(p_clinic_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_settings public.bot_settings%rowtype;
+  v_timezone text;
+  v_appointment public.appointments%rowtype;
+  v_schedule timestamptz;
+  v_generation integer;
+begin
+  update public.appointment_automation_jobs
+  set status = 'cancelled', cancelled_at = now(), processed_at = now(), last_error_code = 'settings_changed',
+      locked_at = null, lease_expires_at = null, locked_by = null
+  where clinic_id = p_clinic_id and type = 'reminder_email'
+    and status in ('pending', 'retry_pending', 'processing');
+
+  select * into v_settings from public.bot_settings where clinic_id = p_clinic_id;
+  if not found or not v_settings.enabled or not v_settings.reminder_enabled
+    or not public.clinic_has_effective_automation_subscription_internal(p_clinic_id) then return; end if;
+  select timezone into v_timezone from public.clinics where id = p_clinic_id;
+
+  for v_appointment in
+    select * from public.appointments
+    where clinic_id = p_clinic_id and status in ('scheduled', 'confirmed', 'waiting') and starts_at > clock_timestamp()
+    order by starts_at, id
+  loop
+    begin
+      v_schedule := public.calculate_appointment_reminder_at(v_appointment.starts_at, v_timezone,
+        v_settings.reminder_hours_before, v_settings.quiet_hours_start, v_settings.quiet_hours_end);
+      v_schedule := public.calculate_appointment_reminder_at(greatest(v_schedule, clock_timestamp()), v_timezone,
+        0, v_settings.quiet_hours_start, v_settings.quiet_hours_end);
+    exception when invalid_parameter_value then
+      continue;
+    end;
+    if v_schedule < v_appointment.starts_at then
+      select coalesce(max(job.generation), 0) + 1 into v_generation
+      from public.appointment_automation_jobs job
+      where job.clinic_id = p_clinic_id and job.appointment_id = v_appointment.id and job.type = 'reminder_email';
+      insert into public.appointment_automation_jobs(
+        clinic_id, appointment_id, type, source_version, generation,
+        scheduled_for, next_attempt_at, dedupe_key
+      ) values (
+        p_clinic_id, v_appointment.id, 'reminder_email', v_appointment.starts_at, v_generation,
+        v_schedule, v_schedule, 'reminder:' || v_appointment.id::text || ':' || v_generation::text
+      ) on conflict (clinic_id, dedupe_key) do nothing;
+    end if;
+  end loop;
+end;
+$$;
+revoke all on function public.rebuild_clinic_reminder_jobs(uuid) from public, anon, authenticated;
+
+create function public.refresh_appointment_automation_after_settings_change()
+returns trigger
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+begin
+  if tg_op = 'INSERT' or old.enabled is distinct from new.enabled
+    or old.reminder_enabled is distinct from new.reminder_enabled
+    or old.reminder_hours_before is distinct from new.reminder_hours_before
+    or old.quiet_hours_start is distinct from new.quiet_hours_start
+    or old.quiet_hours_end is distinct from new.quiet_hours_end then
+    perform public.rebuild_clinic_reminder_jobs(new.clinic_id);
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.refresh_appointment_automation_after_settings_change() from public, anon, authenticated;
+create trigger bot_settings_refresh_appointment_automation
+after insert or update on public.bot_settings
+for each row execute function public.refresh_appointment_automation_after_settings_change();
+
+create function public.refresh_appointment_automation_after_timezone_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if old.timezone is distinct from new.timezone then
+    perform public.rebuild_clinic_reminder_jobs(new.id);
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.refresh_appointment_automation_after_timezone_change() from public, anon, authenticated;
+create trigger clinics_refresh_appointment_automation_timezone
+after update of timezone on public.clinics
+for each row execute function public.refresh_appointment_automation_after_timezone_change();
+
 create function public.claim_due_appointment_automation_jobs(
   p_worker_id text,
   p_limit integer default 20,
@@ -288,6 +395,13 @@ begin
     or p_limit not between 1 and 50 or p_lease_seconds not between 15 and 600 then
     raise exception 'Invalid worker claim.' using errcode = '22023';
   end if;
+  -- Expired work at its attempt ceiling is terminalized instead of remaining stuck forever.
+  update public.appointment_automation_jobs as expired
+  set status = 'failed', last_error_code = 'lease_expired', processed_at = now(),
+      locked_at = null, lease_expires_at = null, locked_by = null
+  where expired.status = 'processing' and expired.lease_expires_at <= clock_timestamp()
+    and expired.attempts >= expired.max_attempts;
+
   return query
   with candidates as (
     select job.id from public.appointment_automation_jobs job
@@ -331,7 +445,8 @@ begin
     raise exception 'Invalid job outcome.' using errcode = '22023';
   end if;
   select * into v_job from public.appointment_automation_jobs
-  where id = p_job_id and status = 'processing' and locked_by = p_worker_id for update;
+  where id = p_job_id and status = 'processing' and locked_by = p_worker_id
+    and lease_expires_at > clock_timestamp() for update;
   if not found then return false; end if;
 
   if p_outcome = 'retry' and v_job.attempts < v_job.max_attempts and p_retry_at > now() then
@@ -384,7 +499,8 @@ as $$
     where profile.clinic_id = j.clinic_id and profile.profile_id = a.doctor_id and profile.is_published
     order by profile.created_at, profile.id limit 1
   ) dpp on true
-  where j.id = p_job_id and j.status = 'processing' and j.locked_by = p_worker_id;
+  where j.id = p_job_id and j.status = 'processing' and j.locked_by = p_worker_id
+    and j.lease_expires_at > clock_timestamp();
 $$;
 revoke all on function public.get_appointment_automation_context(uuid, text) from public, anon, authenticated;
 grant execute on function public.get_appointment_automation_context(uuid, text) to service_role;
@@ -412,12 +528,15 @@ declare
   v_expires timestamptz := now() + interval '14 days';
 begin
   select * into v_job from public.appointment_automation_jobs
-  where id = p_job_id and status = 'processing' and locked_by = p_worker_id and type = 'review_request_email' for update;
+  where id = p_job_id and status = 'processing' and locked_by = p_worker_id
+    and lease_expires_at > clock_timestamp() and type = 'review_request_email' for update;
   if not found then return; end if;
   select * into v_appointment from public.appointments
   where clinic_id = v_job.clinic_id and id = v_job.appointment_id and status = 'completed' for update;
   if not found or not public.clinic_has_effective_automation_subscription_internal(v_job.clinic_id)
     or not exists(select 1 from public.bot_settings where clinic_id = v_job.clinic_id and enabled and review_request_enabled)
+    or not exists(select 1 from public.patients where clinic_id = v_job.clinic_id and id = v_appointment.patient_id
+      and email ~ '^[^[:space:]@<>]+@[^[:space:]@<>]+\.[^[:space:]@<>]+$')
     or exists(select 1 from public.review_invitations where appointment_id = v_job.appointment_id)
     or exists(select 1 from public.doctor_reviews where appointment_id = v_job.appointment_id) then return; end if;
   select profile.id into v_profile_id from public.doctor_public_profiles profile
@@ -454,8 +573,12 @@ set search_path = public, pg_temp
 as $$
 declare v_clinic_id uuid;
 begin
+  if not p_sent and p_error_code is not null and p_error_code !~ '^[a-z0-9_]{1,64}$' then
+    raise exception 'Invalid review delivery outcome.' using errcode = '22023';
+  end if;
   select clinic_id into v_clinic_id from public.appointment_automation_jobs
-  where id = p_job_id and status = 'processing' and locked_by = p_worker_id and type = 'review_request_email';
+  where id = p_job_id and status = 'processing' and locked_by = p_worker_id
+    and lease_expires_at > clock_timestamp() and type = 'review_request_email';
   if not found then return false; end if;
   update public.review_invitations set delivery_status = case when p_sent then 'sent' else 'failed' end,
     email_sent_at = case when p_sent then now() else email_sent_at end
@@ -523,7 +646,8 @@ grant execute on function public.get_appointment_automation_dashboard_for_curren
 create function public.get_appointment_automation_scheduler_status_for_current_user(p_clinic_id uuid)
 returns table (
   last_started_at timestamptz, last_completed_at timestamptz, last_status text,
-  last_claimed integer, last_succeeded integer, last_skipped integer, last_failed integer
+  last_claimed integer, last_succeeded integer, last_skipped integer, last_failed integer,
+  assistant_enabled boolean, reminder_enabled boolean, review_request_enabled boolean
 )
 language sql
 security definer
@@ -531,8 +655,11 @@ set search_path = public, pg_temp
 stable
 as $$
   select state.last_started_at, state.last_completed_at, state.last_status,
-    state.last_claimed, state.last_succeeded, state.last_skipped, state.last_failed
+    state.last_claimed, state.last_succeeded, state.last_skipped, state.last_failed,
+    coalesce(settings.enabled, false), coalesce(settings.reminder_enabled, false),
+    coalesce(settings.review_request_enabled, false)
   from public.appointment_automation_scheduler_state state
+  left join public.bot_settings settings on settings.clinic_id = p_clinic_id
   where state.singleton
     and public.has_clinic_role(p_clinic_id, array['owner','admin','doctor','assistant']);
 $$;
