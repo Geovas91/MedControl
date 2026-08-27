@@ -10,3 +10,12 @@ export type DoctorReviewSummary = {
   reviewCount: number;
   ratingBreakdown: Record<ReviewRating, number>;
 };
+
+export type PublicDoctorReview = Pick<DoctorReview, "rating" | "comment" | "created_at">;
+export type ReviewInvitationStatus = "pending" | "sent" | "completed" | "revoked" | "expired";
+
+export type PublicReviewInvitation = {
+  status: "valid" | "unavailable";
+  doctorDisplayName: string | null;
+  clinicName: string | null;
+};

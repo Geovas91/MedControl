@@ -7,10 +7,38 @@ import { updateAppointmentStatusForActiveTenant } from "@/lib/server/update-appo
 import { deliverAppointmentCalendarEmail } from "@/lib/server/appointment-calendar-email";
 import { getStatusCalendarOperation } from "@/lib/calendar/invitation";
 import { syncAppointmentGoogleCalendar } from "@/lib/server/appointment-google-calendar";
+import { deliverReviewInvitationEmail, issueReviewInvitation, revokeReviewInvitation } from "@/lib/server/review-invitations";
 
 export type AppointmentStatusActionState = {
   error?: string;
 };
+
+export type ReviewInvitationActionState = { error?: string; url?: string; expiresAt?: string; message?: string; status?: "pending" | "sent" | "revoked" };
+
+export async function issueReviewInvitationAction(appointmentId: string, _state: ReviewInvitationActionState): Promise<ReviewInvitationActionState> {
+  const result = await issueReviewInvitation(appointmentId);
+  if (result.state !== "created") return { error: result.state === "forbidden" ? "Tu rol o suscripción no permiten solicitar esta reseña." : "No fue posible generar la invitación. Verifica que la cita esté completada y tenga un perfil profesional válido." };
+  revalidatePath(`/dashboard/appointments/${appointmentId}`);
+  return { url: result.reviewUrl, expiresAt: result.expiresAt, status: "pending", message: "Enlace generado. Sólo estará disponible en esta sesión." };
+}
+
+export async function revokeReviewInvitationAction(appointmentId: string, _state: ReviewInvitationActionState): Promise<ReviewInvitationActionState> {
+  const result = await revokeReviewInvitation(appointmentId);
+  if (result.state !== "revoked") return { error: result.state === "forbidden" ? "Tu rol o suscripción no permiten revocar esta invitación." : "La invitación no está activa." };
+  revalidatePath(`/dashboard/appointments/${appointmentId}`);
+  return { status: "revoked", message: "Invitación revocada." };
+}
+
+export async function sendReviewInvitationEmailAction(appointmentId: string, _state: ReviewInvitationActionState, formData: FormData): Promise<ReviewInvitationActionState> {
+  const reviewUrl = typeof formData.get("review_url") === "string" ? String(formData.get("review_url")) : "";
+  const result = await deliverReviewInvitationEmail({ appointmentId, reviewUrl });
+  revalidatePath(`/dashboard/appointments/${appointmentId}`);
+  if (result.state !== "sent") {
+    const message = result.state === "missing_recipient" ? "El paciente no tiene correo registrado." : result.state === "provider_unavailable" ? "El servicio de correo no está configurado." : "No fue posible enviar el correo. El enlace sigue disponible para copiar.";
+    return { error: message };
+  }
+  return { status: "sent", message: "Solicitud enviada por correo." };
+}
 
 export async function updateAppointmentStatusAction(
   appointmentId: string,
