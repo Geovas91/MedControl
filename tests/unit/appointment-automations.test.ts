@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { getAutomationRetryDelayMs, isAuthorizedAutomationCron, sanitizeAutomationCounters, shouldRetryAutomationEmail } from "../../lib/appointment-automations.ts";
+import { executeAppointmentAutomationEndpoint, getAutomationRetryDelayMs, isAuthorizedAutomationCron, sanitizeAutomationCounters, shouldRetryAutomationEmail } from "../../lib/appointment-automations.ts";
 
 const migration = readFileSync("supabase/migrations/0031_appointment_automation_jobs.sql", "utf8");
+const heartbeatFix = readFileSync("supabase/migrations/0032_fix_appointment_automation_heartbeat.sql", "utf8");
 const runner = readFileSync("lib/server/appointment-automation-runner.ts", "utf8");
 const route = readFileSync("app/api/internal/appointment-automations/run/route.ts", "utf8");
 const template = readFileSync("lib/email/templates/appointment-reminder.ts", "utf8");
@@ -22,6 +23,26 @@ test("cron authorization rejects absent, short and non-equal secrets", () => {
   assert.match(route, /await import\("@\/lib\/server\/appointment-automation-runner"\)/);
   assert.ok(route.indexOf("isAuthorizedAutomationCron") < route.indexOf("await import"));
   assert.doesNotMatch(route, /logger|console\.|authorization.*(?:warn|error|info)/i);
+  assert.match(route, /error: "unauthorized"[\s\S]+status: 401/);
+  assert.match(route, /executeAppointmentAutomationEndpoint\(runAppointmentAutomations\)/);
+});
+
+test("endpoint result stays 200 for healthy runs and returns only run_failed on runner errors", async () => {
+  assert.deepEqual(
+    await executeAppointmentAutomationEndpoint(async () => ({ claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0 })),
+    { status: 200, body: { claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0 } }
+  );
+  const failure = await executeAppointmentAutomationEndpoint(async () => { throw new Error("RAW_INTERNAL_DATABASE_DETAIL"); });
+  assert.deepEqual(failure, { status: 500, body: { error: "run_failed" } });
+  assert.doesNotMatch(JSON.stringify(failure), /RAW_INTERNAL_DATABASE_DETAIL/);
+});
+
+test("0032 keeps the heartbeat contract and qualifies both safe updates", () => {
+  assert.match(heartbeatFix, /create or replace function public\.record_appointment_automation_heartbeat\([\s\S]+returns boolean[\s\S]+language plpgsql[\s\S]+security definer[\s\S]+set search_path = public, pg_temp/i);
+  assert.equal((heartbeatFix.match(/where singleton = true/gi) ?? []).length, 2);
+  assert.match(heartbeatFix, /p_phase = 'start'[\s\S]+p_phase = 'finish'[\s\S]+Invalid heartbeat/i);
+  assert.match(heartbeatFix, /revoke all[\s\S]+from public, anon, authenticated[\s\S]+grant execute[\s\S]+to service_role/i);
+  assert.doesNotMatch(heartbeatFix, /update public\.appointment_automation_scheduler_state\s+set[\s\S]+?updated_at = now\(\);/i);
 });
 
 test("retry policy is bounded and delivery uncertainty is not retried", () => {

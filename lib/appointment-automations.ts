@@ -36,3 +36,17 @@ export type AutomationRunCounters = {
   retryPending: number;
   failed: number;
 };
+
+export type AutomationRunHttpResult =
+  | { status: 200; body: AutomationRunCounters }
+  | { status: 500; body: { error: "run_failed" } };
+
+export async function executeAppointmentAutomationEndpoint(
+  run: () => Promise<AutomationRunCounters>
+): Promise<AutomationRunHttpResult> {
+  try {
+    return { status: 200, body: sanitizeAutomationCounters(await run()) };
+  } catch {
+    return { status: 500, body: { error: "run_failed" } };
+  }
+}

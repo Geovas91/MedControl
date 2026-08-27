@@ -9,6 +9,7 @@ import {
   shouldRetryAutomationEmail,
   type AutomationRunCounters
 } from "@/lib/appointment-automations";
+import { runWithAppointmentAutomationHeartbeat } from "@/lib/appointment-automation-heartbeat";
 import { getInvitationEmailConfiguration } from "@/lib/email/provider";
 import { sendWithResend } from "@/lib/email/resend-provider";
 import { buildAppointmentReminderEmail } from "@/lib/email/templates/appointment-reminder";
@@ -131,9 +132,8 @@ async function processReview(client: RpcClient, job: Job, context: Context, work
 export async function runAppointmentAutomations(): Promise<AutomationRunCounters> {
   const client = createAdminClient() as unknown as RpcClient;
   const workerId = `worker_${randomUUID()}`;
-  const counters = sanitizeAutomationCounters({});
-  await client.rpc("record_appointment_automation_heartbeat", { p_phase: "start" });
-  try {
+  return runWithAppointmentAutomationHeartbeat(client, async () => {
+    const counters = sanitizeAutomationCounters({});
     const claim = await client.rpc("claim_due_appointment_automation_jobs", {
       p_worker_id: workerId, p_limit: APPOINTMENT_AUTOMATION_BATCH_LIMIT,
       p_lease_seconds: APPOINTMENT_AUTOMATION_LEASE_SECONDS
@@ -159,15 +159,6 @@ export async function runAppointmentAutomations(): Promise<AutomationRunCounters
         logger.error("Appointment automation job failed", { component: "appointment_automation", code: "runner_error", job_id: job.id });
       }
     }
-    await client.rpc("record_appointment_automation_heartbeat", {
-      p_phase: "finish", p_status: "ok", p_claimed: counters.claimed,
-      p_succeeded: counters.succeeded, p_skipped: counters.skipped,
-      p_failed: counters.failed
-    });
     return sanitizeAutomationCounters(counters);
-  } catch {
-    await client.rpc("record_appointment_automation_heartbeat", { p_phase: "finish", p_status: "error" });
-    logger.error("Appointment automation runner failed", { component: "appointment_automation", code: "runner_failed" });
-    throw new Error("Appointment automation run failed.");
-  }
+  }, logger);
 }
