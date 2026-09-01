@@ -20,7 +20,7 @@ import { getAppBaseUrl } from "@/lib/supabase/config";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type RpcClient = { rpc(name: string, args?: Record<string, unknown>): Promise<{ data: unknown; error: { code?: string } | null }> };
-type Job = { id: string; clinic_id: string; appointment_id: string; type: "reminder_email" | "review_request_email"; source_version: string; attempts: number; max_attempts: number; scheduled_for: string };
+type Job = { id: string; clinic_id: string; appointment_id: string; type: "reminder_email" | "review_request_email" | "reminder_whatsapp"; source_version: string; attempts: number; max_attempts: number; scheduled_for: string };
 type Context = { clinic_id: string; appointment_id: string; job_type: Job["type"]; source_version: string; appointment_status: string; starts_at: string; doctor_user_id: string | null; clinic_name: string; clinic_timezone: string; patient_email: string | null; doctor_display_name: string | null; valid_subscription: boolean; assistant_enabled: boolean; reminder_enabled: boolean; review_request_enabled: boolean; invitation_exists: boolean; review_exists: boolean };
 type Issued = { invitation_id: string; raw_token: string; expires_at: string };
 
@@ -143,6 +143,12 @@ export async function runAppointmentAutomations(): Promise<AutomationRunCounters
     counters.claimed = jobs.length;
     for (const job of jobs) {
       try {
+        if (job.type === "reminder_whatsapp") {
+          // Phase 1 persists the domain only. No Meta call is reachable until a later phase explicitly enables it.
+          await finish(client, job, workerId, "skipped", "provider_not_enabled");
+          counters.skipped += 1;
+          continue;
+        }
         const context = await loadCurrentContext(client, job, workerId);
         if (!context) {
           await finish(client, job, workerId, "skipped", "context_unavailable");

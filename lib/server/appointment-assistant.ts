@@ -37,7 +37,7 @@ type ActivityRpcRow = {
 
 type AutomationDashboardRow = {
   job_id: string;
-  job_type: "reminder_email" | "review_request_email";
+  job_type: "reminder_email" | "review_request_email" | "reminder_whatsapp";
   job_status: string;
   scheduled_for: string;
   attempts: number;

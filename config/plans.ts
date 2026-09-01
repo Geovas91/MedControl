@@ -4,7 +4,7 @@ export type BillingType = "subscription";
 export type BillingPeriod = "month";
 export type PlanCurrency = "MXN";
 export type PaypalPlanEnvKey = "PAYPAL_BASIC_PLAN_ID" | "PAYPAL_PLUS_PLAN_ID" | "PAYPAL_PRO_PLAN_ID";
-export type PlanFeature = "google_calendar";
+export type PlanFeature = "google_calendar" | "whatsapp_notifications";
 
 export type PlanEntitlements = {
   doctorLimit: DoctorPlanLimit;
@@ -188,9 +188,9 @@ export const commercialPlans = [
 export const commonCommercialFeatures = [...sharedFeatures];
 
 const planEntitlements = {
-  basic: { doctorLimit: 1, features: { google_calendar: false } },
-  plus: { doctorLimit: 5, features: { google_calendar: true } },
-  pro: { doctorLimit: null, features: { google_calendar: true } }
+  basic: { doctorLimit: 1, features: { google_calendar: false, whatsapp_notifications: false } },
+  plus: { doctorLimit: 5, features: { google_calendar: true, whatsapp_notifications: false } },
+  pro: { doctorLimit: null, features: { google_calendar: true, whatsapp_notifications: false } }
 } satisfies Record<PlanId, PlanEntitlements>;
 
 export function getPlanById(planId: PlanId) {

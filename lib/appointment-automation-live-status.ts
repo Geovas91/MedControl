@@ -2,7 +2,7 @@ export const APPOINTMENT_AUTOMATION_LIVE_POLL_INTERVAL_MS = 20_000;
 export const APPOINTMENT_AUTOMATION_HEARTBEAT_STALE_MS = 5 * 60_000;
 export const APPOINTMENT_AUTOMATION_LIVE_JOB_LIMIT = 10;
 
-const jobTypes = ["reminder_email", "review_request_email"] as const;
+const jobTypes = ["reminder_email", "review_request_email", "reminder_whatsapp"] as const;
 const jobStatuses = ["pending", "processing", "retry_pending", "succeeded", "skipped", "failed", "cancelled"] as const;
 const schedulerStatuses = ["running", "ok", "error"] as const;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
