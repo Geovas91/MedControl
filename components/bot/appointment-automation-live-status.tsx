@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 
 const jobLabels = {
   reminder_email: "Recordatorio por email",
-  review_request_email: "Solicitud de reseña"
+  review_request_email: "Solicitud de reseña",
+  reminder_whatsapp: "Recordatorio por WhatsApp"
 } as const;
 
 function dateTime(value: string, timeZone: string) {
