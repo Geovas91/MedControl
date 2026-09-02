@@ -135,7 +135,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'd1000000-0000-4000-8000-000000000001', true);
 
 select * from public.save_appointment_assistant_settings_for_current_user(
-  'd2000000-0000-4000-8000-000000000001', true, 24, time '20:00', time '08:00'
+  'd2000000-0000-4000-8000-000000000001', true, true, 24, time '20:00', time '08:00', false
 );
 
 do $$
@@ -167,21 +167,21 @@ begin
   end;
   begin
     perform * from public.save_appointment_assistant_settings_for_current_user(
-      'd2000000-0000-4000-8000-000000000002', true, 24, null, null
+      'd2000000-0000-4000-8000-000000000002', true, true, 24, null, null, false
     );
     raise exception 'Owner configured a foreign clinic';
   exception when insufficient_privilege then null;
   end;
   begin
     perform * from public.save_appointment_assistant_settings_for_current_user(
-      'd2000000-0000-4000-8000-000000000001', true, 0, null, null
+      'd2000000-0000-4000-8000-000000000001', true, true, 0, null, null, false
     );
     raise exception 'Invalid reminder window was accepted';
   exception when invalid_parameter_value then null;
   end;
   begin
     perform * from public.save_appointment_assistant_settings_for_current_user(
-      'd2000000-0000-4000-8000-000000000001', true, 24, time '20:00', null
+      'd2000000-0000-4000-8000-000000000001', true, true, 24, time '20:00', null, false
     );
     raise exception 'Unpaired quiet hours were accepted';
   exception when invalid_parameter_value then null;
@@ -332,7 +332,7 @@ begin
   end if;
   begin
     perform * from public.save_appointment_assistant_settings_for_current_user(
-      'd2000000-0000-4000-8000-000000000001', false, 48, null, null
+      'd2000000-0000-4000-8000-000000000001', false, false, 48, null, null, false
     );
     raise exception 'Doctor changed global assistant settings';
   exception when insufficient_privilege then null;
@@ -437,7 +437,7 @@ $$;
 
 select set_config('request.jwt.claim.sub', 'd1000000-0000-4000-8000-000000000002', true);
 select * from public.save_appointment_assistant_settings_for_current_user(
-  'd2000000-0000-4000-8000-000000000001', false, 48, null, null
+  'd2000000-0000-4000-8000-000000000001', false, false, 48, null, null, false
 );
 do $$
 begin
@@ -507,7 +507,7 @@ begin
   end;
   begin
     perform * from public.save_appointment_assistant_settings_for_current_user(
-      'd2000000-0000-4000-8000-000000000001', false, 48, null, null
+      'd2000000-0000-4000-8000-000000000001', false, false, 48, null, null, false
     );
     raise exception 'Assistant changed global assistant settings';
   exception when insufficient_privilege then null;
@@ -527,7 +527,7 @@ begin
   end if;
   begin
     perform * from public.save_appointment_assistant_settings_for_current_user(
-      'd2000000-0000-4000-8000-000000000001', false, 48, null, null
+      'd2000000-0000-4000-8000-000000000001', false, false, 48, null, null, false
     );
     raise exception 'Inactive owner changed global assistant settings';
   exception when insufficient_privilege then null;

@@ -924,9 +924,55 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["platform_admins"]["Insert"]>;
       };
+      support_article_categories: {
+        Row: { id: string; slug: string; label: string; sort_order: number; active: boolean; created_at: Timestamp; updated_at: Timestamp };
+        Insert: { id?: string; slug: string; label: string; sort_order?: number; active?: boolean; created_at?: Timestamp; updated_at?: Timestamp };
+        Update: Partial<Database["public"]["Tables"]["support_article_categories"]["Insert"]>;
+      };
+      support_articles: {
+        Row: { id: string; slug: string; category_id: string; audience_roles: Database["public"]["Enums"]["clinic_member_role"][]; required_features: string[]; current_published_version_id: string | null; active: boolean; created_at: Timestamp; updated_at: Timestamp };
+        Insert: { id?: string; slug: string; category_id: string; audience_roles?: Database["public"]["Enums"]["clinic_member_role"][]; required_features?: string[]; current_published_version_id?: string | null; active?: boolean; created_at?: Timestamp; updated_at?: Timestamp };
+        Update: Partial<Database["public"]["Tables"]["support_articles"]["Insert"]>;
+      };
+      support_article_versions: {
+        Row: { id: string; article_id: string; version: number; title: string; summary: string; body_markdown: string; search_document: unknown; status: "draft" | "review" | "published" | "retired"; content_hash: string; reviewed_by: string | null; published_at: Timestamp | null; created_at: Timestamp };
+        Insert: { id?: string; article_id: string; version: number; title: string; summary: string; body_markdown: string; status?: "draft" | "review" | "published" | "retired"; content_hash: string; reviewed_by?: string | null; published_at?: Timestamp | null; created_at?: Timestamp };
+        Update: Partial<Database["public"]["Tables"]["support_article_versions"]["Insert"]>;
+      };
+      support_tickets: {
+        Row: { id: string; reference_code: string; clinic_id: string; created_by: string; category: string; severity: "low" | "normal" | "high"; status: "open" | "triaged" | "in_progress" | "waiting_user" | "resolved" | "closed"; subject: string; summary: string; diagnostic_codes: string[]; assigned_to: string | null; last_activity_at: Timestamp; created_at: Timestamp; updated_at: Timestamp; resolved_at: Timestamp | null; closed_at: Timestamp | null };
+        Insert: { id?: string; reference_code?: string; clinic_id: string; created_by: string; category: string; severity: "low" | "normal" | "high"; status?: "open" | "triaged" | "in_progress" | "waiting_user" | "resolved" | "closed"; subject: string; summary: string; diagnostic_codes?: string[]; assigned_to?: string | null; last_activity_at?: Timestamp; created_at?: Timestamp; updated_at?: Timestamp; resolved_at?: Timestamp | null; closed_at?: Timestamp | null };
+        Update: Partial<Database["public"]["Tables"]["support_tickets"]["Insert"]>;
+      };
+      support_ticket_messages: {
+        Row: { id: string; ticket_id: string; author_user_id: string; author_kind: "clinic_user" | "platform_admin"; visibility: "requester" | "clinic" | "internal"; body: string; created_at: Timestamp; redacted_at: Timestamp | null; redacted_by: string | null };
+        Insert: { id?: string; ticket_id: string; author_user_id: string; author_kind: "clinic_user" | "platform_admin"; visibility: "requester" | "clinic" | "internal"; body: string; created_at?: Timestamp; redacted_at?: Timestamp | null; redacted_by?: string | null };
+        Update: Partial<Database["public"]["Tables"]["support_ticket_messages"]["Insert"]>;
+      };
+      support_ticket_events: {
+        Row: { id: string; ticket_id: string; actor_user_id: string; event_type: string; from_status: string | null; to_status: string | null; safe_metadata: Json; created_at: Timestamp };
+        Insert: { id?: string; ticket_id: string; actor_user_id: string; event_type: string; from_status?: string | null; to_status?: string | null; safe_metadata?: Json; created_at?: Timestamp };
+        Update: Partial<Database["public"]["Tables"]["support_ticket_events"]["Insert"]>;
+      };
+      support_interaction_metrics: {
+        Row: { id: string; clinic_id: string; user_id: string; intent: string; article_ids: string[]; diagnostic_codes: string[]; outcome: "resolved" | "ticket_created" | "abandoned"; created_at: Timestamp };
+        Insert: { id?: string; clinic_id: string; user_id: string; intent: string; article_ids?: string[]; diagnostic_codes?: string[]; outcome: "resolved" | "ticket_created" | "abandoned"; created_at?: Timestamp };
+        Update: Partial<Database["public"]["Tables"]["support_interaction_metrics"]["Insert"]>;
+      };
+      support_rate_limit_counters: {
+        Row: { clinic_id: string; user_id: string; operation: "diagnostic" | "ticket_create" | "message_create"; window_started_at: Timestamp; request_count: number };
+        Insert: { clinic_id: string; user_id: string; operation: "diagnostic" | "ticket_create" | "message_create"; window_started_at: Timestamp; request_count: number };
+        Update: Partial<Database["public"]["Tables"]["support_rate_limit_counters"]["Insert"]>;
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      consume_support_rate_limit: { Args: { p_clinic_id: string; p_operation: string }; Returns: boolean };
+      create_support_ticket_for_current_user: { Args: { p_clinic_id: string; p_category: string; p_impact: string; p_subject: string; p_summary: string; p_diagnostic_codes?: string[] }; Returns: Database["public"]["Tables"]["support_tickets"]["Row"][] };
+      add_support_ticket_message_for_current_user: { Args: { p_clinic_id: string; p_ticket_id: string; p_body: string }; Returns: Database["public"]["Tables"]["support_ticket_messages"]["Row"][] };
+      transition_support_ticket_for_requester: { Args: { p_clinic_id: string; p_ticket_id: string; p_to_status: string }; Returns: Database["public"]["Tables"]["support_tickets"]["Row"][] };
+      record_support_interaction_metric_for_current_user: { Args: { p_clinic_id: string; p_intent: string; p_article_ids: string[]; p_diagnostic_codes: string[]; p_outcome: string }; Returns: string };
+      record_support_diagnostic_audit_for_current_user: { Args: { p_clinic_id: string; p_diagnostic_id: string; p_diagnostic_code: string }; Returns: boolean };
       current_user_clinic_ids: {
         Args: Record<string, never>;
         Returns: string[];
