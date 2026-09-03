@@ -7,6 +7,7 @@ import { buildSupportLogContext } from "@/lib/support/security";
 import { isSupportUuid } from "@/lib/support/security";
 import { canRequesterTransitionSupportTicket, isSupportTicketStatus, isTenantVisibleSupportMessage, parseSupportMessage, parseSupportTicketInput, toSupportTicketSafeProjection } from "@/lib/support/tickets";
 import type { SupportImpact, SupportTicketCategory, SupportTicketSafeProjection, SupportTicketStatus } from "@/lib/support/types";
+import { sendSupportNotification } from "@/lib/email/support-notifications";
 
 const safeTicketColumns = "id, reference_code, category, severity, status, subject, summary, diagnostic_codes, created_by, last_activity_at, created_at, updated_at, resolved_at, closed_at";
 
@@ -51,6 +52,10 @@ export async function createSupportTicket(input: { category: string; impact: str
   });
   if (result.error?.code === "P0001") return rateLimited("ticket_create");
   if (result.error || !result.data?.[0]) return failure("ticket_create", "ticket_create_failed");
+  const created = result.data[0];
+  void sendSupportNotification({ type: "ticket_created_support", ticketId: created.id, reference: created.reference_code, status: created.status, category: created.category, severity: created.severity });
+  const profile: any = await (await createClient()).from("profiles").select("email").eq("id", contextResult.context.userId).maybeSingle();
+  void sendSupportNotification({ type: "ticket_created_requester", ticketId: created.id, reference: created.reference_code, status: created.status, requesterEmail: profile.data?.email });
   logger.info("Support ticket created", buildSupportLogContext({ operation: "ticket_create", status: "success", code: "ticket_created" }));
   return { state: "ready" as const, data: toSupportTicketSafeProjection(result.data[0]) };
 }
