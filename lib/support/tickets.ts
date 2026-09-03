@@ -67,3 +67,11 @@ export function toSupportTicketSafeProjection(row: TicketRow): SupportTicketSafe
 export function isSupportTicketStatus(value: string): value is SupportTicketStatus {
   return statuses.includes(value as SupportTicketStatus);
 }
+
+export function canReadSupportTicket(role: "owner" | "admin" | "doctor" | "assistant", userId: string, createdBy: string) {
+  return role === "owner" || role === "admin" || userId === createdBy;
+}
+
+export function isTenantVisibleSupportMessage(visibility: "requester" | "clinic" | "internal") {
+  return visibility !== "internal";
+}

@@ -88,6 +88,7 @@ test("clinical questions are rejected deterministically without diagnostics or e
   assert.equal(answer.messageCode, "support_clinical_question");
   assert.equal(answer.diagnostics.length, 0);
   assert.equal(answer.offerTicket, false);
+  assert.equal(classifySupportIntent("Tengo fiebre y me duele la cabeza").intent, "clinical_question");
 });
 
 test("deterministic provider answers from supplied safe evidence and offers escalation", async () => {
