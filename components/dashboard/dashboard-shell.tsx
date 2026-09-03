@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, ClipboardList, CreditCard, FileSignature, Globe2, LayoutDashboard, Menu, MessageSquareText, Plug, Settings, Stethoscope, UsersRound, X } from "lucide-react";
+import { CalendarDays, ClipboardList, CreditCard, FileSignature, Globe2, LayoutDashboard, LifeBuoy, Menu, MessageSquareText, Plug, Settings, Stethoscope, UsersRound, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AppVersionLabel } from "@/components/app-version-label";
 import { InstallAppButton } from "@/components/pwa/install-app-button";
@@ -16,7 +16,8 @@ const navItems = [
   { href: "/dashboard/medical-notes", label: "Notas médicas", icon: ClipboardList },
   { href: "/dashboard/appointments", label: "Citas", icon: CalendarDays },
   { href: "/dashboard/consents", label: "Consentimientos", icon: FileSignature },
-  { href: "/dashboard/bot", label: "Asistente", icon: MessageSquareText },
+  { href: "/dashboard/bot", label: "Asistente de agenda", icon: MessageSquareText },
+  { href: "/dashboard/support", label: "Ayuda y soporte", icon: LifeBuoy },
   { href: "/dashboard/payments", label: "Pagos", icon: CreditCard },
   { href: "/dashboard/billing", label: "Facturación", icon: CreditCard },
   { href: "/dashboard/members", label: "Miembros", icon: UsersRound },

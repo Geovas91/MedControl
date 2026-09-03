@@ -1,7 +1,7 @@
 import type { SupportAnswer, SupportAssistantInput, SupportAssistantProvider, SupportDiagnosticId, SupportIntent } from "./types.ts";
 
 const intentRules: ReadonlyArray<{ intent: SupportIntent; terms: string[]; diagnosticIds: SupportDiagnosticId[] }> = [
-  { intent: "clinical_question", terms: ["diagnóstico médico", "qué medicamento", "qué tratamiento", "dosis de", "síntomas médicos"], diagnosticIds: [] },
+  { intent: "clinical_question", terms: ["diagnóstico médico", "diagnostico médico", "qué medicamento", "que medicamento", "medicamento debo", "qué tratamiento", "que tratamiento", "dosis de", "qué dosis", "que dosis", "síntomas médicos", "sintomas médicos", "me duele", "tengo fiebre"], diagnosticIds: [] },
   { intent: "reschedule_appointment", terms: ["reprogram", "cambiar fecha", "cambiar hora"], diagnosticIds: ["appointment_write_readiness"] },
   { intent: "cancel_appointment", terms: ["cancelar cita", "cancelo", "cancelación"], diagnosticIds: ["appointment_write_readiness"] },
   { intent: "create_appointment", terms: ["crear cita", "crear una cita", "nueva cita", "agendar cita"], diagnosticIds: ["appointment_write_readiness"] },

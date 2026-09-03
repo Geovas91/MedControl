@@ -4,7 +4,35 @@
 
 Service Bot es el dominio de ayuda técnica y funcional para usuarios autenticados de CliniControl. Es independiente del Appointment Assistant de `/dashboard/bot`, que opera citas, recordatorios y solicitudes de reseña. Ninguna foundation de Service Bot reutiliza `bot_settings`, `bot_logs`, `appointment_automation_jobs` ni tablas clínicas.
 
-Phase 1 implementa modelo de datos, RLS, contratos, contenido canónico, diagnósticos determinísticos, servicios de tickets, auditoría estructurada y rate limiting durable. La ruta futura será `/dashboard/support` con el nombre visible **Ayuda y soporte**.
+Phase 1 implementa modelo de datos, RLS, contratos, contenido canónico, diagnósticos determinísticos, servicios de tickets, auditoría estructurada y rate limiting durable. Phase 2 incorpora la experiencia tenant en `/dashboard/support` con el nombre visible **Ayuda y soporte**.
+
+## Tenant UI
+
+La interfaz es server-first y está disponible dentro del dashboard autenticado:
+
+- `/dashboard/support`: búsqueda KB, temas frecuentes, asistente guiado, diagnósticos, creación y listas de tickets.
+- `/dashboard/support/articles/[slug]`: artículo canónico publicado y elegible para el rol y features activos.
+- `/dashboard/support/tickets/[id]`: detalle tenant-safe, actividad visible y respuesta sin attachments.
+
+La navegación distingue **Asistente de agenda** (`/dashboard/bot`) de **Ayuda y soporte**. Los estados de carga, lista vacía, búsqueda sin resultados, error seguro, diagnóstico no disponible, rate limit, respuesta no resuelta y ticket creado tienen mensajes explícitos sin errores internos.
+
+### Búsqueda y contenido
+
+La búsqueda es lexical, limitada y opera exclusivamente sobre Markdown canónico validado con `status: published`. Prioriza coincidencias en título, luego resumen derivado y finalmente el documento. Los borradores, artículos en revisión, retirados, roles no elegibles y features no disponibles quedan fuera antes de buscar. La página de artículo valida el slug y renderiza un AST limitado sin HTML crudo ni `dangerouslySetInnerHTML`; las rutas son dinámicas y no se cachean.
+
+### Asistente y diagnósticos
+
+El asistente es un formulario guiado que usa `DeterministicSupportAssistantProvider`; no mantiene chat libre. Devuelve intent, estado, texto controlado, artículos, un diagnóstico allowlisted cuando corresponde y la opción de crear un ticket. Las preguntas médicas reciben rechazo seguro y no ejecutan diagnósticos ni ofrecen escalación automática.
+
+La UI sólo presenta IDs del registry estático. El servidor vuelve a validar el ID, aplica rate limiting PostgreSQL y reduce el resultado a estado, código seguro, `verifiedAt` y slugs. Nunca muestra raw errors, tokens, provider IDs, IDs de citas, pacientes, emails completos ni secretos.
+
+### Lifecycle tenant de tickets
+
+El formulario acepta únicamente categoría, impacto, asunto y resumen con límites estrictos. `clinic_id`, usuario, author kind, visibilidad y severidad se derivan o calculan en servidor; todas las mutaciones usan los RPCs allowlisted de 0034. La UI advierte explícitamente que no se incluya información clínica.
+
+Doctor y assistant ven sólo **Mis tickets**. Owner y admin ven además **Tickets de la clínica**, sin adquirir capacidades internas de soporte. El detalle combina ID y tenant derivado; un ticket ajeno o cross-tenant produce un 404 genérico. La proyección no muestra asignación interna y la consulta de mensajes excluye `internal` tanto por RLS como por filtro explícito.
+
+El tenant puede responder mientras el ticket no esté cerrado. Sólo el requester puede cerrar su propio ticket cuando ya está `resolved`; no puede hacer triage, cambiar severidad, asignar, marcar `in_progress` ni crear notas internas.
 
 ## Arquitectura
 
@@ -97,9 +125,8 @@ Phase 1 no crea jobs de purga. La automatización de retención requiere una fas
 
 `SupportAssistantProvider` permite otra implementación futura sin cambiar contratos. Un proveedor LLM sólo podría recibir intent normalizado, fragmentos KB publicados, rol/plan/entitlements generales y diagnósticos seguros. Nunca recibiría pacientes, expediente, notas, diagnósticos clínicos, citas, emails, teléfonos, tokens, secretos ni raw provider errors.
 
-## No implementado
+## Fuera de alcance
 
-- UI `/dashboard/support`
 - `/admin/support`
 - chat o persistencia de conversaciones
 - LLM/RAG

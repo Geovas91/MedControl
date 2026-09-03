@@ -4,7 +4,8 @@ import { logger } from "@/lib/logger";
 import { getSupportContext } from "@/lib/server/support/context";
 import { createClient } from "@/lib/supabase/server";
 import { buildSupportLogContext } from "@/lib/support/security";
-import { canRequesterTransitionSupportTicket, isSupportTicketStatus, parseSupportMessage, parseSupportTicketInput, toSupportTicketSafeProjection } from "@/lib/support/tickets";
+import { isSupportUuid } from "@/lib/support/security";
+import { canRequesterTransitionSupportTicket, isSupportTicketStatus, isTenantVisibleSupportMessage, parseSupportMessage, parseSupportTicketInput, toSupportTicketSafeProjection } from "@/lib/support/tickets";
 import type { SupportImpact, SupportTicketCategory, SupportTicketSafeProjection, SupportTicketStatus } from "@/lib/support/types";
 
 const safeTicketColumns = "id, reference_code, category, severity, status, subject, summary, diagnostic_codes, created_by, last_activity_at, created_at, updated_at, resolved_at, closed_at";
@@ -21,9 +22,17 @@ type SupportTicketRpcClient = {
   rpc(fn: "transition_support_ticket_for_requester", args: { p_clinic_id: string; p_ticket_id: string; p_to_status: SupportTicketStatus }): Promise<{ data: TicketRow[] | null; error: { code?: string } | null }>;
 };
 
+type TicketMessageRow = { id: string; author_kind: "clinic_user" | "platform_admin"; visibility: "requester" | "clinic" | "internal"; body: string; created_at: string; redacted_at: string | null };
+type TicketEventRow = { id: string; event_type: string; from_status: string | null; to_status: string | null; created_at: string };
+
 function failure(operation: "ticket_create" | "ticket_update", code: string) {
   logger.error("Support ticket operation failed", buildSupportLogContext({ operation, status: "failed", code }));
   return { state: "error" as const, data: null };
+}
+
+function rateLimited(operation: "ticket_create" | "ticket_update") {
+  logger.warn("Support ticket operation rate limited", buildSupportLogContext({ operation, status: "rate_limited", code: "rate_limited" }));
+  return { state: "rate_limited" as const, data: null };
 }
 
 export async function createSupportTicket(input: { category: string; impact: string; subject: string; summary: string; diagnosticCodes?: string[] }) {
@@ -40,7 +49,8 @@ export async function createSupportTicket(input: { category: string; impact: str
     p_summary: parsed.summary,
     p_diagnostic_codes: parsed.diagnosticCodes
   });
-  if (result.error || !result.data?.[0]) return failure("ticket_create", result.error?.code === "P0001" ? "rate_limited" : "ticket_create_failed");
+  if (result.error?.code === "P0001") return rateLimited("ticket_create");
+  if (result.error || !result.data?.[0]) return failure("ticket_create", "ticket_create_failed");
   logger.info("Support ticket created", buildSupportLogContext({ operation: "ticket_create", status: "success", code: "ticket_created" }));
   return { state: "ready" as const, data: toSupportTicketSafeProjection(result.data[0]) };
 }
@@ -74,6 +84,32 @@ export async function getSupportTicket(ticketId: string) {
   return { state: "ready" as const, data: toSupportTicketSafeProjection(result.data as unknown as TicketRow) };
 }
 
+export async function getSupportTicketDetail(ticketId: string) {
+  if (!isSupportUuid(ticketId)) return { state: "not_found" as const, data: null };
+  const contextResult = await getSupportContext();
+  if (contextResult.state !== "ready") return { state: contextResult.state, data: null };
+  const client = await createClient();
+  const ticketResult = await client.from("support_tickets").select(safeTicketColumns).eq("clinic_id", contextResult.context.clinicId).eq("id", ticketId).maybeSingle();
+  if (ticketResult.error) return failure("ticket_update", "ticket_get_failed");
+  if (!ticketResult.data) return { state: "not_found" as const, data: null };
+  const ticketRow = ticketResult.data as unknown as TicketRow;
+  const [messagesResult, eventsResult] = await Promise.all([
+    client.from("support_ticket_messages").select("id, author_kind, visibility, body, created_at, redacted_at").eq("ticket_id", ticketId).neq("visibility", "internal").order("created_at", { ascending: true }),
+    client.from("support_ticket_events").select("id, event_type, from_status, to_status, created_at").eq("ticket_id", ticketId).order("created_at", { ascending: true })
+  ]);
+  if (messagesResult.error || eventsResult.error) return failure("ticket_update", "ticket_detail_failed");
+  const messages = ((messagesResult.data ?? []) as TicketMessageRow[]).filter((message) => isTenantVisibleSupportMessage(message.visibility));
+  return {
+    state: "ready" as const,
+    data: {
+      ticket: toSupportTicketSafeProjection(ticketRow),
+      messages,
+      events: (eventsResult.data ?? []) as TicketEventRow[],
+      canClose: ticketRow.created_by === contextResult.context.userId && ticketRow.status === "resolved"
+    }
+  };
+}
+
 export async function addSupportTicketMessage(ticketId: string, bodyInput: string) {
   const body = parseSupportMessage(bodyInput);
   if (!body) return { state: "invalid_input" as const, data: null };
@@ -81,7 +117,8 @@ export async function addSupportTicketMessage(ticketId: string, bodyInput: strin
   if (contextResult.state !== "ready") return { state: contextResult.state, data: null };
   const client = await createClient() as unknown as SupportTicketRpcClient;
   const result = await client.rpc("add_support_ticket_message_for_current_user", { p_clinic_id: contextResult.context.clinicId, p_ticket_id: ticketId, p_body: body });
-  if (result.error || !result.data?.[0]) return failure("ticket_update", result.error?.code === "P0001" ? "rate_limited" : "ticket_message_failed");
+  if (result.error?.code === "P0001") return rateLimited("ticket_update");
+  if (result.error || !result.data?.[0]) return failure("ticket_update", "ticket_message_failed");
   return { state: "ready" as const, data: result.data[0] };
 }
 

@@ -24,7 +24,7 @@ test("appointment assistant uses real tenant-scoped agenda data and transparent 
 
 test("visible bot route is honestly named and contains no simulated conversations", () => {
   assert.match(page, /title="Asistente de agenda"/);
-  assert.match(navigation, /href: "\/dashboard\/bot", label: "Asistente"/);
+  assert.match(navigation, /href: "\/dashboard\/bot", label: "Asistente de agenda"/);
   assert.doesNotMatch(page, /Demo conectado|Respuesta:|Responde 1|patientResponse/i);
   assert.match(page, /No es un chatbot y no procesa conversaciones/);
 });
