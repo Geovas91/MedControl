@@ -136,3 +136,11 @@ Phase 1 no crea jobs de purga. La automatización de retención requiere una fas
 - acciones correctivas
 - publicación automática Markdown a PostgreSQL
 - jobs automáticos de retención
+
+## Phase 3 — soporte humano interno
+
+La bandeja /admin/support está protegida por platform_admin y ofrece triage allowlisted, asignación únicamente a administradores de plataforma, notas internas no visibles al tenant y respuestas públicas. Las lecturas usan proyecciones seguras sin acceso a expedientes clínicos.
+
+SupportNotificationService usa Resend de forma best-effort. Configurar SUPPORT_EMAIL_TO=soporte@clinicontrol.mx como variable server-only; si falta el destinatario o Resend no está disponible, el ticket permanece persistido y se registra sólo un código sanitizado. Los correos contienen referencia, estado y enlaces seguros, nunca cuerpos, PHI ni datos clínicos. No hay reintentos automáticos.
+
+Auditoría registra únicamente acciones estructuradas y metadatos allowlisted; no se guardan textos de tickets, notas, correos ni errores del proveedor. Fuera de alcance: LLM/RAG, attachments, realtime, helpdesk externo, WhatsApp, impersonación y acciones correctivas automáticas.

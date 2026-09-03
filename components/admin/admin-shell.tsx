@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, CreditCard, LayoutDashboard, Stethoscope, UsersRound } from "lucide-react";
+import { Building2, CreditCard, LayoutDashboard, Stethoscope, UsersRound, LifeBuoy } from "lucide-react";
 import { AppVersionLabel } from "@/components/app-version-label";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,8 @@ const adminNavItems = [
   { href: "/admin", label: "Resumen", icon: LayoutDashboard },
   { href: "/admin/clinics", label: "Clínicas", icon: Building2 },
   { href: "/admin/doctors", label: "Usuarios", icon: UsersRound },
-  { href: "/admin/subscriptions", label: "Suscripciones", icon: CreditCard }
+  { href: "/admin/subscriptions", label: "Suscripciones", icon: CreditCard },
+  { href: "/admin/support", label: "Soporte", icon: LifeBuoy }
 ];
 
 export function AdminShell({ children, adminEmail }: { children: React.ReactNode; adminEmail?: string | null }) {
