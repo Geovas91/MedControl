@@ -7,7 +7,7 @@ export const supportCategoryLabels: Record<SupportTicketCategory, string> = {
 };
 
 export const supportStatusLabels: Record<SupportTicketStatus, string> = {
-  open: "Abierto", triaged: "En revisión", in_progress: "En atención", waiting_user: "Esperando tu respuesta", resolved: "Resuelto", closed: "Cerrado"
+  open: "Abierto", triaged: "En triage", in_progress: "En progreso", waiting_user: "Esperando usuario", resolved: "Resuelto", closed: "Cerrado"
 };
 
 export const supportSeverityLabels: Record<SupportTicketSeverity, string> = { low: "Baja", normal: "Normal", high: "Alta" };
