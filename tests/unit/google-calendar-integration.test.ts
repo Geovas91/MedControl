@@ -199,7 +199,7 @@ test("connect and callback enforce the feature before provider work and callback
 });
 
 test("callback redirects only to a fixed local path on a server-controlled origin", () => {
-  assert.match(callbackRoute, /getGoogleCalendarRedirectOrigin\(\) \?\? getPublicAppOrigin/);
+  assert.match(callbackRoute, /const origin = getPublicAppOrigin\(request, getRuntimePublicSiteUrl\(\)\)/);
   assert.match(callbackRoute, /buildGoogleCalendarSettingsRedirectPath\(outcome\)/);
   assert.equal(buildGoogleCalendarSettingsRedirectPath("connected"), "/dashboard/settings/integrations?google=connected");
   assert.equal(buildGoogleCalendarSettingsRedirectPath("https://evil.example"), "/dashboard/settings/integrations?google=error");

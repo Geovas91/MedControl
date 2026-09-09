@@ -8,13 +8,13 @@ import {
 import { getPublicAppOrigin } from "@/lib/auth/public-origin";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canUseFeature, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
-import { getGoogleCalendarConfiguration, getGoogleCalendarRedirectOrigin } from "@/lib/server/google-calendar-config";
+import { getGoogleCalendarConfiguration } from "@/lib/server/google-calendar-config";
 import { getGoogleCalendarSessionHash } from "@/lib/server/google-calendar-session";
 import { createGoogleCalendarOAuthState } from "@/lib/server/google-calendar-store";
 import { getRuntimePublicSiteUrl } from "@/lib/server/public-site-url";
 
 function settingsRedirect(request: NextRequest, outcome: string) {
-  const origin = getGoogleCalendarRedirectOrigin() ?? getPublicAppOrigin(request, getRuntimePublicSiteUrl());
+  const origin = getPublicAppOrigin(request, getRuntimePublicSiteUrl());
   return NextResponse.redirect(new URL(buildGoogleCalendarSettingsRedirectPath(outcome), origin));
 }
 

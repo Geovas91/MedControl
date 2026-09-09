@@ -9,7 +9,15 @@ export function normalizePublicOrigin(value: string | null | undefined) {
 
   try {
     const url = new URL(candidate);
-    if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username || url.password) {
+    const localHttp = url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+    if (
+      (url.protocol !== "https:" && !localHttp)
+      || url.username
+      || url.password
+      || url.pathname !== "/"
+      || url.search
+      || url.hash
+    ) {
       return null;
     }
 
@@ -19,26 +27,6 @@ export function normalizePublicOrigin(value: string | null | undefined) {
   }
 }
 
-function firstForwardedValue(value: string | null) {
-  return value?.split(",", 1)[0]?.trim() || null;
-}
-
-function normalizeHeaderOrigin(protocol: string | null, host: string | null) {
-  const normalizedProtocol = protocol?.toLowerCase();
-  const normalizedHost = host?.trim();
-
-  if (!normalizedHost || (normalizedProtocol !== "http" && normalizedProtocol !== "https")) {
-    return null;
-  }
-
-  if (/[\s/@?#\\,]/.test(normalizedHost)) {
-    return null;
-  }
-
-  const origin = normalizePublicOrigin(`${normalizedProtocol}://${normalizedHost}`);
-  return origin;
-}
-
 export function getPublicAppOrigin(
   request: PublicOriginRequest,
   configuredSiteUrl?: string
@@ -46,23 +34,14 @@ export function getPublicAppOrigin(
   const configuredOrigin = normalizePublicOrigin(configuredSiteUrl);
   if (configuredOrigin) return configuredOrigin;
 
-  const hasConfiguredSiteUrl = Boolean(configuredSiteUrl?.trim());
-  if (!hasConfiguredSiteUrl) {
-    const forwardedHost = firstForwardedValue(request.headers.get("x-forwarded-host"));
-    const forwardedProtocol = firstForwardedValue(request.headers.get("x-forwarded-proto"));
-    const forwardedOrigin = normalizeHeaderOrigin(forwardedProtocol, forwardedHost);
-    if (forwardedOrigin) return forwardedOrigin;
-
-    const requestOrigin = normalizePublicOrigin(request.nextUrl.origin);
-    const requestProtocol = requestOrigin ? new URL(requestOrigin).protocol.slice(0, -1) : null;
-    const hostOrigin = normalizeHeaderOrigin(forwardedProtocol ?? requestProtocol, request.headers.get("host"));
-    if (hostOrigin) return hostOrigin;
+  if (configuredSiteUrl?.trim()) {
+    throw new Error("The configured public application origin is invalid.");
   }
 
-  const fallbackOrigin = normalizePublicOrigin(request.nextUrl.origin);
-  if (!fallbackOrigin) {
-    throw new Error("Unable to determine a safe public application origin.");
+  const localOrigin = normalizePublicOrigin(request.nextUrl.origin);
+  if (localOrigin && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(localOrigin).hostname)) {
+    return localOrigin;
   }
 
-  return fallbackOrigin;
+  throw new Error("A canonical public application origin is required.");
 }

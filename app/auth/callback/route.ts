@@ -6,6 +6,7 @@ import { buildAuthRedirect, getGoogleOAuthErrorMessage, getPostAuthRedirect, get
 import { syncAuthUserProfile } from "@/lib/auth/profile";
 import { getPublicAppOrigin } from "@/lib/auth/public-origin";
 import { getRuntimePublicSiteUrl } from "@/lib/server/public-site-url";
+import { getSafeDiagnosticCode } from "@/lib/security/public-errors";
 
 function loginRedirect(origin: string, next: string, error: string) {
   return NextResponse.redirect(new URL(buildAuthRedirect("/login", { next, error }), origin));
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     logger.warn("Auth callback received OAuth provider error", {
       component: "auth",
       status: "provider_error",
-      provider_error: oauthError
+      error_code: getSafeDiagnosticCode({ code: oauthError }, "oauth_provider_error")
     });
 
     return loginRedirect(
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
       status: "degraded"
     });
 
-    return loginRedirect(publicOrigin, next, configError);
+    return loginRedirect(publicOrigin, next, "La autenticación no está disponible en este momento.");
   }
 
   const supabase = await createClient();
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
     logger.warn("Auth callback profile synchronization failed", {
       component: "auth",
       status: "profile_sync_failed",
-      error_code: profileError?.code
+      error_code: getSafeDiagnosticCode(profileError, "profile_sync_failed")
     });
     return loginRedirect(publicOrigin, next, "No fue posible preparar tu perfil. Intenta nuevamente.");
   }
@@ -94,7 +95,7 @@ export async function GET(request: NextRequest) {
     logger.warn("Auth callback clinic lookup failed", {
       component: "auth",
       status: "clinic_lookup_failed",
-      error_code: membershipError.code
+      error_code: getSafeDiagnosticCode(membershipError, "clinic_lookup_failed")
     });
   }
 

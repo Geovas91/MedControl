@@ -140,7 +140,13 @@ test("auth callback handles an OAuth provider error", async ({ page }) => {
 
 test("auth callback honors the configured public site origin", async ({ request }) => {
   test.skip(!process.env.NEXT_PUBLIC_SITE_URL, "NEXT_PUBLIC_SITE_URL is required for this proxy-origin regression test.");
-  const response = await request.get("/auth/callback?error=access_denied", { maxRedirects: 0 });
+  const response = await request.get("/auth/callback?error=access_denied", {
+    maxRedirects: 0,
+    headers: {
+      "x-forwarded-host": "attacker.example",
+      "x-forwarded-proto": "https"
+    }
+  });
   expect([302, 303, 307, 308]).toContain(response.status());
 
   const location = response.headers().location;
@@ -164,6 +170,21 @@ test("health, readiness, and not found routes respond safely", async ({ page, re
   const missing = await page.goto("/ruta-inexistente");
   expect(missing?.status()).toBe(404);
   await expect(page.getByRole("heading", { name: /página no encontrada/i })).toBeVisible();
+});
+
+test("public responses include the compatible security header baseline", async ({ request }) => {
+  for (const route of ["/", "/login", "/register", "/forgot-password", "/dashboard"]) {
+    const response = await request.get(route, { maxRedirects: 0 });
+    expect(response.headers()["x-content-type-options"], route).toBe("nosniff");
+    expect(response.headers()["referrer-policy"], route).toBe("strict-origin-when-cross-origin");
+    expect(response.headers()["x-frame-options"], route).toBe("DENY");
+    expect(response.headers()["permissions-policy"], route).toContain("camera=()");
+    expect(response.headers()["x-dns-prefetch-control"], route).toBe("off");
+    expect(response.headers()["cross-origin-opener-policy"], route).toBe("same-origin-allow-popups");
+    if (process.env.PLAYWRIGHT_WEB_SERVER === "production") {
+      expect(response.headers()["strict-transport-security"], route).toBe("max-age=31536000; includeSubDomains");
+    }
+  }
 });
 
 test("public landing and login have no serious automated axe violations", async ({ page }) => {

@@ -19,24 +19,31 @@ function normalizeAppUrl(value: string | undefined) {
   return normalizePublicOrigin(value);
 }
 
+function configuredOrigin(name: string, value: string | undefined) {
+  if (!value?.trim()) return null;
+  const origin = normalizeAppUrl(value);
+  if (!origin) throw new Error(`${name} must be an HTTPS origin without a path, query, or fragment.`);
+  return origin;
+}
+
 export const domainConfig = {
   environment: getAppEnvironment(),
   localAppUrl,
   mexicoDomain: brandConfig.domains.mexico,
   internationalDomain: brandConfig.domains.international,
   stagingDomain: brandConfig.domains.staging,
-  stagingAppUrl: normalizeAppUrl(process.env.APP_STAGING_URL),
-  productionAppUrl: normalizeAppUrl(process.env.APP_PRODUCTION_URL)
+  stagingAppUrl: configuredOrigin("APP_STAGING_URL", process.env.APP_STAGING_URL),
+  productionAppUrl: configuredOrigin("APP_PRODUCTION_URL", process.env.APP_PRODUCTION_URL)
 } as const;
 
 export function getCanonicalAppUrl() {
-  const publicSiteUrl = normalizeAppUrl(process.env.NEXT_PUBLIC_SITE_URL);
+  const publicSiteUrl = configuredOrigin("NEXT_PUBLIC_SITE_URL", process.env.NEXT_PUBLIC_SITE_URL);
 
   if (publicSiteUrl) {
     return publicSiteUrl;
   }
 
-  const explicitBaseUrl = normalizeAppUrl(process.env.APP_BASE_URL);
+  const explicitBaseUrl = configuredOrigin("APP_BASE_URL", process.env.APP_BASE_URL);
 
   if (explicitBaseUrl) {
     return explicitBaseUrl;
@@ -51,7 +58,11 @@ export function getCanonicalAppUrl() {
   }
 
   if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
+    return configuredOrigin("VERCEL_URL", `https://${process.env.VERCEL_URL}`)!;
+  }
+
+  if (domainConfig.environment !== "development") {
+    throw new Error(`A canonical application origin is required for ${domainConfig.environment}.`);
   }
 
   return localAppUrl;

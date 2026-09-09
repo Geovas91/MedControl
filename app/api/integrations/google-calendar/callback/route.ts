@@ -9,7 +9,7 @@ import {
 import { canReuseEncryptedCalendarRefreshToken, encryptCalendarRefreshToken } from "@/lib/calendar/token-encryption";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canUseFeature, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
-import { getGoogleCalendarConfiguration, getGoogleCalendarRedirectOrigin } from "@/lib/server/google-calendar-config";
+import { getGoogleCalendarConfiguration } from "@/lib/server/google-calendar-config";
 import { getGoogleCalendarSessionHash } from "@/lib/server/google-calendar-session";
 import { exchangeGoogleCalendarAuthorizationCode, revokeGoogleCalendarToken } from "@/lib/server/google-calendar-provider";
 import {
@@ -22,7 +22,7 @@ import {
 import { getRuntimePublicSiteUrl } from "@/lib/server/public-site-url";
 
 function settingsRedirect(request: NextRequest, outcome: string) {
-  const origin = getGoogleCalendarRedirectOrigin() ?? getPublicAppOrigin(request, getRuntimePublicSiteUrl());
+  const origin = getPublicAppOrigin(request, getRuntimePublicSiteUrl());
   return NextResponse.redirect(new URL(buildGoogleCalendarSettingsRedirectPath(outcome), origin));
 }
 

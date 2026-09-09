@@ -9,6 +9,11 @@ export function getSafeLocalPath(value: string | null | undefined, fallback = "/
   }
 
   try {
+    const decoded = decodeURIComponent(candidate);
+    if (decoded.startsWith("//") || decoded.includes("\\") || /[\u0000-\u001F\u007F]/.test(decoded)) {
+      return fallback;
+    }
+
     const baseUrl = new URL("https://clinicontrol.invalid");
     const parsed = new URL(candidate, baseUrl);
 
