@@ -104,7 +104,7 @@ export async function saveDirectoryProfileAction(
   const { data: clinicMembers, error: membersError } = await listClinicMembersForClinic(onboardingStatus.membership.clinic_id);
 
   if (membersError) {
-    return { error: membersError.message };
+    return { error: "No fue posible consultar los miembros de la clínica." };
   }
 
   const targetMember = clinicMembers?.find((member) => member.id === targetClinicMemberId);
@@ -145,7 +145,7 @@ export async function saveDirectoryProfileAction(
   });
 
   if (error) {
-    return { error: error.message };
+    return { error: "No fue posible guardar el perfil público. Intenta nuevamente." };
   }
 
   revalidatePath("/dashboard/directory");

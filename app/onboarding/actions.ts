@@ -38,7 +38,7 @@ export async function completeOnboardingAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/onboarding?${encodedParam("error", error.message)}`);
+    redirect(`/onboarding?${encodedParam("error", "No fue posible completar la configuración. Intenta nuevamente.")}`);
   }
 
   revalidatePath("/", "layout");

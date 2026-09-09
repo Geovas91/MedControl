@@ -61,7 +61,7 @@ export async function addClinicMemberAction(
   const { data, error } = await createClinicInvitation(activeTenant.tenant.clinic.id, email, role);
 
   if (error) {
-    return { error: error.message };
+    return { error: "No fue posible crear la invitación. Revisa los datos e intenta nuevamente." };
   }
 
   const invitation = data?.[0];
@@ -100,7 +100,7 @@ export async function rotateClinicInvitationAction(
   if (activeTenant.state === "unauthenticated") redirect("/login");
   if (activeTenant.state !== "ready") return { error: "No tienes una membresía activa para administrar invitaciones." };
   const { data, error } = await rotateClinicInvitation(invitationId);
-  if (error || !data?.[0]) return { error: error?.message ?? "No fue posible rotar el enlace." };
+  if (error || !data?.[0]) return { error: "No fue posible rotar el enlace." };
   const { data: invitations } = await listClinicInvitations(activeTenant.tenant.clinic.id);
   const details = invitations?.find((item) => item.id === invitationId);
   const fallbackUrl = new URL(`/invite/${data[0].raw_token}`, getAppBaseUrl()).toString();
@@ -127,7 +127,7 @@ export async function revokeClinicInvitationAction(
   if (!invitationId) return { error: "No fue posible identificar la invitación." };
 
   const { error } = await revokeClinicInvitation(invitationId);
-  if (error) return { error: error.message };
+  if (error) return { error: "No fue posible revocar la invitación." };
 
   revalidatePath("/dashboard/members");
   return { message: "La invitación fue revocada y su enlace ya no es válido." };

@@ -21,10 +21,6 @@ function validRedirectUri(value: string) {
   }
 }
 
-export function getGoogleCalendarRedirectOrigin() {
-  const redirectUri = process.env[environmentKeys.redirectUri]?.trim();
-  return redirectUri && validRedirectUri(redirectUri) ? new URL(redirectUri).origin : null;
-}
 export function getGoogleCalendarConfiguration() {
   const clientId = process.env[environmentKeys.clientId]?.trim();
   const clientSecret = process.env[environmentKeys.clientSecret]?.trim();

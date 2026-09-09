@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getAppBaseUrl, getSupabaseConfigError, hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { buildAuthRedirect, getSafeLocalPath, isInvitationPath } from "@/lib/auth/redirects";
+import { getSafeSignInError, getSafeSignUpError } from "@/lib/security/public-errors";
 
 function asString(value: FormDataEntryValue | null) {
   return typeof value === "string" ? value.trim() : "";
@@ -21,7 +22,7 @@ export async function signInAction(formData: FormData) {
 
   const configError = getSupabaseConfigError();
   if (configError) {
-    redirect(buildAuthRedirect("/login", { next, error: configError }));
+    redirect(buildAuthRedirect("/login", { next, error: "La autenticación no está disponible en este momento." }));
   }
 
   const supabase = await createClient();
@@ -31,7 +32,7 @@ export async function signInAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(buildAuthRedirect("/login", { next, error: error.message }));
+    redirect(buildAuthRedirect("/login", { next, error: getSafeSignInError(error) }));
   }
 
   revalidatePath("/", "layout");
@@ -52,7 +53,7 @@ export async function signUpAction(formData: FormData) {
 
   const configError = getSupabaseConfigError();
   if (configError) {
-    redirect(buildAuthRedirect("/register", { next, error: configError }));
+    redirect(buildAuthRedirect("/register", { next, error: "El registro no está disponible en este momento." }));
   }
 
   const supabase = await createClient();
@@ -66,7 +67,7 @@ export async function signUpAction(formData: FormData) {
   });
 
   if (error) {
-    redirect(buildAuthRedirect("/register", { next, error: error.message }));
+    redirect(buildAuthRedirect("/register", { next, error: getSafeSignUpError() }));
   }
 
   revalidatePath("/", "layout");

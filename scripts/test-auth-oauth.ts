@@ -60,6 +60,9 @@ assert.deepEqual(
 );
 
 assert.equal(normalizePublicOrigin("https://staging.clinicontrol.mx/"), "https://staging.clinicontrol.mx");
+assert.equal(normalizePublicOrigin("https://staging.clinicontrol.mx/path"), null);
+assert.equal(normalizePublicOrigin("http://staging.clinicontrol.mx"), null);
+assert.equal(normalizePublicOrigin("http://localhost:3100"), "http://localhost:3100");
 assert.equal(normalizePublicOrigin("javascript:alert(1)"), null);
 assert.equal(normalizePublicOrigin("data:text/plain,test"), null);
 assert.equal(normalizePublicOrigin("/relative"), null);
@@ -74,18 +77,23 @@ assert.equal(
   getPublicAppOrigin(internalRequest, "https://staging.clinicontrol.mx/"),
   "https://staging.clinicontrol.mx"
 );
-assert.equal(
-  getPublicAppOrigin(internalRequest, "javascript:alert(1)"),
-  "http://localhost:3000",
-  "A configured but invalid site URL must not be replaced by manipulated headers."
-);
+assert.throws(() => getPublicAppOrigin(internalRequest, "javascript:alert(1)"), /configured public application origin is invalid/i);
 
 const proxiedRequest = originRequest("http://localhost:3000", {
   "x-forwarded-host": "staging.clinicontrol.mx",
   "x-forwarded-proto": "https",
   host: "localhost:3000"
 });
-assert.equal(getPublicAppOrigin(proxiedRequest, ""), "https://staging.clinicontrol.mx");
+assert.equal(getPublicAppOrigin(proxiedRequest, ""), "http://localhost:3000");
+assert.throws(
+  () => getPublicAppOrigin(originRequest("https://internal.example", { "x-forwarded-host": "staging.clinicontrol.mx", "x-forwarded-proto": "https" }), ""),
+  /canonical public application origin is required/i
+);
+
+assert.equal(getSafeLocalPath("/%5cevil.example/steal", "/dashboard"), "/dashboard");
+assert.equal(getSafeLocalPath("/%2f%2fevil.example/steal", "/dashboard"), "/dashboard");
+assert.equal(getSafeLocalPath("/%0d%0aSet-Cookie:test", "/dashboard"), "/dashboard");
+assert.equal(getSafeLocalPath("/%ZZ", "/dashboard"), "/dashboard");
 
 const publicOrigin = getPublicAppOrigin(proxiedRequest, "https://staging.clinicontrol.mx");
 assert.equal(new URL("/dashboard", publicOrigin).origin, "https://staging.clinicontrol.mx");
