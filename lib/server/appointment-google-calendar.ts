@@ -85,7 +85,7 @@ async function accessTokenFor(integration: StoredGoogleCalendarIntegration, acto
 }
 
 async function recordFailure(mapping: StoredGoogleCalendarEvent, integration: StoredGoogleCalendarIntegration, appointmentVersion: string, actorUserId: string | null, code: string) {
-  await recordGoogleCalendarEventResult({
+  const persistence = await recordGoogleCalendarEventResult({
     mappingId: mapping.id,
     integrationId: integration.id,
     clinicId: integration.clinic_id,
@@ -94,6 +94,16 @@ async function recordFailure(mapping: StoredGoogleCalendarEvent, integration: St
     googleEventId: mapping.google_event_id!,
     errorCode: code
   });
+  if (!persistence.persisted) {
+    await auditGoogleCalendarEvent({
+      clinicId: mapping.clinic_id,
+      actorUserId,
+      entityId: mapping.appointment_id,
+      action: "appointment_calendar_sync_failed",
+      metadata: { provider: "google", reason: "local_persistence_failed" }
+    });
+    return "failed";
+  }
   await auditGoogleCalendarEvent({
     clinicId: integration.clinic_id,
     actorUserId,
@@ -115,7 +125,7 @@ async function deleteStoredEvent(mapping: StoredGoogleCalendarEvent, actorUserId
     await recordFailure(mapping, integration, appointmentVersion, actorUserId, deleted.code);
     return deleted.code === "reconnect_required" ? "reconnect_required" : "failed";
   }
-  await recordGoogleCalendarEventResult({
+  const persistence = await recordGoogleCalendarEventResult({
     mappingId: mapping.id,
     integrationId: integration.id,
     clinicId: mapping.clinic_id,
@@ -124,6 +134,16 @@ async function deleteStoredEvent(mapping: StoredGoogleCalendarEvent, actorUserId
     googleEventId: mapping.google_event_id,
     errorCode: null
   });
+  if (!persistence.persisted) {
+    await auditGoogleCalendarEvent({
+      clinicId: mapping.clinic_id,
+      actorUserId,
+      entityId: mapping.appointment_id,
+      action: "appointment_calendar_sync_failed",
+      metadata: { provider: "google", reason: "local_persistence_failed" }
+    });
+    return "failed";
+  }
   await auditGoogleCalendarEvent({
     clinicId: mapping.clinic_id,
     actorUserId,
@@ -143,7 +163,6 @@ export async function syncAppointmentGoogleCalendar(input: {
     const context = await getActiveTenantContext();
     if (context.state !== "ready" || !["owner", "admin", "doctor"].includes(context.tenant.membership.role)) return "disabled";
     const clinicId = context.tenant.clinic.id;
-    if (!canUseFeature(await getClinicEntitlements(clinicId), "google_calendar")) return "disabled";
     const supabase = await createClient();
     const appointmentResult = await supabase.from("appointments")
       .select("id, doctor_id, starts_at, ends_at, status, updated_at")
@@ -158,6 +177,16 @@ export async function syncAppointmentGoogleCalendar(input: {
     if (shouldDelete) {
       const outcomes = await Promise.all(mappings.map((mapping) => deleteStoredEvent(mapping, context.user.id, input.appointmentVersion)));
       return outcomes.some((outcome) => outcome === "failed" || outcome === "reconnect_required") ? "failed" : outcomes.length ? "deleted" : "disabled";
+    }
+
+    const hasCalendarEntitlement = canUseFeature(await getClinicEntitlements(clinicId), "google_calendar");
+    if (!hasCalendarEntitlement) {
+      const outcomes = await Promise.all(mappings
+        .filter((mapping) => mapping.sync_status !== "deleted")
+        .map((mapping) => deleteStoredEvent(mapping, context.user.id, input.appointmentVersion)));
+      return outcomes.some((outcome) => outcome === "failed" || outcome === "reconnect_required")
+        ? "failed"
+        : outcomes.length ? "deleted" : "disabled";
     }
 
     const doctorUserId = appointment.doctor_id!;
@@ -221,7 +250,7 @@ export async function syncAppointmentGoogleCalendar(input: {
       await recordFailure(mapping, integration, input.appointmentVersion, context.user.id, providerResult.code);
       return providerResult.code === "reconnect_required" ? "reconnect_required" : "failed";
     }
-    await recordGoogleCalendarEventResult({
+    const persistence = await recordGoogleCalendarEventResult({
       mappingId: mapping.id,
       integrationId: integration.id,
       clinicId,
@@ -230,6 +259,16 @@ export async function syncAppointmentGoogleCalendar(input: {
       googleEventId: providerResult.eventId,
       errorCode: null
     });
+    if (!persistence.persisted) {
+      await auditGoogleCalendarEvent({
+        clinicId,
+        actorUserId: context.user.id,
+        entityId: input.appointmentId,
+        action: "appointment_calendar_sync_failed",
+        metadata: { provider: "google", reason: "local_persistence_failed" }
+      });
+      return "failed";
+    }
     await auditGoogleCalendarEvent({
       clinicId,
       actorUserId: context.user.id,

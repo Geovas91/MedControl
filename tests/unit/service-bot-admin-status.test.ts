@@ -67,7 +67,7 @@ for (const status of states) {
       statusButtons(tree)[index].props.onClick();
       assert.ok(statusButtons(ui.render()).every((button: any) => button.props.disabled));
       await ui.done();
-      assert.deepEqual(calls.at(-1), [id, target]);
+      assert.deepEqual(calls.at(-1), [id, status, target]);
     }
   });
 }
@@ -88,19 +88,13 @@ for (const failure of ["invalid_transition", "error", "throws"]) {
   });
 }
 
-function server(from: string, denied = false) {
-  const writes: Array<{ table: string; kind: string; payload: any }> = [];
+function server(from: string, denied = false, stale = false) {
+  const calls: Array<{ fn: string; args: any }> = [];
   let guards = 0;
   let clients = 0;
-  const admin = { from: (table: string) => {
-    const query: any = {
-      select: () => query, eq: () => query,
-      maybeSingle: async () => ({ data: { id, status: from, clinic_id: "clinic" }, error: null }),
-      update: (payload: unknown) => { writes.push({ table, kind: "update", payload }); return query; },
-      insert: (payload: unknown) => { writes.push({ table, kind: "insert", payload }); return query; },
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve)
-    };
-    return query;
+  const admin = { rpc: async (fn: string, args: any) => {
+    calls.push({ fn, args });
+    return { data: stale ? [] : [{ event_id: "event", reference_code: "REFERENCE", created_by: "requester", status: args.p_to_status }], error: null };
   } };
   const loaded = load("lib/server/support/admin.ts", {
     "server-only": {},
@@ -110,44 +104,42 @@ function server(from: string, denied = false) {
     "@/lib/support/security": { isSupportUuid },
     "@/lib/support/tickets": {}
   });
-  return { transition: loaded.transitionAdminSupportTicket, writes, guards: () => guards, clients: () => clients };
+  return { transition: loaded.transitionAdminSupportTicket, calls, guards: () => guards, clients: () => clients };
 }
 
 for (const from of states) for (const to of states) {
   test(`server transition ${from} -> ${to}`, async () => {
     const service = server(from);
     const allowed = expected[from].some(([target]) => target === to);
-    assert.equal((await service.transition(id, to)).state, allowed ? "ready" : "invalid_transition");
+    assert.equal((await service.transition(id, from, to)).state, allowed ? "ready" : "invalid_transition");
     assert.equal(service.guards(), 1);
-    if (!allowed) { assert.equal(service.writes.length, 0); return; }
-    const [update, event, audit] = service.writes;
-    assert.equal(update.payload.status, to);
-    if (to === "resolved") assert.ok(update.payload.resolved_at);
-    if (to === "closed") assert.ok(update.payload.closed_at);
-    assert.equal(event.table, "support_ticket_events");
-    assert.equal(event.payload.event_type, "support_ticket_status_changed");
-    assert.equal(event.payload.from_status, from);
-    assert.equal(event.payload.to_status, to);
-    assert.equal(audit.table, "audit_logs");
-    assert.deepEqual(JSON.parse(JSON.stringify(audit.payload.metadata)), { ticket_id: id, from_status: from, to_status: to });
-    assert.equal(service.writes.length, 3);
+    if (!allowed) { assert.equal(service.calls.length, 0); return; }
+    assert.deepEqual(JSON.parse(JSON.stringify(service.calls)), [{ fn: "transition_admin_support_ticket", args: {
+      p_ticket_id: id, p_expected_status: from, p_to_status: to, p_actor_user_id: "admin"
+    } }]);
   });
 }
+
+test("stale expected status is a safe no-op", async () => {
+  const service = server("open", false, true);
+  assert.equal((await service.transition(id, "open", "triaged")).state, "invalid_transition");
+  assert.equal(service.calls.length, 1);
+});
 
 test("server rejects arbitrary client statuses before creating a database client", async () => {
   for (const to of ["arbitrary", "__proto__", "constructor", "", "Cerrado"]) {
     const service = server("open");
-    assert.equal((await service.transition(id, to)).state, "invalid_input");
+    assert.equal((await service.transition(id, "open", to)).state, "invalid_input");
     assert.equal(service.clients(), 0);
-    assert.equal(service.writes.length, 0);
+    assert.equal(service.calls.length, 0);
   }
 });
 
 test("platform admin authorization cannot be bypassed", async () => {
   const service = server("open", true);
-  await assert.rejects(service.transition(id, "triaged"), /forbidden/);
+  await assert.rejects(service.transition(id, "open", "triaged"), /forbidden/);
   assert.equal(service.clients(), 0);
-  assert.equal(service.writes.length, 0);
+  assert.equal(service.calls.length, 0);
 });
 
 test("tenant reads current status without importing admin controls or actions", () => {

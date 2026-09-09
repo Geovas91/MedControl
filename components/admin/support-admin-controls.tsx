@@ -27,7 +27,7 @@ export function SupportAdminControls({ ticket, admins }: {
     setStatusError(null);
     start(async () => {
       try {
-        const result = await transitionSupportAction(ticket.id, status);
+        const result = await transitionSupportAction(ticket.id, ticket.status, status);
         if (result.state !== "ready") {
           setStatusError(result.state === "invalid_transition"
             ? "El estado del ticket cambió. Actualiza la página e inténtalo de nuevo."

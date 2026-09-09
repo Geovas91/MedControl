@@ -28,6 +28,7 @@ import {
 } from "../../lib/calendar/token-encryption.ts";
 
 const migration = readFileSync("supabase/migrations/0029_google_calendar_integrations.sql", "utf8");
+const hardeningMigration = readFileSync("supabase/migrations/0038_plan_support_calendar_hardening.sql", "utf8");
 const callbackRoute = readFileSync("app/api/integrations/google-calendar/callback/route.ts", "utf8");
 const connectRoute = readFileSync("app/api/integrations/google-calendar/connect/route.ts", "utf8");
 const integrationServer = readFileSync("lib/server/google-calendar-integration.ts", "utf8");
@@ -244,16 +245,32 @@ test("disconnect is ownership-bound and invalidates locally even when provider r
   assert.doesNotMatch(clearBody, /appointments|google_calendar_events|\.delete\(/);
 });
 
-test("Basic and inactive subscriptions stop sync before token or provider access", () => {
+test("lost entitlement permits existing cleanup but blocks create and update", () => {
   const syncBody = syncServer.slice(syncServer.indexOf("export async function syncAppointmentGoogleCalendar"));
-  const entitlementGuard = syncBody.indexOf("canUseFeature(await getClinicEntitlements(clinicId), \"google_calendar\")");
+  const entitlementGuard = syncBody.indexOf("const hasCalendarEntitlement");
   assert.ok(entitlementGuard > -1);
-  assert.ok(entitlementGuard < syncBody.indexOf("listStoredGoogleCalendarEvents"));
+  assert.ok(entitlementGuard > syncBody.indexOf("listStoredGoogleCalendarEvents"));
+  assert.ok(syncBody.slice(entitlementGuard).indexOf("deleteStoredEvent") < syncBody.slice(entitlementGuard).indexOf("getGoogleCalendarIntegration(clinicId, doctorUserId)"));
   assert.ok(entitlementGuard < syncBody.indexOf("getGoogleCalendarIntegration(clinicId, doctorUserId)"));
   assert.ok(entitlementGuard < syncBody.indexOf("accessTokenFor(integration"));
   assert.ok(entitlementGuard < syncBody.indexOf("createGoogleCalendarEvent"));
   assert.ok(entitlementGuard < syncBody.indexOf("updateGoogleCalendarEvent"));
-  assert.ok(entitlementGuard < syncBody.indexOf("deleteStoredEvent"));
+});
+
+test("provider success is reported only after atomic local persistence", () => {
+  assert.match(store, /rpc\("record_google_calendar_event_result"/);
+  assert.match(store, /persisted: result\.error === null && result\.data === true/);
+  assert.match(syncServer, /if \(!persistence\.persisted\)[\s\S]+return "failed"/);
+  assert.match(hardeningMigration, /update public\.google_calendar_events[\s\S]+get diagnostics v_mapping_count=row_count/);
+  assert.match(hardeningMigration, /update public\.calendar_integrations[\s\S]+get diagnostics v_integration_count=row_count/);
+  assert.match(hardeningMigration, /grant execute on function public\.record_google_calendar_event_result[\s\S]+to service_role/);
+  assert.doesNotMatch(hardeningMigration, /grant execute on function public\.record_google_calendar_event_result[\s\S]+to (?:anon|authenticated)/);
+});
+
+test("create retries reuse the reserved provider id and cannot blindly duplicate", () => {
+  const syncBody = syncServer.slice(syncServer.indexOf("export async function syncAppointmentGoogleCalendar"));
+  assert.match(syncBody, /providerResult\.code === "event_exists"[\s\S]+updateGoogleCalendarEvent/);
+  assert.ok(syncBody.indexOf("reserveGoogleCalendarEvent") < syncBody.indexOf("createGoogleCalendarEvent"));
 });
 
 test("callback replaces a new secret atomically and never overwrites with a missing one", () => {
