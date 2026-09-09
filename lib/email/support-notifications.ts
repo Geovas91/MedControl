@@ -16,12 +16,17 @@ export function buildSupportNotificationMessage(input:{type:SupportNotificationT
   const text=input.type==="ticket_created_support"?`Se creó un nuevo ticket de soporte en CliniControl.\n\nReferencia: ${input.reference}\nCategoría: ${input.category??"Soporte"}\nSeveridad: ${input.severity??"Normal"}\nEstado: ${input.status}\n\nRevisar en CliniControl: ${url}`:`Tu solicitud de soporte ${input.reference} tiene estado ${input.status}.\n\nPuedes revisar el seguimiento en CliniControl: ${url}`;
   return { subject, text, html:text.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll("\n","<br />"), url };
 }
-export async function sendSupportNotification(input:{type:SupportNotificationType; ticketId:string; reference:string; status:string; category?:string; severity?:string; requesterEmail?:string|null}) {
-  const to=resolveSupportRecipient(input.type,process.env.SUPPORT_EMAIL_TO,input.requesterEmail);
-  if(!to) return {state:"skipped" as const,reason:"no_recipient"};
-  const config=getInvitationEmailConfiguration(); if(config.state!=="ready") return {state:"skipped" as const,reason:"provider_unavailable"};
-  const message=buildSupportNotificationMessage(input,getAppBaseUrl());
-  const result=await sendWithResend(config,{to,subject:message.subject,text:message.text,html:message.html,idempotencyKey:`support-${input.type}-${input.ticketId}-${input.status}`});
-  if(!result.ok){logger.error("Support notification failed",{component:"support_notifications",operation:"send",status:"failed",code:result.code}); return {state:"failed" as const,reason:result.code};}
-  logger.info("Support notification sent",{component:"support_notifications",operation:"send",status:"sent",code:input.type}); return {state:"sent" as const};
+export async function sendSupportNotification(input:{type:SupportNotificationType; ticketId:string; eventId:string; reference:string; status:string; category?:string; severity?:string; requesterEmail?:string|null}) {
+  try {
+    const to=resolveSupportRecipient(input.type,process.env.SUPPORT_EMAIL_TO,input.requesterEmail);
+    if(!to) return {state:"skipped" as const,reason:"no_recipient"};
+    const config=getInvitationEmailConfiguration(); if(config.state!=="ready") return {state:"skipped" as const,reason:"provider_unavailable"};
+    const message=buildSupportNotificationMessage(input,getAppBaseUrl());
+    const result=await sendWithResend(config,{to,subject:message.subject,text:message.text,html:message.html,idempotencyKey:`support-${input.type}-${input.ticketId}-${input.eventId}`});
+    if(!result.ok){logger.error("Support notification failed",{component:"support_notifications",operation:"send",status:"failed",code:result.code}); return {state:"failed" as const,reason:result.code};}
+    logger.info("Support notification sent",{component:"support_notifications",operation:"send",status:"sent",code:input.type}); return {state:"sent" as const};
+  } catch {
+    logger.error("Support notification failed",{component:"support_notifications",operation:"send",status:"failed",code:"notification_failed"});
+    return {state:"failed" as const,reason:"notification_failed"};
+  }
 }

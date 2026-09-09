@@ -219,20 +219,14 @@ export async function recordGoogleCalendarEventResult(input: {
   googleEventId: string;
   errorCode: string | null;
 }) {
-  const now = new Date().toISOString();
-  const admin = createAdminClient();
-  const mapping = await admin.from("google_calendar_events" as never).update({
-    appointment_version: input.appointmentVersion,
-    sync_status: input.status,
-    google_event_id: input.googleEventId,
-    last_error_code: input.errorCode,
-    last_synced_at: input.status === "failed" ? null : now
-  } as never).eq("id", input.mappingId).eq("clinic_id", input.clinicId);
-  if (!mapping.error) {
-    await admin.from("calendar_integrations").update((input.status === "failed"
-      ? { last_error_code: input.errorCode }
-      : { last_sync_at: now, last_error_code: null }) as never)
-      .eq("id", input.integrationId).eq("clinic_id", input.clinicId);
-  }
-  return mapping;
+  const result = await (createAdminClient() as any).rpc("record_google_calendar_event_result", {
+    p_mapping_id: input.mappingId,
+    p_integration_id: input.integrationId,
+    p_clinic_id: input.clinicId,
+    p_appointment_version: input.appointmentVersion,
+    p_status: input.status,
+    p_google_event_id: input.googleEventId,
+    p_error_code: input.errorCode
+  });
+  return { persisted: result.error === null && result.data === true, error: result.error };
 }

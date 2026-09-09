@@ -53,9 +53,16 @@ export async function createSupportTicket(input: { category: string; impact: str
   if (result.error?.code === "P0001") return rateLimited("ticket_create");
   if (result.error || !result.data?.[0]) return failure("ticket_create", "ticket_create_failed");
   const created = result.data[0];
-  void sendSupportNotification({ type: "ticket_created_support", ticketId: created.id, reference: created.reference_code, status: created.status, category: created.category, severity: created.severity });
-  const profile: any = await (await createClient()).from("profiles").select("email").eq("id", contextResult.context.userId).maybeSingle();
-  void sendSupportNotification({ type: "ticket_created_requester", ticketId: created.id, reference: created.reference_code, status: created.status, requesterEmail: profile.data?.email });
+  const notificationClient = await createClient();
+  const event: any = await notificationClient.from("support_ticket_events").select("id")
+    .eq("ticket_id", created.id).eq("event_type", "support_ticket_created").maybeSingle();
+  const profile: any = await notificationClient.from("profiles").select("email").eq("id", contextResult.context.userId).maybeSingle();
+  if (event.data?.id) {
+    void sendSupportNotification({ type: "ticket_created_support", ticketId: created.id, eventId: event.data.id, reference: created.reference_code, status: created.status, category: created.category, severity: created.severity });
+    void sendSupportNotification({ type: "ticket_created_requester", ticketId: created.id, eventId: event.data.id, reference: created.reference_code, status: created.status, requesterEmail: profile.data?.email });
+  } else {
+    logger.error("Support notification event unavailable", buildSupportLogContext({ operation: "ticket_create", status: "failed", code: "notification_event_missing" }));
+  }
   logger.info("Support ticket created", buildSupportLogContext({ operation: "ticket_create", status: "success", code: "ticket_created" }));
   return { state: "ready" as const, data: toSupportTicketSafeProjection(result.data[0]) };
 }
