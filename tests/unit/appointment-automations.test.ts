@@ -29,8 +29,8 @@ test("cron authorization rejects absent, short and non-equal secrets", () => {
 
 test("endpoint result stays 200 for healthy runs and returns only run_failed on runner errors", async () => {
   assert.deepEqual(
-    await executeAppointmentAutomationEndpoint(async () => ({ claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0 })),
-    { status: 200, body: { claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0 } }
+    await executeAppointmentAutomationEndpoint(async () => ({ claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0 })),
+    { status: 200, body: { claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0 } }
   );
   const failure = await executeAppointmentAutomationEndpoint(async () => { throw new Error("RAW_INTERNAL_DATABASE_DETAIL"); });
   assert.deepEqual(failure, { status: 500, body: { error: "run_failed" } });
@@ -56,7 +56,7 @@ test("retry policy is bounded and delivery uncertainty is not retried", () => {
 
 test("public counters are non-negative integers only", () => {
   assert.deepEqual(sanitizeAutomationCounters({ claimed: 2, succeeded: -1, failed: Number.NaN }), {
-    claimed: 2, succeeded: 0, skipped: 0, retryPending: 0, failed: 0
+    claimed: 2, succeeded: 0, skipped: 0, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0
   });
 });
 

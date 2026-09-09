@@ -49,11 +49,13 @@ export async function runWithAppointmentAutomationHeartbeat(
     const counters = sanitizeAutomationCounters(await execute());
     const finish = await recordHeartbeat(client, {
       p_phase: "finish",
-      p_status: "ok",
+      p_status: counters.uncertain > 0 || counters.lostLease > 0 ? "error" : "ok",
       p_claimed: counters.claimed,
       p_succeeded: counters.succeeded,
       p_skipped: counters.skipped,
-      p_failed: counters.failed
+      p_failed: counters.failed,
+      p_uncertain: counters.uncertain,
+      p_lost_lease: counters.lostLease
     });
     if (!finish.ok) {
       heartbeatLogger.error("Appointment automation heartbeat failed", {

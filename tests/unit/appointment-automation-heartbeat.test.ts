@@ -29,7 +29,7 @@ test("start heartbeat RPC error fails before claiming jobs", async () => {
   await assert.rejects(
     runWithAppointmentAutomationHeartbeat(client, async () => {
       executed = true;
-      return { claimed: 1, succeeded: 0, skipped: 0, retryPending: 0, failed: 0 };
+      return { claimed: 1, succeeded: 0, skipped: 0, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0 };
     }, capture.logger),
     { message: "Appointment automation heartbeat start failed." }
   );
@@ -50,7 +50,7 @@ test("finish OK heartbeat RPC error cannot report runner success", async () => {
   const capture = loggerCapture();
 
   await assert.rejects(
-    runWithAppointmentAutomationHeartbeat(client, async () => ({ claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0 }), capture.logger),
+    runWithAppointmentAutomationHeartbeat(client, async () => ({ claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0 }), capture.logger),
     { message: "Appointment automation run failed." }
   );
   assert.deepEqual(calls.map((call) => [call.args?.p_phase, call.args?.p_status ?? null]), [
@@ -109,12 +109,28 @@ test("healthy execution returns the existing sanitized counters after finish OK"
   };
   const capture = loggerCapture();
   const result = await runWithAppointmentAutomationHeartbeat(client, async () => ({
-    claimed: 2, succeeded: 1, skipped: 1, retryPending: 0, failed: 0
+    claimed: 2, succeeded: 1, skipped: 1, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0
   }), capture.logger);
 
-  assert.deepEqual(result, { claimed: 2, succeeded: 1, skipped: 1, retryPending: 0, failed: 0 });
+  assert.deepEqual(result, { claimed: 2, succeeded: 1, skipped: 1, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0 });
   assert.deepEqual(calls.map((call) => [call.args?.p_phase, call.args?.p_status ?? null]), [
     ["start", null], ["finish", "ok"]
   ]);
   assert.equal(capture.entries.length, 0);
+});
+
+test("uncertain persistence makes the heartbeat unhealthy", async () => {
+  const calls: RpcCall[] = [];
+  const client: AutomationHeartbeatRpcClient = {
+    async rpc(name, args) {
+      calls.push({ name, args });
+      return { data: true, error: null };
+    }
+  };
+  const capture = loggerCapture();
+  await runWithAppointmentAutomationHeartbeat(client, async () => ({
+    claimed: 1, succeeded: 0, skipped: 0, retryPending: 0, failed: 0, uncertain: 1, lostLease: 0
+  }), capture.logger);
+  assert.equal(calls.at(-1)?.args?.p_status, "error");
+  assert.equal(calls.at(-1)?.args?.p_uncertain, 1);
 });

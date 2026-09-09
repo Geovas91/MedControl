@@ -18,6 +18,26 @@ export function shouldRetryAutomationEmail(code: string) {
   return code === "rate_limited";
 }
 
+export async function confirmAutomationMutation(
+  call: () => Promise<{ data: unknown; error: unknown }>
+) {
+  try {
+    const result = await call();
+    return !result.error && result.data === true;
+  } catch {
+    return false;
+  }
+}
+
+export function classifyAutomationFinalization<T extends "succeeded" | "skipped" | "retryPending" | "failed">(
+  expected: T,
+  confirmed: boolean,
+  providerAccepted = false
+): T | "uncertain" | "lostLease" {
+  if (confirmed) return expected;
+  return providerAccepted ? "uncertain" : "lostLease";
+}
+
 export function sanitizeAutomationCounters(value: Partial<AutomationRunCounters>): AutomationRunCounters {
   const safe = (candidate: unknown) => Number.isSafeInteger(candidate) && Number(candidate) >= 0 ? Number(candidate) : 0;
   return {
@@ -25,7 +45,9 @@ export function sanitizeAutomationCounters(value: Partial<AutomationRunCounters>
     succeeded: safe(value.succeeded),
     skipped: safe(value.skipped),
     retryPending: safe(value.retryPending),
-    failed: safe(value.failed)
+    failed: safe(value.failed),
+    uncertain: safe(value.uncertain),
+    lostLease: safe(value.lostLease)
   };
 }
 
@@ -35,6 +57,8 @@ export type AutomationRunCounters = {
   skipped: number;
   retryPending: number;
   failed: number;
+  uncertain: number;
+  lostLease: number;
 };
 
 export type AutomationRunHttpResult =
