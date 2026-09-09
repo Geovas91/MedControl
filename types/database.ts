@@ -183,13 +183,31 @@ export type Database = {
         };
         Update: Partial<Database["public"]["Tables"]["clinic_member_invitations"]["Insert"]>;
       };
+      paypal_billing_intents: {
+        Row: {
+          id: string; clinic_id: string; user_id: string; plan_id: "basic" | "plus" | "pro";
+          provider_plan_id: string; provider_subscription_id: string | null; previous_subscription_id: string | null;
+          status: "pending" | "completed"; created_at: Timestamp; expires_at: Timestamp; completed_at: Timestamp | null;
+        };
+        Insert: {
+          id?: string; clinic_id: string; user_id: string; plan_id: "basic" | "plus" | "pro";
+          provider_plan_id: string; provider_subscription_id?: string | null; previous_subscription_id?: string | null;
+          status?: "pending" | "completed"; created_at?: Timestamp; expires_at?: Timestamp; completed_at?: Timestamp | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["paypal_billing_intents"]["Insert"]>;
+      };
       paypal_webhook_events: {
         Row: {
           id: string;
           event_id: string;
           event_type: string;
           provider_subscription_id: string | null;
-          processing_status: "processed" | "ignored" | "failed";
+          processing_status: "received" | "processing" | "processed" | "ignored" | "failed";
+          attempt_count: number;
+          lease_until: Timestamp | null;
+          lease_token: string | null;
+          failed_at: Timestamp | null;
+          last_error_code: "processing_failed" | "subscription_not_found" | "provider_mismatch" | "unsupported_event" | null;
           created_at: Timestamp;
           processed_at: Timestamp | null;
         };
@@ -198,7 +216,12 @@ export type Database = {
           event_id: string;
           event_type: string;
           provider_subscription_id?: string | null;
-          processing_status?: "processed" | "ignored" | "failed";
+          processing_status?: "received" | "processing" | "processed" | "ignored" | "failed";
+          attempt_count?: number;
+          lease_until?: Timestamp | null;
+          lease_token?: string | null;
+          failed_at?: Timestamp | null;
+          last_error_code?: "processing_failed" | "subscription_not_found" | "provider_mismatch" | "unsupported_event" | null;
           created_at?: Timestamp;
           processed_at?: Timestamp | null;
         };

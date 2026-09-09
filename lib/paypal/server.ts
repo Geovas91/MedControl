@@ -17,6 +17,7 @@ type PaypalVerifyWebhookResponse = {
 
 type PaypalSubscriptionDetails = {
   id: string;
+  custom_id?: string;
   status?: string;
   plan_id?: string;
   start_time?: string;
@@ -90,6 +91,7 @@ export async function getPaypalAccessToken() {
       "Content-Type": "application/x-www-form-urlencoded"
     },
     body: "grant_type=client_credentials",
+    signal: AbortSignal.timeout(15_000),
     cache: "no-store"
   });
 
@@ -112,6 +114,7 @@ export async function getPaypalSubscriptionDetails(subscriptionId: string) {
     headers: {
       Authorization: `Bearer ${accessToken}`
     },
+    signal: AbortSignal.timeout(15_000),
     cache: "no-store"
   });
 
@@ -120,6 +123,21 @@ export async function getPaypalSubscriptionDetails(subscriptionId: string) {
   }
 
   return (await response.json()) as PaypalSubscriptionDetails;
+}
+
+export async function createPaypalSubscription(intent: { id: string; provider_plan_id: string }) {
+  const accessToken = await getPaypalAccessToken();
+  const response = await fetch(`${getPaypalBaseUrl()}/v1/billing/subscriptions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "PayPal-Request-Id": intent.id },
+    body: JSON.stringify({ plan_id: intent.provider_plan_id, custom_id: intent.id }),
+    signal: AbortSignal.timeout(15_000),
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error("paypal_creation_failed");
+  const created = (await response.json()) as { id?: string };
+  if (!created.id || !/^I-[A-Z0-9]{6,64}$/.test(created.id)) throw new Error("paypal_creation_failed");
+  return getPaypalSubscriptionDetails(created.id);
 }
 
 export async function verifyPaypalWebhookSignature(headers: PaypalWebhookHeaders, webhookEvent: PaypalWebhookEvent) {
@@ -155,11 +173,12 @@ export async function verifyPaypalWebhookSignature(headers: PaypalWebhookHeaders
       webhook_id: webhookId,
       webhook_event: webhookEvent
     }),
+    signal: AbortSignal.timeout(15_000),
     cache: "no-store"
   });
 
   if (!response.ok) {
-    return false;
+    throw new Error("paypal_verification_unavailable");
   }
 
   const data = (await response.json()) as PaypalVerifyWebhookResponse;
