@@ -1150,14 +1150,6 @@ export type Database = {
         Args: { p_clinic_id: string; p_user_id: string };
         Returns: string | null;
       };
-      add_clinic_member_by_email_for_current_user: {
-        Args: {
-          target_clinic_id: string;
-          member_email: string;
-          member_role: Database["public"]["Enums"]["clinic_member_role"];
-        };
-        Returns: string;
-      };
       create_clinic_member_invitation_for_current_user: {
         Args: { p_clinic_id: string; p_email: string; p_role: string };
         Returns: Array<{ invitation_id: string; raw_token: string; expires_at: Timestamp; invited_email: string; invited_role: string }>;
