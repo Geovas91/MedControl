@@ -7,27 +7,27 @@ select extensions.plan(10);
 select extensions.is(
   (select count(*)::integer
    from regexp_matches(
-     pg_get_functiondef('public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer)'::regprocedure),
+     pg_get_functiondef('public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer,integer,integer)'::regprocedure),
      'where singleton = true', 'gi'
    )),
   2,
   'both heartbeat updates target the singleton row explicitly'
 );
 select extensions.ok(
-  pg_get_functiondef('public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer)'::regprocedure)
+  pg_get_functiondef('public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer,integer,integer)'::regprocedure)
     not like '%UPDATE public.appointment_automation_scheduler_state SET last_started_at%updated_at = now();%',
   'heartbeat has no legacy unqualified start update'
 );
 select extensions.ok(
-  has_function_privilege('service_role', 'public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer)', 'EXECUTE'),
+  has_function_privilege('service_role', 'public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer,integer,integer)', 'EXECUTE'),
   'service role retains heartbeat execute permission'
 );
 select extensions.ok(
-  not has_function_privilege('anon', 'public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer)', 'EXECUTE'),
+  not has_function_privilege('anon', 'public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer,integer,integer)', 'EXECUTE'),
   'anon cannot execute heartbeat'
 );
 select extensions.ok(
-  not has_function_privilege('authenticated', 'public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer)', 'EXECUTE'),
+  not has_function_privilege('authenticated', 'public.record_appointment_automation_heartbeat(text,text,integer,integer,integer,integer,integer,integer)', 'EXECUTE'),
   'authenticated cannot execute heartbeat'
 );
 
