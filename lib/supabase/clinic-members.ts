@@ -21,20 +21,10 @@ type ClinicMembersRpcClient = {
     fn: "list_clinic_members_for_current_user",
     args: { target_clinic_id: string }
   ): Promise<{ data: ManagedClinicMember[] | null; error: PostgrestError | null }>;
-  rpc(
-    fn: "add_clinic_member_by_email_for_current_user",
-    args: { target_clinic_id: string; member_email: string; member_role: Exclude<ClinicMemberRole, "owner"> }
-  ): Promise<{ data: string | null; error: PostgrestError | null }>;
   rpc(fn: "create_clinic_member_invitation_for_current_user", args: { p_clinic_id: string; p_email: string; p_role: Exclude<ClinicMemberRole, "owner"> }): Promise<{ data: InvitationTokenResult[] | null; error: PostgrestError | null }>;
   rpc(fn: "list_clinic_member_invitations_for_current_user", args: { p_clinic_id: string }): Promise<{ data: ManagedClinicInvitation[] | null; error: PostgrestError | null }>;
   rpc(fn: "rotate_clinic_member_invitation_token_for_current_user", args: { p_invitation_id: string }): Promise<{ data: { raw_token: string; expires_at: string }[] | null; error: PostgrestError | null }>;
   rpc(fn: "revoke_clinic_member_invitation_for_current_user", args: { p_invitation_id: string }): Promise<{ data: boolean | null; error: PostgrestError | null }>;
-};
-
-export type AddClinicMemberByEmailInput = {
-  clinicId: string;
-  email: string;
-  role: Exclude<ClinicMemberRole, "owner">;
 };
 
 export async function listClinicMembersForClinic(clinicId: string) {
@@ -43,17 +33,6 @@ export async function listClinicMembersForClinic(clinicId: string) {
 
   return clinicMembersClient.rpc("list_clinic_members_for_current_user", {
     target_clinic_id: clinicId
-  });
-}
-
-export async function addClinicMemberByEmailToClinic({ clinicId, email, role }: AddClinicMemberByEmailInput) {
-  const supabase = await createClient();
-  const clinicMembersClient = supabase as unknown as ClinicMembersRpcClient;
-
-  return clinicMembersClient.rpc("add_clinic_member_by_email_for_current_user", {
-    target_clinic_id: clinicId,
-    member_email: email,
-    member_role: role
   });
 }
 

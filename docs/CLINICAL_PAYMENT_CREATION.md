@@ -15,6 +15,10 @@ El selector consulta solo `id`, `full_name` y `status` de pacientes de la clíni
 servidor confirma de nuevo que el paciente pertenece al mismo `clinic_id`. No se aceptan IDs de clínica enviados
 por el formulario o la URL.
 
+Desde `0036_identity_payments_integrity.sql`, PostgreSQL también impone estas relaciones aunque una escritura omita la validación de aplicación o use `service_role`. Una cita referencia `(clinic_id, patient_id)` del paciente; un pago referencia `(clinic_id, patient_id)` y, cuando incluye cita, `(clinic_id, appointment_id, patient_id)`. Por tanto, paciente, cita y pago siempre pertenecen al mismo tenant y paciente.
+
+Las FKs compuestas mantienen la semántica previa de borrado: borrar un paciente elimina sus citas y deja el pago histórico con `patient_id` nulo; borrar sólo una cita deja el pago y anula únicamente `appointment_id`. RLS continúa siendo una capa separada: owner/admin mantienen las escrituras permitidas, otros tenants no pueden leer ni modificar el pago, y las constraints siguen aplicando a `service_role`.
+
 ## Campos y validación
 
 - `amount` es `numeric(12,2)` en unidades monetarias completas. Se acepta únicamente decimal canónico positivo,
@@ -32,8 +36,7 @@ La inserción envía solo `clinic_id`, `patient_id`, `amount`, `currency`, `stat
 
 ## Alcance y limitaciones
 
-No se incluye `appointment_id` en esta fase. Aunque la columna existe, asociarla exige un selector dependiente del
-paciente y validación adicional de citas; no se acepta un UUID oculto sin esa interfaz segura.
+La interfaz actual no envía `appointment_id`. La columna sigue disponible para flujos futuros, pero la base rechaza cualquier asociación que no coincida con el paciente y clínica del pago.
 
 El botón se deshabilita mientras la acción está pendiente y el flujo redirige después del éxito, evitando reenvíos
 accidentales al refrescar. Dos solicitudes HTTP deliberadamente simultáneas aún podrían duplicar un registro; una
