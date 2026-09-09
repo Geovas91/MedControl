@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { PaypalSubscriptionButton } from "@/components/dashboard/paypal-subscription-button";
 import { commercialPlans } from "@/config/plans";
 import { formatMXN } from "@/lib/format";
-import { getOnboardingStatus } from "@/lib/onboarding";
+import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canManageBilling } from "@/lib/paypal/billing-policy";
 import { getPaypalEnvironment, getPaypalPlanIdForPlan, hasPaypalPublicConfig } from "@/lib/paypal/server";
 import { getClinicPlanContext } from "@/lib/supabase/subscriptions";
 import type { SubscriptionStatus } from "@/types/subscriptions";
@@ -27,17 +28,18 @@ const statusVariants: Record<SubscriptionStatus, "green" | "amber" | "slate"> = 
 };
 
 export default async function BillingPage() {
-  const onboardingStatus = await getOnboardingStatus();
+  const context = await getActiveTenantContext();
 
-  if (onboardingStatus.state === "unauthenticated") {
+  if (context.state === "unauthenticated") {
     redirect("/login");
   }
 
-  if (onboardingStatus.state !== "complete") {
+  if (context.state !== "ready") {
     redirect("/onboarding");
   }
 
-  const planContextResult = await getClinicPlanContext(onboardingStatus.membership.clinic_id);
+  const canBill = canManageBilling(context.tenant.membership.role);
+  const planContextResult = await getClinicPlanContext(context.tenant.clinic.id);
   const planContext = planContextResult.data;
   const currentStatus = planContext?.subscription?.status ?? "inactive";
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID?.trim() || null;
@@ -116,12 +118,12 @@ export default async function BillingPage() {
               ) : null}
 
               <div className="mt-auto pt-5">
-                <PaypalSubscriptionButton
+                {canBill ? <PaypalSubscriptionButton
                   clientId={paypalClientId}
                   planId={plan.id}
                   paypalPlanId={paypalPlanId}
                   label={actionLabel}
-                />
+                /> : <p className="text-sm text-slate-600">Sólo el propietario puede gestionar la suscripción.</p>}
               </div>
             </article>
           );

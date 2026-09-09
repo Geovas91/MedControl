@@ -11,12 +11,6 @@ type PaypalSubscriptionButtonProps = {
   label: string;
 };
 
-type PaypalButtonActions = {
-  subscription: {
-    create(options: { plan_id: string }): Promise<string>;
-  };
-};
-
 type PaypalButtons = {
   render(container: HTMLElement): Promise<void>;
 };
@@ -28,7 +22,7 @@ type PaypalNamespace = {
       shape?: "rect" | "pill";
       label?: "subscribe" | "paypal";
     };
-    createSubscription(data: unknown, actions: PaypalButtonActions): Promise<string>;
+    createSubscription(): Promise<string>;
     onApprove(data: { subscriptionID?: string }): Promise<void>;
     onError(error: unknown): void;
   }): PaypalButtons;
@@ -83,6 +77,7 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
 
   useEffect(() => {
     let cancelled = false;
+    let intentId: string | null = null;
 
     if (!clientId || !paypalPlanId || !containerRef.current || renderedRef.current) {
       return;
@@ -105,13 +100,18 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
               shape: "rect",
               label: "subscribe"
             },
-            createSubscription(_data, actions) {
-              return actions.subscription.create({
-                plan_id: paypalPlanId
+            async createSubscription() {
+              const response = await fetch("/api/paypal/subscription/create", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ planId })
               });
+              const result = await response.json() as { intentId?: string; subscriptionId?: string };
+              if (!response.ok || !result.intentId || !result.subscriptionId) throw new Error("No se pudo iniciar la suscripción.");
+              intentId = result.intentId;
+              return result.subscriptionId;
             },
             async onApprove(data) {
-              if (!data.subscriptionID) {
+              if (!data.subscriptionID || !intentId) {
                 setStatus("error");
                 setMessage("PayPal no devolvió un identificador de suscripción.");
                 return;
@@ -126,6 +126,7 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
                 },
                 body: JSON.stringify({
                   subscriptionId: data.subscriptionID,
+                  intentId,
                   planId
                 })
               });

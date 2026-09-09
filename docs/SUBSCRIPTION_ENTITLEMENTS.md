@@ -1,5 +1,7 @@
 # Entitlements de suscripción
 
+La autorización owner-only, intents y reentrega segura de PayPal se documentan en [PAYPAL_BILLING_SECURITY.md](./PAYPAL_BILLING_SECURITY.md). Esta política de billing no modifica la matriz de entitlements clínicos.
+
 `lib/server/entitlements.ts` calcula siempre en servidor el plan y estado desde `clinic_subscriptions`; no usa datos del navegador. Distingue una suscripción faltante de un error técnico: ambos fallan cerrado para escrituras, y el dashboard muestra un aviso genérico de configuración o indisponibilidad sin describirlo como deuda.
 
 El estado persistido se conserva como `persistedStatus`. El acceso se calcula como `effectiveStatus`: un `trialing` sólo permite escritura cuando `current_period_end` existe y es estrictamente posterior a `now()`. Si es nulo, igual a `now()` o anterior, el acceso efectivo es `trial_expired`; no se muta la suscripción durante la lectura, se preservan históricos y se bloquean escrituras sin afirmar que exista una deuda. Un `active` sigue activo aunque su periodo histórico haya terminado, conforme a la política actual.
