@@ -61,6 +61,34 @@ const comparison = [
     values: commercialPlans.map(() => "Incluidas")
   },
   {
+    feature: "Usuarios administrativos y asistentes",
+    values: ["No incluidos", "Incluidos", "Incluidos"]
+  },
+  {
+    feature: "Invitaciones de calendario ICS por email",
+    values: commercialPlans.map(() => "Incluidas")
+  },
+  {
+    feature: "Consentimientos personalizados por especialidad",
+    values: commercialPlans.map(() => "Incluidos")
+  },
+  {
+    feature: "Google Calendar",
+    values: ["No incluido", "Incluido", "Incluido"]
+  },
+  {
+    feature: "Appointment Assistant",
+    values: ["No incluido", "Incluido", "Incluido"]
+  },
+  {
+    feature: "Service Bot Tier 1",
+    values: commercialPlans.map(() => "Incluido")
+  },
+  {
+    feature: "WhatsApp outbound",
+    values: commercialPlans.map(() => "No incluido")
+  },
+  {
     feature: "Suscripción mensual vía PayPal",
     values: commercialPlans.map(() => "Preparada")
   }

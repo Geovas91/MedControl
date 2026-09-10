@@ -33,9 +33,10 @@ type DashboardShellProps = {
   footer?: React.ReactNode;
   account?: { name: string; subtitle: string };
   subscriptionNotice?: string | null;
+  appointmentAssistantAvailable?: boolean;
 };
 
-export function DashboardShell({ children, footer, account, subscriptionNotice }: DashboardShellProps) {
+export function DashboardShell({ children, footer, account, subscriptionNotice, appointmentAssistantAvailable = false }: DashboardShellProps) {
   const pathname = usePathname();
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
   const appContentRef = useRef<HTMLDivElement>(null);
@@ -45,6 +46,7 @@ export function DashboardShell({ children, footer, account, subscriptionNotice }
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const open = drawerPath === pathname;
+  const visibleNavItems = appointmentAssistantAvailable ? navItems : navItems.filter((item) => item.href !== "/dashboard/bot");
   const closeDrawer = () => setDrawerPath(null);
   const openDrawer = (event: React.MouseEvent<HTMLButtonElement>) => {
     openerRef.current = event.currentTarget;
@@ -103,7 +105,7 @@ export function DashboardShell({ children, footer, account, subscriptionNotice }
         <div><p className="text-sm font-bold text-ink">CliniControl</p><p className="text-xs text-[var(--foreground-muted)]">Espacio clínico</p></div>
       </div>
       <nav className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto p-3" aria-label={inDrawer ? "Navegación principal" : undefined}>
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const active = isDashboardNavItemActive(pathname, item.href);
           return <Link key={item.href} href={item.href} onClick={closeDrawer} aria-current={active ? "page" : undefined} className={cn("flex min-h-11 items-center gap-3 rounded-[var(--radius-sm)] px-3 py-2.5 text-sm font-medium text-[var(--foreground-soft)] transition duration-150 hover:bg-[var(--surface-muted)] hover:text-ink", active && "bg-[var(--clinic-soft)] text-clinic")}><Icon className="h-4 w-4" />{item.label}</Link>;

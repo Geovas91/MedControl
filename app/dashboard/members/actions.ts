@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
+import { canCreateWithEntitlements, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import {
   createClinicInvitation,
   listClinicInvitations,
@@ -46,7 +46,8 @@ export async function addClinicMemberAction(
     return { error: "No tienes una membresía activa para administrar invitaciones." };
   }
 
-  if (!canCreateWithEntitlements(await getClinicEntitlements(activeTenant.tenant.clinic.id))) {
+  const entitlements = await getClinicEntitlements(activeTenant.tenant.clinic.id);
+  if (!canCreateWithEntitlements(entitlements)) {
     return { error: "La suscripción actual no permite administrar miembros." };
   }
 
@@ -56,6 +57,10 @@ export async function addClinicMemberAction(
 
   if (!isSupportedRole(role)) {
     return { error: "Selecciona un rol válido para el miembro." };
+  }
+
+  if ((role === "admin" || role === "assistant") && !planIncludesFeature(entitlements, "additional_staff")) {
+    return { error: "Los roles de administrador y asistente están disponibles en Plus y Pro." };
   }
 
   const { data, error } = await createClinicInvitation(activeTenant.tenant.clinic.id, email, role);

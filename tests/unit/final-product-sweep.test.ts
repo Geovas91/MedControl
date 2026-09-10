@@ -21,6 +21,6 @@ test("settings only presents configuration destinations backed by real routes", 
   assert.doesNotMatch(settingsPage, /Perfil de clínica|Notificaciones|Controles de privacidad|próximas fases/);
 });
 
-test("commercial plans do not promise unfinished review or reminder automation", () => {
-  assert.doesNotMatch(plans, /Reseñas verificadas|Bot premium|Recordatorios avanzados|Reportes ampliados|Configuración avanzada de horarios/);
+test("commercial plans avoid unsupported premium claims", () => {
+  assert.doesNotMatch(plans, /Bot premium|Recordatorios avanzados|Reportes (?:básicos|ampliados)|Configuración avanzada de horarios|Gestión avanzada de roles|Soporte prioritario|Soporte preferente/);
 });

@@ -10,18 +10,15 @@ El estado persistido se conserva como `persistedStatus`. El acceso se calcula co
 
 Los límites comerciales existentes de médicos siguen centralizados en `config/plans.ts` y la RPC existente los valida al agregar miembros. No se agregaron límites de pacientes ni precios nuevos. Las suscripciones SaaS continúan separadas de `public.payments`, que contiene sólo pagos paciente-clínica.
 
-Las capacidades por plan también se declaran de forma tipada en `config/plans.ts`. `google_calendar` está excluida de Básico e incluida en Plus y Pro. `canUseFeature` exige a la vez que el plan incluya la capacidad y que la suscripción permita escritura efectiva; los permisos de rol y el tenant se validan adicionalmente en cada flujo servidor.
+Las capacidades por plan también se declaran de forma tipada en `config/plans.ts`. `google_calendar`, `additional_staff` y `appointment_assistant` están excluidas de Básico e incluidas en Plus y Pro. `service_bot_tier1` está incluido en todos los planes y `whatsapp_notifications` permanece deshabilitado en todos. `canUseFeature` exige a la vez que el plan incluya la capacidad y que la suscripción permita escritura efectiva; los permisos de rol y el tenant se validan adicionalmente en cada flujo servidor.
 
-Las guardas se aplican en las funciones servidoras y la RPC de miembros, además de ocultar controles de gestión en la interfaz. Pendiente: una política aprobada para expiración/cancelación y una fuente productiva de cambios de estado validada por PayPal.
+Las invitaciones ICS por email, los consentimientos personalizados por especialidad y las reseñas verificadas no tienen entitlement de plan porque están incluidos en Básico, Plus y Pro. Google Calendar es una integración distinta de las invitaciones ICS.
 
-## Backlog comercial fuera de este cambio
+Una clínica sin fila en `clinic_subscriptions` se representa como `missing` y la interfaz muestra "Sin plan configurado"; nunca se presenta como Básico ni recibe permisos. Las guardas de staff y Appointment Assistant se aplican en servidor y SQL, además de ocultar los controles correspondientes.
 
-- Alinear la promesa de Básico sin usuarios administrativos adicionales con el enforcement de invitaciones.
-- Definir si las invitaciones ICS deben limitarse por plan antes de cambiar su comportamiento actual.
-- Convertir las diferencias textuales entre consentimientos básicos, por paciente y personalizados en capacidades definidas antes de aplicar gating.
-- Definir técnicamente qué añade la gestión avanzada de roles de Pro antes de diferenciar permisos.
+Al bajar a Básico, los admins y assistants existentes permanecen activos, pero no pueden crearse, aceptarse ni reactivarse otros. Los jobs del Appointment Assistant que ya existen conservan su lifecycle, lease y fencing para poder finalizar o reconciliarse sin reenvío ciego; el plan Básico no puede guardar configuración ni generar jobs nuevos.
 
-Estos puntos se documentan como inconsistencias preexistentes; el entitlement de Google Calendar no cambia su comportamiento.
+No se anuncian tiers base/completo del Appointment Assistant, roles avanzados, reportes ni prioridad/SLA de soporte porque esas diferencias no existen en el producto actual.
 
 ## Matriz manual
 

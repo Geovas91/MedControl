@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { listClinicInvitations, listClinicMembersForClinic, type ClinicMemberRole } from "@/lib/supabase/clinic-members";
 import { getClinicPlanContext } from "@/lib/supabase/subscriptions";
-import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
+import { canCreateWithEntitlements, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { formatDate } from "@/lib/utils";
 
 const roleLabels: Record<ClinicMemberRole, string> = {
@@ -58,6 +58,7 @@ export default async function MembersPage() {
   const planContext = planContextResult.data;
   const members = membersResult.data ?? [];
   const invitations = invitationsResult.data ?? [];
+  const canAddAdditionalStaff = planIncludesFeature(entitlementsResult, "additional_staff");
 
   return (
     <>
@@ -89,7 +90,22 @@ export default async function MembersPage() {
         </section>
       ) : null}
 
-      {planContext && canCreateWithEntitlements(entitlementsResult) ? <AddMemberForm canAddDoctor={planContext.canAddDoctor} /> : null}
+      {planContext && canCreateWithEntitlements(entitlementsResult) && (planContext.canAddDoctor || canAddAdditionalStaff) ? (
+        <AddMemberForm
+          canAddDoctor={planContext.canAddDoctor}
+          canAddAdditionalStaff={canAddAdditionalStaff}
+        />
+      ) : null}
+
+      {planContext?.planId === "basic" && !planContext.canAddDoctor ? (
+        <section className="surface-card mb-6 p-5 text-sm text-slate-600">
+          El plan Básico ya utiliza su único lugar médico y no permite altas de administradores o asistentes.
+        </section>
+      ) : null}
+
+      {planContextResult.state === "missing" ? (
+        <section className="surface-card mb-6 p-5 text-sm text-slate-600">Sin plan configurado.</section>
+      ) : null}
 
       <section className="surface-card mt-6 overflow-hidden">
         <div className="border-b border-slate-200 p-5">

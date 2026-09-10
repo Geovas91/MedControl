@@ -16,7 +16,7 @@ export type ClinicSubscriptionResult = {
 
 export type ClinicPlanContext = {
   clinicId: string;
-  subscription: ClinicSubscription | null;
+  subscription: ClinicSubscription;
   plan: CommercialPlan;
   planId: PlanId;
   doctorLimit: DoctorPlanLimit;
@@ -83,22 +83,28 @@ export async function getClinicSubscription(clinicId: string): Promise<ClinicSub
   };
 }
 
-export async function getClinicPlanContext(clinicId: string): Promise<{
-  data: ClinicPlanContext | null;
-  error: PostgrestError | Error | null;
-}> {
+export type ClinicPlanContextResult =
+  | { state: "ready"; data: ClinicPlanContext; error: null }
+  | { state: "missing"; data: null; error: null }
+  | { state: "error"; data: null; error: PostgrestError | Error };
+
+export async function getClinicPlanContext(clinicId: string): Promise<ClinicPlanContextResult> {
   const supabase = await createClient();
   const { data: subscription, error: subscriptionError } = await getClinicSubscription(clinicId);
 
   if (subscriptionError) {
-    return { data: null, error: subscriptionError };
+    return { state: "error", data: null, error: subscriptionError };
   }
 
-  const planId = subscription?.plan_id ?? "basic";
+  if (!subscription) {
+    return { state: "missing", data: null, error: null };
+  }
+
+  const planId = subscription.plan_id;
   const plan = getPlanById(planId);
 
   if (!plan) {
-    return { data: null, error: new Error(`Unknown CliniControl plan: ${planId}`) };
+    return { state: "error", data: null, error: new Error(`Unknown CliniControl plan: ${planId}`) };
   }
 
   const doctorCountRpcClient = supabase as unknown as DoctorCountRpcClient;
@@ -110,12 +116,13 @@ export async function getClinicPlanContext(clinicId: string): Promise<{
   );
 
   if (doctorCountError) {
-    return { data: null, error: doctorCountError };
+    return { state: "error", data: null, error: doctorCountError };
   }
 
   const doctorLimit = getDoctorLimitForPlan(planId);
 
   return {
+    state: "ready",
     data: {
       clinicId,
       subscription,

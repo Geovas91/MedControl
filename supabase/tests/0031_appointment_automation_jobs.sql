@@ -20,8 +20,8 @@ insert into public.clinic_members(id, clinic_id, user_id, role, status) values
   ('f2100000-0000-4000-8000-000000000002', 'f2000000-0000-4000-8000-000000000001', 'f1000000-0000-4000-8000-000000000002', 'doctor', 'active'),
   ('f2100000-0000-4000-8000-000000000003', 'f2000000-0000-4000-8000-000000000002', 'f1000000-0000-4000-8000-000000000003', 'owner', 'active');
 insert into public.clinic_subscriptions(clinic_id, plan_id, status, billing_provider, current_period_end) values
-  ('f2000000-0000-4000-8000-000000000001', 'basic', 'active', 'manual', now() + interval '30 days'),
-  ('f2000000-0000-4000-8000-000000000002', 'basic', 'active', 'manual', now() + interval '30 days');
+  ('f2000000-0000-4000-8000-000000000001', 'plus', 'active', 'manual', now() + interval '30 days'),
+  ('f2000000-0000-4000-8000-000000000002', 'plus', 'active', 'manual', now() + interval '30 days');
 insert into public.patients(id, clinic_id, full_name, first_names, internal_identifier, email) values
   ('f3000000-0000-4000-8000-000000000001', 'f2000000-0000-4000-8000-000000000001', 'Paciente Automatización A', 'Paciente', 'PAC-AUTOMATIONA', 'patient-a@example.test'),
   ('f3000000-0000-4000-8000-000000000002', 'f2000000-0000-4000-8000-000000000002', 'Paciente Automatización B', 'Paciente', 'PAC-AUTOMATIONB', 'patient-b@example.test');

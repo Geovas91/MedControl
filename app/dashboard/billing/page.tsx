@@ -41,7 +41,7 @@ export default async function BillingPage() {
   const canBill = canManageBilling(context.tenant.membership.role);
   const planContextResult = await getClinicPlanContext(context.tenant.clinic.id);
   const planContext = planContextResult.data;
-  const currentStatus = planContext?.subscription?.status ?? "inactive";
+  const currentStatus = planContext?.subscription.status ?? "inactive";
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID?.trim() || null;
   const hasPublicPaypalConfig = hasPaypalPublicConfig();
 
@@ -55,12 +55,16 @@ export default async function BillingPage() {
       <section className="mb-6 grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm font-semibold text-slate-500">Plan actual</p>
-          <p className="mt-1 text-lg font-bold text-ink">{planContext?.plan.name ?? "Sin plan activo"}</p>
+          <p className="mt-1 text-lg font-bold text-ink">{planContext?.plan.name ?? "Sin plan configurado"}</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-sm font-semibold text-slate-500">Estado de suscripción</p>
           <div className="mt-2">
-            <Badge variant={statusVariants[currentStatus]}>{statusLabels[currentStatus]}</Badge>
+            {planContextResult.state === "missing" ? (
+              <Badge variant="slate">Sin plan configurado</Badge>
+            ) : (
+              <Badge variant={statusVariants[currentStatus]}>{statusLabels[currentStatus]}</Badge>
+            )}
           </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
