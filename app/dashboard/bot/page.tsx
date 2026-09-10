@@ -63,6 +63,20 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
   if (result.state === "no_active_membership") {
     return <Unavailable title="Sin clínica activa" description="Necesitas una membresía activa para consultar el asistente de agenda." />;
   }
+  if (result.state === "upgrade_required") {
+    return (
+      <>
+        <PageHeader title="Appointment Assistant" description="Automatiza recordatorios por email y solicitudes de reseña." />
+        <section className="surface-card p-5">
+          <h2 className="font-bold text-ink">Disponible en Plus y Pro</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Tu plan actual conserva la agenda, las invitaciones ICS y las reseñas verificadas. Cambia a Plus o Pro para configurar automatizaciones.
+          </p>
+          <ButtonLink href="/dashboard/billing" className="mt-4">Ver planes</ButtonLink>
+        </section>
+      </>
+    );
+  }
   if (result.state === "error") {
     return <Unavailable title="No fue posible cargar el asistente" description="La agenda no está disponible temporalmente. Intenta nuevamente." />;
   }

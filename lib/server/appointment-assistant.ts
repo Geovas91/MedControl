@@ -13,7 +13,7 @@ import { getClinicDateRange, getClinicDayRange } from "@/lib/dashboard/timezone"
 import { getInvitationEmailConfiguration } from "@/lib/email/config";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
-import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
+import { canUseFeature, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -130,7 +130,7 @@ export type AppointmentAssistantData = {
 
 export type AppointmentAssistantResult =
   | { state: "ready"; data: AppointmentAssistantData }
-  | { state: "unauthenticated" | "no_active_membership" | "error"; data: null };
+  | { state: "unauthenticated" | "no_active_membership" | "upgrade_required" | "error"; data: null };
 
 function patientName(relation: PatientRelation) {
   return Array.isArray(relation) ? relation[0]?.full_name ?? "Paciente" : relation?.full_name ?? "Paciente";
@@ -143,6 +143,11 @@ export async function getAppointmentAssistantForActiveTenant(
   if (context.state !== "ready") return { state: context.state, data: null };
 
   const clinicId = context.tenant.clinic.id;
+  const entitlements = await getClinicEntitlements(clinicId);
+  if (entitlements.state !== "ready") return { state: "error", data: null };
+  if (!planIncludesFeature(entitlements, "appointment_assistant")) {
+    return { state: "upgrade_required", data: null };
+  }
   let todayRange;
   let upcomingEnd;
 
@@ -195,7 +200,6 @@ export async function getAppointmentAssistantForActiveTenant(
         .eq("clinic_id", clinicId)
         .maybeSingle()
     : Promise.resolve({ data: null, error: null });
-  const entitlementsPromise = getClinicEntitlements(clinicId);
   const activityQuery = (supabase as unknown as AssistantRpcClient).rpc(
     "list_appointment_assistant_activity_for_current_user",
     {
@@ -213,13 +217,12 @@ export async function getAppointmentAssistantForActiveTenant(
     "get_appointment_automation_scheduler_status_for_current_user", { p_clinic_id: clinicId }
   );
 
-  const [todayResult, upcomingCountResult, upcomingResult, settingsResult, entitlements, activityResult, automationResult, schedulerResult] =
+  const [todayResult, upcomingCountResult, upcomingResult, settingsResult, activityResult, automationResult, schedulerResult] =
     await Promise.all([
       todayQuery,
       upcomingCountQuery,
       upcomingQuery,
       settingsQuery,
-      entitlementsPromise,
       activityQuery,
       automationQuery,
       schedulerQuery
@@ -278,7 +281,7 @@ export async function getAppointmentAssistantForActiveTenant(
       })),
       settings: safeSettings,
       canManageSettings,
-      canWriteSettings: Boolean(entitlements && canCreateWithEntitlements(entitlements)),
+      canWriteSettings: canUseFeature(entitlements, "appointment_assistant"),
       emailCalendarConfigured: configuration.state === "ready",
       googleCalendarAvailable: Boolean(entitlements && entitlements.state === "ready" && entitlements.entitlements.plan.features.google_calendar),
       automationJobs: (automationResult.data ?? []) as AutomationDashboardRow[],
@@ -317,7 +320,7 @@ export async function saveAppointmentAssistantSettingsForActiveTenant(
   if (context.state === "error") return { state: "error" };
   if (context.state !== "ready") return { state: context.state };
   if (!canManageAppointmentAssistant(context.tenant.membership.role)) return { state: "forbidden" };
-  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return { state: "forbidden" };
+  if (!canUseFeature(await getClinicEntitlements(context.tenant.clinic.id), "appointment_assistant")) return { state: "forbidden" };
 
   const supabase = await createClient();
   const result = await (supabase as unknown as AssistantRpcClient).rpc(

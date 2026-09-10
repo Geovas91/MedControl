@@ -4,7 +4,12 @@ export type BillingType = "subscription";
 export type BillingPeriod = "month";
 export type PlanCurrency = "MXN";
 export type PaypalPlanEnvKey = "PAYPAL_BASIC_PLAN_ID" | "PAYPAL_PLUS_PLAN_ID" | "PAYPAL_PRO_PLAN_ID";
-export type PlanFeature = "google_calendar" | "whatsapp_notifications" | "service_bot_tier1";
+export type PlanFeature =
+  | "additional_staff"
+  | "appointment_assistant"
+  | "google_calendar"
+  | "whatsapp_notifications"
+  | "service_bot_tier1";
 
 export type PlanEntitlements = {
   doctorLimit: DoctorPlanLimit;
@@ -47,11 +52,11 @@ const sharedFeatures = [
   "Notas médicas",
   "Plantillas basadas en especialidad",
   "Registro y consulta de pagos",
-  "Consentimientos básicos",
+  "Consentimientos personalizados por especialidad",
   "Acceso al directorio médico público",
   "Perfil público para médicos",
   "Suscripción mensual vía PayPal",
-  "Soporte base"
+  "Service Bot Tier 1"
 ] as const;
 
 function paypalSubscriptionBilling(paypalPlanEnvKey: PaypalPlanEnvKey) {
@@ -93,8 +98,12 @@ export const commercialPlans = [
       "Agenda de citas",
       "Gestión de pacientes",
       "Notas médicas",
-      "Plantillas basadas en especialidad",
-      "Consentimientos básicos",
+      "Plantillas y consentimientos personalizados por especialidad",
+      "Invitaciones de calendario ICS por email",
+      "Reseñas verificadas",
+      "Service Bot Tier 1",
+      "Sin Google Calendar",
+      "Sin Appointment Assistant",
       "Registro y consulta de pagos",
       "Suscripción mensual vía PayPal",
       "Soporte por correo"
@@ -121,7 +130,6 @@ export const commercialPlans = [
     badgeLabel: "Más recomendado",
     audience: "Clínicas pequeñas",
     features: [
-      "Todo lo del Plan Básico",
       "Hasta 5 médicos por clínica",
       "Usuarios administrativos/asistentes",
       "Gestión centralizada de pacientes por clínica",
@@ -129,14 +137,15 @@ export const commercialPlans = [
       "Roles por clínica",
       "Notas médicas por médico",
       "Plantillas basadas en especialidad",
-      "Consentimientos por paciente",
+      "Consentimientos personalizados por especialidad",
       "Registro y consulta de pagos",
-      "Reportes básicos de citas y pagos",
-      "Invitaciones de calendario",
+      "Invitaciones de calendario ICS por email",
       "Integración con Google Calendar",
+      "Appointment Assistant",
+      "Reseñas verificadas",
+      "Service Bot Tier 1",
       "Perfil público para cada médico",
-      "Suscripción mensual vía PayPal",
-      "Soporte prioritario"
+      "Suscripción mensual vía PayPal"
     ],
     limits: {
       doctors: "Hasta 5 médicos por clínica",
@@ -159,19 +168,21 @@ export const commercialPlans = [
     ctaHref: "/signup",
     audience: "Clínicas en crecimiento",
     features: [
-      "Todo lo del Plan Plus",
       "Médicos ilimitados por clínica",
       "Usuarios administrativos/asistentes sin límite definido",
-      "Gestión avanzada de roles por clínica",
       "Agenda centralizada por médico",
       "Gestión centralizada de pacientes",
       "Notas médicas por especialidad",
       "Plantillas basadas en especialidad",
-      "Consentimientos personalizados",
+      "Consentimientos personalizados por especialidad",
+      "Invitaciones de calendario ICS por email",
+      "Integración con Google Calendar",
+      "Appointment Assistant",
+      "Reseñas verificadas",
+      "Service Bot Tier 1",
       "Registro y consulta de pagos",
       "Perfil público para cada médico",
       "Suscripción mensual vía PayPal",
-      "Soporte preferente",
       "Sujeto a uso razonable"
     ],
     limits: {
@@ -188,9 +199,36 @@ export const commercialPlans = [
 export const commonCommercialFeatures = [...sharedFeatures];
 
 const planEntitlements = {
-  basic: { doctorLimit: 1, features: { google_calendar: false, whatsapp_notifications: false, service_bot_tier1: true } },
-  plus: { doctorLimit: 5, features: { google_calendar: true, whatsapp_notifications: false, service_bot_tier1: true } },
-  pro: { doctorLimit: null, features: { google_calendar: true, whatsapp_notifications: false, service_bot_tier1: true } }
+  basic: {
+    doctorLimit: 1,
+    features: {
+      additional_staff: false,
+      appointment_assistant: false,
+      google_calendar: false,
+      whatsapp_notifications: false,
+      service_bot_tier1: true
+    }
+  },
+  plus: {
+    doctorLimit: 5,
+    features: {
+      additional_staff: true,
+      appointment_assistant: true,
+      google_calendar: true,
+      whatsapp_notifications: false,
+      service_bot_tier1: true
+    }
+  },
+  pro: {
+    doctorLimit: null,
+    features: {
+      additional_staff: true,
+      appointment_assistant: true,
+      google_calendar: true,
+      whatsapp_notifications: false,
+      service_bot_tier1: true
+    }
+  }
 } satisfies Record<PlanId, PlanEntitlements>;
 
 export function getPlanById(planId: PlanId) {

@@ -7,7 +7,7 @@ import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
+export function AddMemberForm({ canAddDoctor, canAddAdditionalStaff }: { canAddDoctor: boolean; canAddAdditionalStaff: boolean }) {
   const [state, formAction] = useActionState(addClinicMemberAction, {});
   const [copied, setCopied] = useState(false);
 
@@ -38,15 +38,21 @@ export function AddMemberForm({ canAddDoctor }: { canAddDoctor: boolean }) {
             <option value="doctor" disabled={!canAddDoctor}>
               Médico
             </option>
-            <option value="admin">Administrador</option>
-            <option value="assistant">Asistente</option>
+            <option value="admin" disabled={!canAddAdditionalStaff}>Administrador</option>
+            <option value="assistant" disabled={!canAddAdditionalStaff}>Asistente</option>
           </Select>
         </Field>
       </div>
 
       {!canAddDoctor ? (
         <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-800">
-          El límite de médicos de tu plan ya está completo. Aún puedes agregar roles administrativos o asistentes.
+          El límite de médicos de tu plan ya está completo.
+        </p>
+      ) : null}
+
+      {!canAddAdditionalStaff ? (
+        <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-800">
+          Los roles de administrador y asistente están disponibles en Plus y Pro.
         </p>
       ) : null}
 

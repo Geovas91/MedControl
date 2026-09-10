@@ -1,7 +1,7 @@
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { signOutAction } from "@/app/(auth)/actions";
 import { getOnboardingStatus } from "@/lib/onboarding";
-import { getClinicEntitlements, getEntitlementNotice } from "@/lib/server/entitlements";
+import { getClinicEntitlements, getEntitlementNotice, planIncludesFeature } from "@/lib/server/entitlements";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { ClinicSwitcher } from "@/components/dashboard/clinic-switcher";
 import { redirect } from "next/navigation";
@@ -26,6 +26,7 @@ async function getDashboardAccount() {
     name: fullName ?? onboardingStatus.user.email ?? "Usuario autenticado",
     subtitle: onboardingStatus.user.email ?? "Sesión activa en Supabase",
     subscriptionNotice: getEntitlementNotice(entitlements),
+    appointmentAssistantAvailable: planIncludesFeature(entitlements, "appointment_assistant"),
     tenant: tenantContext.state === "ready" ? tenantContext.tenant : null
   };
 }
@@ -37,6 +38,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <DashboardShell
       account={{ name: account.name, subtitle: account.subtitle }}
       subscriptionNotice={account.subscriptionNotice}
+      appointmentAssistantAvailable={account.appointmentAssistantAvailable}
       footer={
         <>
           {account.tenant ? <ClinicSwitcher activeClinicId={account.tenant.clinic.id} clinics={account.tenant.availableClinics} /> : null}

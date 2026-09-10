@@ -38,7 +38,7 @@ export default async function SettingsPage() {
   const planContext =
     onboardingStatus.state === "complete"
       ? await getClinicPlanContext(onboardingStatus.membership.clinic_id)
-      : { data: null, error: null };
+      : { state: "missing" as const, data: null, error: null };
 
   return (
     <>
@@ -61,12 +61,14 @@ export default async function SettingsPage() {
               </p>
             </div>
             <div>
-                  <p className="text-sm font-semibold text-slate-500">Estado de suscripción</p>
-                  <p className="mt-1 text-lg font-bold text-ink">
-                {planContext.data.subscription?.status ?? "Pendiente"}
-              </p>
+              <p className="text-sm font-semibold text-slate-500">Estado de suscripción</p>
+              <p className="mt-1 text-lg font-bold text-ink">{planContext.data.subscription.status}</p>
             </div>
           </div>
+        </section>
+      ) : planContext.state === "missing" ? (
+        <section className="mb-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
+          Sin plan configurado.
         </section>
       ) : null}
 

@@ -15,7 +15,6 @@ test("tenant can search, open an article, diagnose and reject a medical question
   if (process.env.PLAYWRIGHT_WEB_SERVER === "production") expect(supportResponse?.headers()["cache-control"]).toContain("private, no-store");
   expect(supportResponse?.headers()["referrer-policy"]).toBe("no-referrer");
   await expect(page.getByRole("heading", { name: "Ayuda y soporte", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Asistente de agenda", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Ayuda y soporte", exact: true })).toBeVisible();
 
   await page.getByRole("textbox", { name: "¿En qué necesitas ayuda?", exact: true }).fill("crear cita");
