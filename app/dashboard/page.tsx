@@ -28,7 +28,7 @@ function statusVariant(status: DashboardAgendaItem["status"]) {
   }
 
   if (status === "cancelled") {
-    return "slate" as const;
+    return "red" as const;
   }
 
   return "teal" as const;
@@ -75,8 +75,8 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Resumen de clínica" description="Vista rápida de la actividad de hoy, pacientes y flujo de pagos." />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <PageHeader eyebrow="Panel clínico" title="Resumen de clínica" description="Vista rápida de la actividad de hoy, pacientes y flujo de pagos." />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:gap-5">
         <StatCard
           label="Pacientes"
           value={`${data.patientCount}`}
@@ -103,25 +103,25 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <section className="surface-card p-4 sm:p-5">
-          <h2 className="text-lg font-bold text-ink">Agenda de hoy</h2>
-          <div className="mt-4 grid gap-3">
+      <div className="mt-6 grid gap-5 lg:grid-cols-[1.28fr_0.72fr] xl:gap-6">
+        <section className="glass-card-strong p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.1em] text-clinic">Hoy</p><h2 className="mt-1 text-lg font-bold tracking-[-0.02em] text-ink">Agenda de hoy</h2></div><span className="glass-control inline-flex h-10 items-center px-3 text-xs font-semibold text-[var(--foreground-soft)]">{data.localDate}</span></div>
+          <div className="mt-5 grid gap-3">
             {agendaState === "empty" ? (
-              <div className="rounded-md border border-dashed border-slate-200 p-5 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-[var(--border-strong)] bg-white/50 p-5 text-sm text-[var(--foreground-muted)]">
                 No hay citas registradas para hoy en la zona horaria de la clínica.
               </div>
             ) : (
               data.appointmentsToday.map((appointment) => (
                 <div
                   key={appointment.id}
-                className="clinical-surface flex flex-col gap-3 p-3 transition hover:border-[var(--clinic-border)] sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                className="clinical-surface flex flex-col gap-3 p-3.5 transition duration-150 hover:-translate-y-px hover:border-[var(--clinic-border)] hover:bg-white/90 hover:shadow-[var(--shadow-sm)] sm:flex-row sm:items-center sm:justify-between sm:p-4"
                 >
                   <div>
                     <p className="font-semibold text-ink">
                       {formatClinicTime(appointment.startsAt, data.tenant.clinic.timezone)} · {appointment.patientName}
                     </p>
-                    <p className="text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-[var(--foreground-muted)]">
                       <Link
                         href={`/dashboard/appointments/${appointment.id}`}
                         className="font-medium text-ink hover:text-clinic hover:underline"
@@ -138,10 +138,11 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        <section className="surface-card p-5">
-          <h2 className="text-lg font-bold text-ink">Actividad reciente</h2>
-          <div className="mt-4 rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-4">
-            <p className="text-sm text-slate-500">No hay una fuente de actividad reciente disponible.</p>
+        <section className="glass-card p-5 sm:p-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-clinic">Resumen</p>
+          <h2 className="mt-1 text-lg font-bold tracking-[-0.02em] text-ink">Actividad reciente</h2>
+          <div className="clinical-surface mt-5 border-dashed p-5">
+            <p className="text-sm leading-6 text-[var(--foreground-muted)]">No hay una fuente de actividad reciente disponible.</p>
           </div>
         </section>
       </div>

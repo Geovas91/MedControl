@@ -45,7 +45,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <form action={signOutAction}>
             <button
               type="submit"
-              className="min-h-11 w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-white px-3 py-2 text-sm font-semibold text-[var(--foreground-soft)] shadow-xs transition hover:bg-[var(--surface-muted)]"
+              className="glass-control min-h-11 w-full px-3 py-2 text-sm font-semibold text-[var(--foreground-soft)]"
             >
               Cerrar sesión
             </button>

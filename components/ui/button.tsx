@@ -2,9 +2,10 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const styles = {
-  primary: "bg-clinic text-white shadow-xs hover:bg-[var(--clinic-hover)]",
-  secondary: "border border-[var(--border)] bg-white text-ink shadow-xs hover:bg-[var(--surface-muted)]",
-  ghost: "text-[var(--foreground-soft)] hover:bg-[var(--surface-muted)]"
+  primary: "border border-teal-700/20 bg-[linear-gradient(135deg,var(--clinic),#0b918a)] text-white shadow-[0_10px_24px_rgba(8,124,120,0.22),inset_0_1px_0_rgba(255,255,255,0.25)] hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,var(--clinic-hover),#087c78)] hover:shadow-[0_14px_28px_rgba(8,124,120,0.25)]",
+  secondary: "glass-control text-ink hover:-translate-y-0.5",
+  ghost: "border border-transparent text-[var(--foreground-soft)] hover:border-white/70 hover:bg-white/60 hover:text-ink",
+  danger: "border border-rose-700/20 bg-[linear-gradient(135deg,#be123c,#dc2626)] text-white shadow-[0_10px_24px_rgba(190,18,60,0.2),inset_0_1px_0_rgba(255,255,255,0.22)] hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,#9f1239,#be123c)]"
 };
 
 type BaseProps = {
@@ -22,7 +23,7 @@ export function ButtonLink({ children, className, href, variant = "primary" }: B
     <Link
       href={href}
       className={cn(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 text-sm font-semibold transition duration-150 disabled:pointer-events-none disabled:opacity-55",
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition duration-150 disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-55",
         styles[variant],
         className
       )}
@@ -41,7 +42,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 text-sm font-semibold transition duration-150 disabled:pointer-events-none disabled:opacity-55",
+        "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition duration-150 disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-55",
         styles[variant],
         className
       )}
