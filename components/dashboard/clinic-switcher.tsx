@@ -11,9 +11,9 @@ export function ClinicSwitcher({ activeClinicId, clinics }: ClinicSwitcherProps)
   if (clinics.length < 2) return null;
 
   return (
-    <form action={switchActiveClinicAction} className="mb-3">
-      <label className="block text-xs font-medium text-slate-500" htmlFor="active-clinic">Clínica activa</label>
-      <select id="active-clinic" name="clinic_id" defaultValue={activeClinicId} onChange={(event) => event.currentTarget.form?.requestSubmit()} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700">
+    <form action={switchActiveClinicAction} className="glass-card mb-3 rounded-2xl p-3">
+      <label className="block text-xs font-semibold text-[var(--foreground-muted)]" htmlFor="active-clinic">Clínica activa</label>
+      <select id="active-clinic" name="clinic_id" defaultValue={activeClinicId} onChange={(event) => event.currentTarget.form?.requestSubmit()} className="glass-input mt-2 min-h-10 w-full rounded-xl px-2.5 py-1.5 text-sm font-medium text-[var(--foreground-soft)] outline-none transition focus:border-clinic focus:ring-4 focus:ring-teal-100/80">
         {clinics.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.name}</option>)}
       </select>
     </form>
