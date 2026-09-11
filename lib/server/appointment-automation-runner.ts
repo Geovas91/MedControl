@@ -4,8 +4,11 @@ import { randomUUID } from "node:crypto";
 import {
   APPOINTMENT_AUTOMATION_BATCH_LIMIT,
   APPOINTMENT_AUTOMATION_LEASE_SECONDS,
+  classifyAutomationContextLookup,
   classifyAutomationFinalization,
   confirmAutomationMutation,
+  getReminderPreflightInvalidation,
+  getReviewPreflightInvalidation,
   getAutomationRetryDelayMs,
   sanitizeAutomationCounters,
   shouldRetryAutomationEmail,
@@ -26,7 +29,6 @@ type Job = { id: string; clinic_id: string; appointment_id: string; type: "remin
 type Context = { clinic_id: string; appointment_id: string; job_type: Job["type"]; source_version: string; appointment_status: string; starts_at: string; doctor_user_id: string | null; clinic_name: string; clinic_timezone: string; patient_email: string | null; doctor_display_name: string | null; valid_subscription: boolean; assistant_enabled: boolean; reminder_enabled: boolean; review_request_enabled: boolean; invitation_exists: boolean; review_exists: boolean };
 type Issued = { invitation_id: string; raw_token: string; expires_at: string };
 
-const compatibleEmail = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const rows = <T>(data: unknown) => (Array.isArray(data) ? data : []) as T[];
 
 async function rpcConfirmed(client: RpcClient, name: string, args: Record<string, unknown>) {
@@ -51,37 +53,66 @@ const beginDelivery = (client: RpcClient, job: Job, workerId: string) => rpcConf
 const markAccepted = (client: RpcClient, job: Job, workerId: string) => rpcConfirmed(client, "mark_appointment_automation_delivery_accepted", {
   p_job_id: job.id, p_worker_id: workerId, p_lease_token: job.lease_token
 });
-function validSharedPreflight(job: Job, context: Context) {
-  return context.clinic_id === job.clinic_id
-    && context.appointment_id === job.appointment_id
-    && context.source_version === job.source_version
-    && context.valid_subscription
-    && context.assistant_enabled
-    && Boolean(context.patient_email && compatibleEmail.test(context.patient_email))
-    && Boolean(context.doctor_display_name);
+async function loadCurrentContext(client: RpcClient, job: Job, workerId: string) {
+  try {
+    const lookup = await client.rpc("get_appointment_automation_context", { p_job_id: job.id, p_worker_id: workerId, p_lease_token: job.lease_token });
+    return classifyAutomationContextLookup<Context>(lookup);
+  } catch {
+    return { state: "retryable", code: "rpc_exception" } as const;
+  }
 }
 
-async function loadCurrentContext(client: RpcClient, job: Job, workerId: string) {
-  const lookup = await client.rpc("get_appointment_automation_context", { p_job_id: job.id, p_worker_id: workerId, p_lease_token: job.lease_token });
-  return lookup.error ? null : rows<Context>(lookup.data)[0] ?? null;
+function logPreflight(job: Job, stage: "initial" | "final", reason: string, retryable: boolean) {
+  logger.warn("Appointment automation preflight blocked", {
+    component: "appointment_automation",
+    code: reason,
+    job_id: job.id,
+    stage,
+    retryable
+  });
+}
+
+async function retryContextLookup(
+  client: RpcClient,
+  job: Job,
+  workerId: string,
+  stage: "initial" | "final",
+  rpcCode: string
+) {
+  logger.warn("Appointment automation context lookup failed", {
+    component: "appointment_automation",
+    code: "context_lookup_failed",
+    rpc_code: rpcCode,
+    job_id: job.id,
+    stage,
+    retryable: true
+  });
+  const retryable = job.attempts < job.max_attempts;
+  return classifyAutomationFinalization(
+    retryable ? "retryPending" : "failed",
+    await finish(client, job, workerId, retryable ? "retry" : "failed", "context_lookup_failed")
+  );
 }
 
 async function processReminder(client: RpcClient, job: Job, context: Context, workerId: string) {
-  if (!validSharedPreflight(job, context) || !context.reminder_enabled
-    || !["scheduled", "confirmed", "waiting"].includes(context.appointment_status)
-    || Date.parse(context.starts_at) <= Date.now()) {
-    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", "preflight_unavailable"));
+  const initialInvalidation = getReminderPreflightInvalidation(job, context);
+  if (initialInvalidation) {
+    logPreflight(job, "initial", initialInvalidation, false);
+    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", initialInvalidation));
   }
   const configuration = getInvitationEmailConfiguration();
   if (configuration.state !== "ready") {
     return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", "provider_unavailable"));
   }
   // Final gate after claim and provider readiness: appointment/settings/subscription may have changed.
-  const current = await loadCurrentContext(client, job, workerId);
-  if (!current || !validSharedPreflight(job, current) || !current.reminder_enabled
-    || !["scheduled", "confirmed", "waiting"].includes(current.appointment_status)
-    || Date.parse(current.starts_at) <= Date.now()) {
-    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", "preflight_changed"));
+  const lookup = await loadCurrentContext(client, job, workerId);
+  if (lookup.state === "retryable") return retryContextLookup(client, job, workerId, "final", lookup.code);
+  if (lookup.state === "lostLease") return "lostLease" as const;
+  const current = lookup.context;
+  const finalInvalidation = getReminderPreflightInvalidation(job, current);
+  if (finalInvalidation) {
+    logPreflight(job, "final", finalInvalidation, false);
+    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", finalInvalidation));
   }
   if (!await renew(client, job, workerId) || !await beginDelivery(client, job, workerId)) return "lostLease" as const;
   const message = buildAppointmentReminderEmail({
@@ -104,10 +135,11 @@ async function processReminder(client: RpcClient, job: Job, context: Context, wo
 
 async function processReview(client: RpcClient, job: Job, context: Context, workerId: string) {
   const configuration = getInvitationEmailConfiguration();
-  if (!validSharedPreflight(job, context) || !context.review_request_enabled
-    || context.appointment_status !== "completed" || context.invitation_exists || context.review_exists
-    || configuration.state !== "ready") {
-    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", "preflight_unavailable"));
+  const initialInvalidation = getReviewPreflightInvalidation(job, context);
+  if (initialInvalidation || configuration.state !== "ready") {
+    const reason = initialInvalidation ?? "provider_unavailable";
+    logPreflight(job, "initial", reason, false);
+    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", reason));
   }
   const issue = await client.rpc("issue_review_invitation_for_automation", { p_job_id: job.id, p_worker_id: workerId, p_lease_token: job.lease_token });
   const invitation = rows<Issued>(issue.data)[0];
@@ -116,10 +148,17 @@ async function processReview(client: RpcClient, job: Job, context: Context, work
   }
   // Issuance itself revalidates completed/profile/subscription/settings/email in SQL.
   // Recheck once more before the provider call; if state changed, keep the invitation for manual recovery.
-  const current = await loadCurrentContext(client, job, workerId);
-  if (!current || !validSharedPreflight(job, current) || !current.review_request_enabled
-    || current.appointment_status !== "completed") {
-    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", "preflight_changed"));
+  const lookup = await loadCurrentContext(client, job, workerId);
+  if (lookup.state === "retryable") {
+    logPreflight(job, "final", "review_context_lookup_failed", false);
+    return classifyAutomationFinalization("failed", await finish(client, job, workerId, "failed", "review_context_lookup_failed"));
+  }
+  if (lookup.state === "lostLease") return "lostLease" as const;
+  const current = lookup.context;
+  const finalInvalidation = getReviewPreflightInvalidation(job, { ...current, invitation_exists: false });
+  if (finalInvalidation) {
+    logPreflight(job, "final", finalInvalidation, false);
+    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", finalInvalidation));
   }
   if (!await renew(client, job, workerId) || !await beginDelivery(client, job, workerId)) return "lostLease" as const;
   const reviewUrl = buildReviewUrl(getAppBaseUrl(), invitation.raw_token);
@@ -162,12 +201,17 @@ export async function runAppointmentAutomations(): Promise<AutomationRunCounters
           counters[skipped ? "skipped" : "lostLease"] += 1;
           continue;
         }
-        const context = await loadCurrentContext(client, job, workerId);
-        if (!context) {
-          const skipped = await finish(client, job, workerId, "skipped", "context_unavailable");
-          counters[skipped ? "skipped" : "lostLease"] += 1;
+        const lookup = await loadCurrentContext(client, job, workerId);
+        if (lookup.state === "retryable") {
+          const outcome = await retryContextLookup(client, job, workerId, "initial", lookup.code);
+          counters[outcome] += 1;
           continue;
         }
+        if (lookup.state === "lostLease") {
+          counters.lostLease += 1;
+          continue;
+        }
+        const context = lookup.context;
         const outcome = job.type === "reminder_email"
           ? await processReminder(client, job, context, workerId)
           : await processReview(client, job, context, workerId);
