@@ -112,13 +112,13 @@ export default async function DirectoryProfilePage({ params }: DirectoryProfileP
 
       <section className="mx-auto grid max-w-5xl gap-6 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_20rem] lg:px-8">
         <div className="grid gap-6">
-          <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <article className="glass-card-strong p-5">
             <h2 className="text-lg font-bold text-ink">Reseñas verificadas</h2>
             <div className="mt-3">
               <ReviewSummary summary={reviewSummary} />
             </div>
             <p className="mt-3 text-sm leading-6 text-slate-600">Sólo se publican valoraciones vinculadas a citas completadas. Nunca mostramos la identidad del paciente ni detalles de su cita.</p>
-            {publicReviews.length ? <ul className="mt-5 grid gap-4">{publicReviews.map((review, index) => <li key={`${review.created_at}-${index}`} className="rounded-md border border-slate-200 p-4"><p aria-label={`${review.rating} de 5 estrellas`} className="font-semibold text-amber-600">{"★".repeat(review.rating)}<span className="text-slate-300">{"★".repeat(5 - review.rating)}</span></p>{review.comment ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{review.comment}</p> : <p className="mt-2 text-sm text-slate-500">Valoración sin comentario.</p>}<time className="mt-2 block text-xs text-slate-500" dateTime={review.created_at}>{new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(review.created_at))}</time></li>)}</ul> : <p className="mt-4 rounded-md bg-slate-50 p-4 text-sm text-slate-500">Este profesional todavía no tiene reseñas verificadas publicadas.</p>}
+            {publicReviews.length ? <ul className="mt-5 grid gap-4">{publicReviews.map((review, index) => <li key={`${review.created_at}-${index}`} className="clinical-surface p-4"><p aria-label={`${review.rating} de 5 estrellas`} className="font-semibold text-amber-600">{"★".repeat(review.rating)}<span className="text-slate-300">{"★".repeat(5 - review.rating)}</span></p>{review.comment ? <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{review.comment}</p> : <p className="mt-2 text-sm text-slate-500">Valoración sin comentario.</p>}<time className="mt-2 block text-xs text-slate-500" dateTime={review.created_at}>{new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(review.created_at))}</time></li>)}</ul> : <p className="clinical-surface mt-4 p-4 text-sm text-slate-500">Este profesional todavía no tiene reseñas verificadas publicadas.</p>}
           </article>
 
           {profile.bio ? (

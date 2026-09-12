@@ -3,10 +3,12 @@
 import { Copy, Link2, Mail, XCircle } from "lucide-react";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { ReviewInvitationActionState } from "@/app/dashboard/appointments/[id]/actions";
 import type { ReviewInvitationStatus } from "@/types/reviews";
 
 const labels: Record<ReviewInvitationStatus, string> = { pending: "Pendiente", sent: "Enviada", completed: "Completada", revoked: "Revocada", expired: "Expirada" };
+const variants: Record<ReviewInvitationStatus, "amber" | "green" | "red" | "slate"> = { pending: "amber", sent: "green", completed: "green", revoked: "red", expired: "slate" };
 
 export function ReviewInvitationControls({ issueAction, emailAction, revokeAction, initialStatus, patientHasEmail }: {
   issueAction: (state: ReviewInvitationActionState) => Promise<ReviewInvitationActionState>;
@@ -23,7 +25,7 @@ export function ReviewInvitationControls({ issueAction, emailAction, revokeActio
   const active = effectiveStatus === "pending" || effectiveStatus === "sent";
   const url = issueState.url;
   return <section className="glass-card mt-6 p-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-ink">Solicitud de reseña</h2><p className="mt-1 text-sm text-slate-600">Genera un enlace personal, expirable y de un solo uso.</p></div>{effectiveStatus ? <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{labels[effectiveStatus]}</span> : null}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-ink">Solicitud de reseña</h2><p className="mt-1 text-sm text-slate-600">Genera un enlace personal, expirable y de un solo uso.</p></div>{effectiveStatus ? <Badge variant={variants[effectiveStatus]}>{labels[effectiveStatus]}</Badge> : null}</div>
     <div className="mt-4 flex flex-wrap gap-3">
       <form action={issueFormAction}><Button type="submit" disabled={issuePending || effectiveStatus === "completed"}><Link2 className="h-4 w-4" />{issuePending ? "Generando…" : active || effectiveStatus === "expired" || effectiveStatus === "revoked" ? "Regenerar enlace" : "Solicitar reseña"}</Button></form>
       <Button type="button" variant="secondary" disabled={!url} onClick={() => { if (url) void navigator.clipboard.writeText(url).then(() => setCopied(true)); }}><Copy className="h-4 w-4" />{copied ? "Copiado" : "Copiar"}</Button>

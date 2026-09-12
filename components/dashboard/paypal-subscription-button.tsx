@@ -167,7 +167,7 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
   }
 
   return (
-    <div className="grid gap-2">
+    <div className="clinical-surface grid gap-2 p-3">
       <div id={`paypal-subscription-${generatedId}`} ref={containerRef} aria-label={label} />
       {status === "loading" ? <p className="text-xs text-slate-500">Preparando suscripción segura...</p> : null}
       {message ? (

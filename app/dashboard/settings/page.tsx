@@ -48,7 +48,7 @@ export default async function SettingsPage() {
       />
 
       {planContext.data ? (
-        <section className="mb-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <section className="glass-card-strong mb-6 p-5">
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <p className="text-sm font-semibold text-slate-500">Plan actual</p>
@@ -67,7 +67,7 @@ export default async function SettingsPage() {
           </div>
         </section>
       ) : planContext.state === "missing" ? (
-        <section className="mb-6 rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
+        <section className="glass-card-strong mb-6 p-5 text-sm text-slate-600">
           Sin plan configurado.
         </section>
       ) : null}
@@ -77,8 +77,8 @@ export default async function SettingsPage() {
           const Icon = item.icon;
 
           return (
-            <article key={item.title} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="grid h-11 w-11 place-items-center rounded-md bg-teal-50 text-clinic">
+            <article key={item.title} className="glass-card p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--clinic-border)] hover:shadow-[var(--shadow-soft)]">
+              <div className="glass-control grid h-11 w-11 place-items-center text-clinic">
                 <Icon className="h-5 w-5" />
               </div>
               <h2 className="mt-5 text-lg font-bold text-ink">{item.title}</h2>

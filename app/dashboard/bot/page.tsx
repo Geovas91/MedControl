@@ -42,7 +42,7 @@ function dateTime(value: string, timeZone: string) {
 function statusVariant(status: AppointmentStatus) {
   if (status === "completed") return "green" as const;
   if (status === "waiting") return "amber" as const;
-  if (status === "cancelled") return "slate" as const;
+  if (status === "cancelled") return "red" as const;
   return "teal" as const;
 }
 
@@ -50,7 +50,7 @@ function Unavailable({ title, description }: { title: string; description: strin
   return (
     <>
       <PageHeader title={title} description={description} />
-      <section className="surface-card p-5 text-sm text-slate-600">No hay información de agenda disponible.</section>
+      <section className="glass-card-strong p-5 text-sm text-slate-600">No hay información de agenda disponible.</section>
     </>
   );
 }
@@ -67,7 +67,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
     return (
       <>
         <PageHeader title="Appointment Assistant" description="Automatiza recordatorios por email y solicitudes de reseña." />
-        <section className="surface-card p-5">
+        <section className="glass-card-strong p-5">
           <h2 className="font-bold text-ink">Disponible en Plus y Pro</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
             Tu plan actual conserva la agenda, las invitaciones ICS y las reseñas verificadas. Cambia a Plus o Pro para configurar automatizaciones.
@@ -101,7 +101,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
       {hasAppointmentAssistantSavedMessage(params) ? <p role="status" className="mb-5 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm font-medium text-[var(--success)]">La configuración se guardó para esta clínica.</p> : null}
       {hasAppointmentAssistantSettingsError(params) ? <p role="alert" className="mb-5 rounded-[var(--radius-md)] bg-red-50 p-3 text-sm font-medium text-red-700">No fue posible guardar la configuración. Revisa los valores y tus permisos.</p> : null}
 
-      <section className="surface-card mb-5 p-5">
+      <section className="glass-card-strong mb-5 p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="flex items-center gap-2 font-bold text-ink"><Settings2 className="h-5 w-5 text-clinic" />Estado del asistente</h2>
@@ -128,7 +128,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         emailCalendarConfigured={data.emailCalendarConfigured}
       />
 
-      <section className="surface-card mt-5 p-5">
+      <section className="glass-card-strong mt-5 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="font-bold text-ink">Agenda real</h2>
@@ -145,21 +145,21 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
               </div>
               <Badge variant={statusVariant(appointment.status)}>{getAppointmentStatusLabel(appointment.status)}</Badge>
             </article>
-          )) : <p className="rounded-[var(--radius-md)] border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">No hay citas activas durante los próximos 8 días.</p>}
+          )) : <p className="clinical-surface border-dashed p-5 text-center text-sm text-slate-500">No hay citas activas durante los próximos 8 días.</p>}
         </div>
         {data.totals.upcoming > data.upcoming.length ? <p className="mt-3 text-sm text-slate-500">Se muestran las primeras {data.upcoming.length} de {data.totals.upcoming}; el historial completo está en Citas.</p> : null}
       </section>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
         <AppointmentAssistantSettings settings={data.settings} canManage={data.canManageSettings} canWrite={data.canWriteSettings} />
-        <section className="surface-card p-5">
+        <section className="glass-card-strong p-5">
           <h2 className="font-bold text-ink">Canales e integraciones</h2>
           <div className="mt-4 grid gap-3">
-            <div className="rounded-[var(--radius-md)] border border-slate-200 p-4">
+            <div className="clinical-surface p-4">
               <div className="flex items-center justify-between gap-3"><span className="flex items-center gap-2 font-semibold text-ink"><Mail className="h-4 w-4 text-clinic" />Email</span><Badge variant={data.emailCalendarConfigured ? "green" : "slate"}>{data.emailCalendarConfigured ? "Canal conectado" : "No configurado"}</Badge></div>
               <p className="mt-2 text-sm leading-6 text-slate-500">El mismo provider entrega invitaciones ICS históricas, recordatorios programados y solicitudes de reseña.</p>
             </div>
-            <div className="rounded-[var(--radius-md)] border border-slate-200 p-4">
+            <div className="clinical-surface p-4">
               <div className="flex items-center gap-2 font-semibold text-ink"><MessageSquareOff className="h-4 w-4 text-slate-500" />WhatsApp y SMS</div>
               <p className="mt-2 text-sm leading-6 text-slate-500">No configurado. Esta versión no envía mensajes por estos canales.</p>
             </div>
@@ -167,14 +167,14 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         </section>
       </div>
 
-      <section className="surface-card mt-5 p-5">
+      <section className="glass-card-strong mt-5 p-5">
         <div>
           <h2 className="flex items-center gap-2 font-bold text-ink"><Activity className="h-5 w-5 text-clinic" />Actividad real</h2>
           <p className="mt-1 text-sm leading-6 text-slate-500">Citas registradas, cambios de agenda auditados y resultados reales del email de calendario. No contiene chats, respuestas ni mensajes inventados.</p>
         </div>
         <ol className="mt-4 grid gap-3">
           {data.activity.length ? data.activity.map((event) => (
-            <li key={`${event.source}-${event.id}`} className="rounded-[var(--radius-md)] border border-slate-200 p-4">
+            <li key={`${event.source}-${event.id}`} className="clinical-surface p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="font-semibold text-ink">{activityLabels[event.action] ?? "Actividad de agenda"}</p>
@@ -184,7 +184,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
                 <time dateTime={event.occurredAt} className="text-sm text-slate-500">{dateTime(event.occurredAt, data.tenant.clinic.timezone)}</time>
               </div>
             </li>
-          )) : <li className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-5 text-center text-sm text-slate-500">No hay actividad de agenda registrada para esta clínica.</li>}
+          )) : <li className="clinical-surface p-5 text-center text-sm text-slate-500">No hay actividad de agenda registrada para esta clínica.</li>}
         </ol>
         {data.activityHasPrevious || olderActivityHref ? (
           <nav aria-label="Navegación de actividad del asistente" className="mt-5 flex items-center justify-between gap-3 text-sm font-semibold">
