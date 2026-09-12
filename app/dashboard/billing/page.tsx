@@ -53,11 +53,11 @@ export default async function BillingPage() {
       />
 
       <section className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="glass-card p-5">
           <p className="text-sm font-semibold text-slate-500">Plan actual</p>
           <p className="mt-1 text-lg font-bold text-ink">{planContext?.plan.name ?? "Sin plan configurado"}</p>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="glass-card p-5">
           <p className="text-sm font-semibold text-slate-500">Estado de suscripción</p>
           <div className="mt-2">
             {planContextResult.state === "missing" ? (
@@ -67,7 +67,7 @@ export default async function BillingPage() {
             )}
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="glass-card p-5">
           <p className="text-sm font-semibold text-slate-500">Ambiente PayPal</p>
           <p className="mt-1 text-lg font-bold capitalize text-ink">{getPaypalEnvironment()}</p>
         </div>
@@ -86,7 +86,7 @@ export default async function BillingPage() {
           const actionLabel = isCurrentPlan ? `Mantener ${plan.name}` : `Cambiar a ${plan.name}`;
 
           return (
-            <article key={plan.id} className="flex flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <article key={plan.id} className="glass-card flex flex-col p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--clinic-border)] hover:shadow-[var(--shadow-soft)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-bold text-ink">{plan.name}</h2>
@@ -116,7 +116,7 @@ export default async function BillingPage() {
               </ul>
 
               {!paypalPlanId ? (
-                <p className="mt-5 rounded-md bg-slate-50 p-3 text-sm text-slate-600">
+                <p className="clinical-surface mt-5 p-3 text-sm text-slate-600">
                   Falta configurar <code>{plan.billing.paypalPlanEnvKey}</code> para este plan.
                 </p>
               ) : null}
@@ -134,7 +134,7 @@ export default async function BillingPage() {
         })}
       </section>
 
-      <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600 shadow-sm">
+      <section className="glass-card-strong mt-6 p-5 text-sm leading-6 text-slate-600">
         <div className="flex gap-3">
           <CreditCard className="mt-0.5 h-5 w-5 shrink-0 text-clinic" />
           <p>

@@ -16,7 +16,7 @@ export function AppointmentAssistantSettings({
 }) {
   if (!canManage) {
     return (
-      <section className="surface-card p-5">
+      <section className="glass-card-strong p-5">
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--surface-muted)] text-[var(--foreground-soft)]">
             <LockKeyhole className="h-5 w-5" />
@@ -34,7 +34,7 @@ export function AppointmentAssistantSettings({
 
   const configured = Boolean(settings);
   return (
-    <section className="surface-card p-5">
+    <section className="glass-card-strong p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[var(--radius-md)] bg-[var(--clinic-soft)] text-clinic">
@@ -52,16 +52,16 @@ export function AppointmentAssistantSettings({
         </Badge>
       </div>
 
-      <form action={saveAppointmentAssistantSettingsAction} className="mt-5 grid gap-4">
-        <label className="flex min-h-11 items-center justify-between gap-4 rounded-[var(--radius-md)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-semibold text-ink">
+      <form action={saveAppointmentAssistantSettingsAction} className="clinical-surface mt-5 grid gap-4 p-4">
+        <label className="glass-input flex min-h-11 items-center justify-between gap-4 rounded-xl px-4 py-3 text-sm font-semibold text-ink">
           Activar Asistente de Agenda
           <input name="enabled" type="checkbox" defaultChecked={settings?.enabled ?? false} disabled={!canWrite} className="h-5 w-5 rounded border-slate-300" />
         </label>
-        <label className="flex min-h-11 items-center justify-between gap-4 rounded-[var(--radius-md)] border border-slate-200 px-4 py-3 text-sm font-semibold text-ink">
+        <label className="glass-input flex min-h-11 items-center justify-between gap-4 rounded-xl px-4 py-3 text-sm font-semibold text-ink">
           <span className="flex items-center gap-2"><Mail className="h-4 w-4 text-clinic" />Recordatorios por email</span>
           <input name="reminder_enabled" type="checkbox" defaultChecked={settings?.reminder_enabled ?? false} disabled={!canWrite} className="h-5 w-5 rounded border-slate-300" />
         </label>
-        <label className="flex min-h-11 items-center justify-between gap-4 rounded-[var(--radius-md)] border border-slate-200 px-4 py-3 text-sm font-semibold text-ink">
+        <label className="glass-input flex min-h-11 items-center justify-between gap-4 rounded-xl px-4 py-3 text-sm font-semibold text-ink">
           <span className="flex items-center gap-2"><Star className="h-4 w-4 text-clinic" />Solicitudes automáticas de reseña</span>
           <input name="review_request_enabled" type="checkbox" defaultChecked={settings?.review_request_enabled ?? false} disabled={!canWrite} className="h-5 w-5 rounded border-slate-300" />
         </label>

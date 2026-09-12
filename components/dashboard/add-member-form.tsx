@@ -12,9 +12,9 @@ export function AddMemberForm({ canAddDoctor, canAddAdditionalStaff }: { canAddD
   const [copied, setCopied] = useState(false);
 
   return (
-    <form action={formAction} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <form action={formAction} className="glass-card-strong p-5">
       <div className="flex items-center gap-3">
-        <div className="grid h-10 w-10 place-items-center rounded-md bg-teal-50 text-clinic">
+        <div className="glass-control grid h-10 w-10 place-items-center text-clinic">
           <UserPlus className="h-5 w-5" />
         </div>
         <div>
@@ -27,7 +27,7 @@ export function AddMemberForm({ canAddDoctor, canAddAdditionalStaff }: { canAddD
       {state.message ? (
         <p aria-live="polite" className="mt-5 rounded-md bg-emerald-50 p-3 text-sm text-emerald-700">{state.message}</p>
       ) : null}
-      {state.invitationUrl ? <div className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700"><p>El enlace es personal y se muestra sólo en esta respuesta.</p><input readOnly aria-label="Enlace de invitación para copiar" value={state.invitationUrl} className="mt-2 w-full rounded border border-slate-200 bg-white p-2 text-xs" onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="secondary" className="mt-2" onClick={async () => { try { if (!navigator.clipboard) throw new Error("Clipboard unavailable"); await navigator.clipboard.writeText(state.invitationUrl ?? ""); setCopied(true); } catch { setCopied(false); } }}><Copy className="h-4 w-4" aria-hidden="true" />{copied ? "Enlace copiado" : "Copiar enlace"}</Button>{!copied ? <p className="mt-2 text-xs text-slate-500">Si no puedes copiarlo con el botón, selecciónalo en el campo.</p> : null}</div> : null}
+      {state.invitationUrl ? <div className="clinical-surface mt-3 p-3 text-sm text-slate-700"><p>El enlace es personal y se muestra sólo en esta respuesta.</p><input readOnly aria-label="Enlace de invitación para copiar" value={state.invitationUrl} className="glass-input mt-2 h-10 w-full rounded-xl px-3 text-xs outline-none focus:border-clinic focus:ring-4 focus:ring-teal-100/80" onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="secondary" className="mt-2" onClick={async () => { try { if (!navigator.clipboard) throw new Error("Clipboard unavailable"); await navigator.clipboard.writeText(state.invitationUrl ?? ""); setCopied(true); } catch { setCopied(false); } }}><Copy className="h-4 w-4" aria-hidden="true" />{copied ? "Enlace copiado" : "Copiar enlace"}</Button>{!copied ? <p className="mt-2 text-xs text-slate-500">Si no puedes copiarlo con el botón, selecciónalo en el campo.</p> : null}</div> : null}
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
         <Field label="Correo" htmlFor="email">

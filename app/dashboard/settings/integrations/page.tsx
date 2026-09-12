@@ -49,7 +49,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       <PageHeader title="Integraciones" description="Conecta tu calendario personal de Google para reflejar de forma unidireccional las citas que tienes asignadas." />
       {message ? <p role={message.tone === "error" ? "alert" : "status"} className={`mb-5 rounded-[var(--radius-md)] p-3 text-sm font-medium ${message.tone === "error" ? "bg-red-50 text-red-700" : "bg-[var(--success-soft)] text-[var(--success)]"}`}>{message.text}</p> : null}
 
-      <section className="surface-card p-5">
+      <section className="glass-card-strong p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-teal-50 text-clinic"><CalendarDays className="h-5 w-5" /></span>
@@ -66,7 +66,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             {data.hasOwnDisconnectableIntegration && data.canConnectOwn ? <form action={disconnectGoogleCalendarAction}><Button type="submit" variant="secondary"><Link2Off className="h-4 w-4" />Desconectar integración anterior</Button></form> : <Button type="button" disabled><CalendarDays className="h-4 w-4" />Disponible en Plus</Button>}
           </div>
         ) : !data.canConnectOwn ? (
-          <div className="mt-5 flex gap-3 rounded-[var(--radius-md)] bg-slate-50 p-4 text-sm leading-6 text-slate-600"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><p>El rol assistant no conecta ni administra cuentas de médicos. Solicita que cada profesional conecte su propia cuenta.</p></div>
+          <div className="clinical-surface mt-5 flex gap-3 p-4 text-sm leading-6 text-slate-600"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><p>El rol assistant no conecta ni administra cuentas de médicos. Solicita que cada profesional conecte su propia cuenta.</p></div>
         ) : !data.canUseGoogleCalendar ? (
           <div className="mt-5 grid gap-4">
             <div className="flex gap-3 rounded-[var(--radius-md)] bg-amber-50 p-4 text-sm leading-6 text-amber-800"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>La suscripción actual no permite conectar ni sincronizar Google Calendar.</p></div>
@@ -75,8 +75,8 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         ) : (
           <div className="mt-5 grid gap-4">
             <dl className="grid gap-3 text-sm sm:grid-cols-2">
-              <div className="rounded-[var(--radius-md)] bg-slate-50 p-4"><dt className="font-semibold text-slate-700">Calendario</dt><dd className="mt-1 text-slate-600">Calendario principal de tu cuenta Google</dd></div>
-              <div className="rounded-[var(--radius-md)] bg-slate-50 p-4"><dt className="font-semibold text-slate-700">Última sincronización correcta</dt><dd className="mt-1 text-slate-600">{formatDate(data.own?.lastSyncAt ?? null)}</dd></div>
+              <div className="clinical-surface p-4"><dt className="font-semibold text-slate-700">Calendario</dt><dd className="mt-1 text-slate-600">Calendario principal de tu cuenta Google</dd></div>
+              <div className="clinical-surface p-4"><dt className="font-semibold text-slate-700">Última sincronización correcta</dt><dd className="mt-1 text-slate-600">{formatDate(data.own?.lastSyncAt ?? null)}</dd></div>
             </dl>
             <div className="flex flex-wrap gap-3">
               {connected ? <form action={disconnectGoogleCalendarAction}><Button type="submit" variant="secondary"><Link2Off className="h-4 w-4" />Desconectar mi cuenta</Button></form> : data.configurationReady ? <ButtonLink href="/api/integrations/google-calendar/connect"><CalendarDays className="h-4 w-4" />{requiresReconnect ? "Reconectar Google Calendar" : "Conectar Google Calendar"}</ButtonLink> : <Button type="button" disabled><CalendarDays className="h-4 w-4" />Conectar Google Calendar</Button>}
@@ -85,9 +85,9 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
         )}
       </section>
 
-      {data.clinicSummary ? <section className="surface-card mt-5 p-5"><h2 className="flex items-center gap-2 font-bold text-ink"><CircleCheck className="h-5 w-5 text-clinic" />Estado general de la clínica</h2><p className="mt-2 text-sm leading-6 text-slate-600">{data.clinicSummary.connected} cuenta(s) conectada(s) y {data.clinicSummary.requiresReconnect} que requieren reconexión. Este resumen no expone tokens ni permite administrar cuentas ajenas.</p></section> : null}
+      {data.clinicSummary ? <section className="glass-card mt-5 p-5"><h2 className="flex items-center gap-2 font-bold text-ink"><CircleCheck className="h-5 w-5 text-clinic" />Estado general de la clínica</h2><p className="mt-2 text-sm leading-6 text-slate-600">{data.clinicSummary.connected} cuenta(s) conectada(s) y {data.clinicSummary.requiresReconnect} que requieren reconexión. Este resumen no expone tokens ni permite administrar cuentas ajenas.</p></section> : null}
 
-      <section className="mt-5 rounded-[var(--radius-md)] border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600"><h2 className="font-bold text-ink">Alcance y privacidad</h2><p className="mt-2">Se solicita únicamente permiso para administrar eventos en calendarios propiedad del usuario. No se solicitan Gmail, Contacts, Drive, Meet ni acceso completo al calendario. Los eventos no incluyen paciente, diagnóstico, notas clínicas ni consentimientos.</p></section>
+      <section className="glass-card mt-5 p-5 text-sm leading-6 text-slate-600"><h2 className="font-bold text-ink">Alcance y privacidad</h2><p className="mt-2">Se solicita únicamente permiso para administrar eventos en calendarios propiedad del usuario. No se solicitan Gmail, Contacts, Drive, Meet ni acceso completo al calendario. Los eventos no incluyen paciente, diagnóstico, notas clínicas ni consentimientos.</p></section>
     </>
   );
 }

@@ -26,7 +26,7 @@ function InvitationLink({ url }: { url: string }) {
   }
 
   return (
-    <div className="mt-3"><input readOnly aria-label="Enlace de invitación para copiar" value={url} className="w-full rounded border border-slate-200 bg-white p-2 text-xs" onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="secondary" className="mt-2" onClick={copyLink} title="Copiar enlace de invitación"><Copy className="h-4 w-4" aria-hidden="true" />{copied ? "Enlace copiado" : "Copiar enlace"}</Button>{!copied ? <p className="mt-2 text-xs text-slate-500">Si no puedes copiarlo con el botón, selecciónalo en el campo.</p> : null}</div>
+    <div className="mt-3"><input readOnly aria-label="Enlace de invitación para copiar" value={url} className="glass-input h-10 w-full rounded-xl px-3 text-xs outline-none focus:border-clinic focus:ring-4 focus:ring-teal-100/80" onFocus={(event) => event.currentTarget.select()} /><Button type="button" variant="secondary" className="mt-2" onClick={copyLink} title="Copiar enlace de invitación"><Copy className="h-4 w-4" aria-hidden="true" />{copied ? "Enlace copiado" : "Copiar enlace"}</Button>{!copied ? <p className="mt-2 text-xs text-slate-500">Si no puedes copiarlo con el botón, selecciónalo en el campo.</p> : null}</div>
   );
 }
 

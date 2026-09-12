@@ -121,18 +121,18 @@ export function AppointmentAutomationLiveStatusPanel({
   return (
     <>
       <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5" aria-label="Estado operacional">
-        <div className="surface-card p-4">
+        <div className="glass-card p-4">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Scheduler</p>
           <p className="mt-2 font-bold text-ink">{status.scheduler.label}</p>
           <p className="mt-1 text-xs text-slate-500">Último heartbeat: {status.scheduler.lastStartedAt ? dateTime(status.scheduler.lastStartedAt, timeZone) : "sin ejecuciones"}</p>
         </div>
-        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recordatorios</p><p className="mt-2 font-bold text-ink">{assistantEnabled && reminderEnabled ? "ON" : "OFF"}</p></div>
-        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reviews automáticas</p><p className="mt-2 font-bold text-ink">{assistantEnabled && reviewRequestEnabled ? "ON" : "OFF"}</p></div>
-        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Google Calendar</p><p className="mt-2 font-bold text-ink">{googleCalendarAvailable ? "Disponible" : "Disponible en Plus y Pro"}</p></div>
-        <div className="surface-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Provider email</p><p className="mt-2 font-bold text-ink">{emailCalendarConfigured ? "Listo" : "No configurado"}</p></div>
+        <div className="glass-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Recordatorios</p><p className="mt-2 font-bold text-ink">{assistantEnabled && reminderEnabled ? "ON" : "OFF"}</p></div>
+        <div className="glass-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reviews automáticas</p><p className="mt-2 font-bold text-ink">{assistantEnabled && reviewRequestEnabled ? "ON" : "OFF"}</p></div>
+        <div className="glass-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Google Calendar</p><p className="mt-2 font-bold text-ink">{googleCalendarAvailable ? "Disponible" : "Disponible en Plus y Pro"}</p></div>
+        <div className="glass-card p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Provider email</p><p className="mt-2 font-bold text-ink">{emailCalendarConfigured ? "Listo" : "No configurado"}</p></div>
       </section>
 
-      <section className="surface-card mt-5 p-5">
+      <section className="glass-card-strong mt-5 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="flex items-center gap-2 font-bold text-ink"><Star className="h-5 w-5 text-clinic" />Jobs recientes y próximos</h2>
@@ -150,14 +150,14 @@ export function AppointmentAutomationLiveStatusPanel({
         </div>
         <div className="mt-4 grid gap-3">
           {status.jobs.length ? status.jobs.map((job) => (
-            <article key={job.id} className="rounded-[var(--radius-md)] border border-slate-200 p-4">
+            <article key={job.id} className="clinical-surface p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div><p className="font-semibold text-ink">{jobLabels[job.type]}</p><Link href={`/dashboard/appointments/${job.appointmentId}`} className="mt-1 inline-flex text-sm font-semibold text-clinic hover:underline">Ver cita</Link></div>
-                <Badge variant={job.status === "succeeded" ? "green" : job.status === "failed" || job.status === "retry_pending" ? "amber" : "slate"}>{job.status}</Badge>
+                <Badge variant={job.status === "succeeded" ? "green" : job.status === "failed" ? "red" : job.status === "retry_pending" ? "amber" : "slate"}>{job.status}</Badge>
               </div>
               <p className="mt-2 text-sm text-slate-500">Programado: {dateTime(job.scheduledFor, timeZone)} · intento {job.attempts}/{job.maxAttempts}{job.lastErrorCode ? ` · ${job.lastErrorCode}` : ""}</p>
             </article>
-          )) : <p className="rounded-[var(--radius-md)] bg-[var(--surface-muted)] p-5 text-center text-sm text-slate-500">No hay jobs registrados para esta clínica.</p>}
+          )) : <p className="clinical-surface p-5 text-center text-sm text-slate-500">No hay jobs registrados para esta clínica.</p>}
         </div>
       </section>
     </>

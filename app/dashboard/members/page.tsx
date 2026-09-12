@@ -16,6 +16,13 @@ const roleLabels: Record<ClinicMemberRole, string> = {
   assistant: "Asistente"
 };
 
+const roleVariants: Record<ClinicMemberRole, "teal" | "green" | "amber" | "slate"> = {
+  owner: "teal",
+  admin: "green",
+  doctor: "slate",
+  assistant: "amber"
+};
+
 const statusLabels = {
   active: "Activo",
   invited: "Invitado",
@@ -44,7 +51,7 @@ export default async function MembersPage() {
   }
 
   if (activeTenant.state !== "ready") {
-    return <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">No tienes una membresía activa para administrar miembros.</section>;
+    return <section className="glass-card-strong p-5 text-sm text-slate-600">No tienes una membresía activa para administrar miembros.</section>;
   }
 
   const clinicId = activeTenant.tenant.clinic.id;
@@ -68,7 +75,7 @@ export default async function MembersPage() {
       />
 
       {planContext ? (
-        <section className="surface-card mb-6 p-5">
+        <section className="glass-card-strong mb-6 p-5">
           <div className="grid gap-4 md:grid-cols-3">
             <div>
               <p className="text-sm font-semibold text-slate-500">Plan actual</p>
@@ -98,17 +105,17 @@ export default async function MembersPage() {
       ) : null}
 
       {planContext?.planId === "basic" && !planContext.canAddDoctor ? (
-        <section className="surface-card mb-6 p-5 text-sm text-slate-600">
+        <section className="glass-card mb-6 p-5 text-sm text-slate-600">
           El plan Básico ya utiliza su único lugar médico y no permite altas de administradores o asistentes.
         </section>
       ) : null}
 
       {planContextResult.state === "missing" ? (
-        <section className="surface-card mb-6 p-5 text-sm text-slate-600">Sin plan configurado.</section>
+        <section className="glass-card mb-6 p-5 text-sm text-slate-600">Sin plan configurado.</section>
       ) : null}
 
-      <section className="surface-card mt-6 overflow-hidden">
-        <div className="border-b border-slate-200 p-5">
+      <section className="glass-card-strong mt-6 overflow-hidden">
+        <div className="glass-divider border-b bg-white/55 p-5">
           <h2 className="font-bold text-ink">Miembros actuales</h2>
           <p className="mt-1 text-sm text-slate-500">
             Solo miembros de esta clínica son visibles. No se muestran datos de otras clínicas.
@@ -116,7 +123,7 @@ export default async function MembersPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600">
+            <thead className="bg-white/65 text-slate-600">
               <tr>
                 <th className="px-5 py-3 font-semibold">Nombre</th>
                 <th className="px-5 py-3 font-semibold">Email</th>
@@ -125,12 +132,12 @@ export default async function MembersPage() {
                 <th className="px-5 py-3 font-semibold">Creado</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-[rgba(173,204,214,0.54)]">
               {members.map((member) => (
-                <tr key={member.id}>
+                <tr key={member.id} className="transition hover:bg-white/65">
                   <td className="px-5 py-4 font-semibold text-ink">{member.full_name ?? "Sin nombre"}</td>
                   <td className="px-5 py-4 text-slate-600">{member.email ?? "Sin correo"}</td>
-                  <td className="px-5 py-4 text-slate-600">{roleLabels[member.role]}</td>
+                  <td className="px-5 py-4"><Badge variant={roleVariants[member.role]}>{roleLabels[member.role]}</Badge></td>
                   <td className="px-5 py-4">
                     <Badge variant={statusVariant[member.status]}>{statusLabels[member.status]}</Badge>
                   </td>
@@ -149,16 +156,16 @@ export default async function MembersPage() {
         </div>
       </section>
 
-      <section className="surface-card mt-6 overflow-hidden">
-        <div className="border-b border-slate-200 p-5">
+      <section className="glass-card-strong mt-6 overflow-hidden">
+        <div className="glass-divider border-b bg-white/55 p-5">
           <h2 className="font-bold text-ink">Invitaciones</h2>
           <p className="mt-1 text-sm text-slate-500">Los enlaces se muestran sólo al crearlos o generar uno nuevo. Si Resend está configurado, también se intenta enviar el correo.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Correo</th><th className="px-5 py-3">Rol</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3">Expira</th><th className="px-5 py-3">Acciones</th></tr></thead>
-            <tbody className="divide-y divide-slate-200">
-              {invitations.map((invitation) => <tr key={invitation.id}><td className="px-5 py-4 text-slate-700">{invitation.invited_email}</td><td className="px-5 py-4 text-slate-600">{roleLabels[invitation.role]}</td><td className="px-5 py-4 text-slate-600">{invitation.status}</td><td className="px-5 py-4 text-slate-600">{formatDate(invitation.expires_at.slice(0, 10))}</td><td className="px-5 py-4">{invitation.status === "pending" ? <InvitationActions invitationId={invitation.id} /> : null}</td></tr>)}
+            <thead className="bg-white/65 text-slate-600"><tr><th className="px-5 py-3">Correo</th><th className="px-5 py-3">Rol</th><th className="px-5 py-3">Estado</th><th className="px-5 py-3">Expira</th><th className="px-5 py-3">Acciones</th></tr></thead>
+            <tbody className="divide-y divide-[rgba(173,204,214,0.54)]">
+              {invitations.map((invitation) => <tr key={invitation.id} className="transition hover:bg-white/65"><td className="px-5 py-4 text-slate-700">{invitation.invited_email}</td><td className="px-5 py-4"><Badge variant={roleVariants[invitation.role]}>{roleLabels[invitation.role]}</Badge></td><td className="px-5 py-4"><Badge variant={invitation.status === "pending" ? "amber" : invitation.status === "accepted" ? "green" : "slate"}>{invitation.status}</Badge></td><td className="px-5 py-4 text-slate-600">{formatDate(invitation.expires_at.slice(0, 10))}</td><td className="px-5 py-4">{invitation.status === "pending" ? <InvitationActions invitationId={invitation.id} /> : null}</td></tr>)}
               {invitations.length === 0 ? <tr><td className="px-5 py-6 text-center text-slate-500" colSpan={5}>No hay invitaciones registradas.</td></tr> : null}
             </tbody>
           </table>

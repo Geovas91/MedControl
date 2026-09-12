@@ -24,10 +24,10 @@ export function SupportAssistantForm() {
     <SubmitButton disabled={pending}>{pending ? "Revisando…" : "Obtener ayuda guiada"}</SubmitButton>
   </form>
   {state.message ? <p role="status" className="rounded-[var(--radius-sm)] bg-[var(--warning-soft)] p-3 text-sm text-[var(--warning)]">{state.message}</p> : null}
-  {state.answer ? <section aria-live="polite" className="rounded-[var(--radius-md)] border border-[var(--clinic-border)] bg-[var(--clinic-soft)] p-4">
+  {state.answer ? <section aria-live="polite" className="glass-card p-4">
     <h3 className="font-bold text-ink">Respuesta guiada</h3><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-clinic">Estado: {state.answer.status === "unresolved" ? "No resuelto" : "Respuesta verificada"}</p><p className="mt-2 text-sm leading-6 text-[var(--foreground-soft)]">{supportIntentMessages[state.answer.intent]}</p>
     {state.answer.articleReferences.length ? <div className="mt-3"><p className="text-sm font-semibold text-ink">Artículos sugeridos</p><ul className="mt-2 grid gap-2">{state.answer.articleReferences.map((article) => <li key={article.slug}><Link href={`/dashboard/support/articles/${article.slug}`} className="text-sm font-semibold text-clinic hover:underline">{article.title}</Link></li>)}</ul></div> : null}
-    {state.answer.diagnostics.map((diagnostic) => <div key={diagnostic.diagnosticId} className="mt-3 rounded-[var(--radius-sm)] bg-white p-3 text-sm"><strong>{diagnosticLabels[diagnostic.diagnosticId]}:</strong> {diagnosticStatusLabels[diagnostic.status]}<span className="block text-xs text-[var(--foreground-muted)]">Verificado: {new Date(diagnostic.verifiedAt).toLocaleString("es-MX")}</span></div>)}
+    {state.answer.diagnostics.map((diagnostic) => <div key={diagnostic.diagnosticId} className="clinical-surface mt-3 p-3 text-sm"><strong>{diagnosticLabels[diagnostic.diagnosticId]}:</strong> {diagnosticStatusLabels[diagnostic.status]}<span className="block text-xs text-[var(--foreground-muted)]">Verificado: {new Date(diagnostic.verifiedAt).toLocaleString("es-MX")}</span></div>)}
     {state.answer.offerTicket ? <a href="#crear-ticket" className="mt-4 inline-flex text-sm font-semibold text-clinic hover:underline">Crear ticket de soporte</a> : null}
   </section> : null}</div>;
 }
@@ -39,7 +39,7 @@ export function SupportDiagnosticForm() {
     <SubmitButton disabled={pending}>{pending ? "Verificando…" : "Ejecutar diagnóstico"}</SubmitButton>
   </form>
   {state.message ? <p role="status" className="rounded-[var(--radius-sm)] bg-[var(--warning-soft)] p-3 text-sm text-[var(--warning)]">{state.message}</p> : null}
-  {state.diagnostic ? <div aria-live="polite" className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-muted)] p-4"><p className="font-semibold text-ink">{diagnosticLabels[state.diagnostic.diagnosticId]}</p><p className="mt-1 text-sm">Estado: {diagnosticStatusLabels[state.diagnostic.status]}</p><p className="mt-1 text-xs text-[var(--foreground-muted)]">Verificado: {new Date(state.diagnostic.verifiedAt).toLocaleString("es-MX")}</p></div> : null}</div>;
+  {state.diagnostic ? <div aria-live="polite" className="clinical-surface p-4"><p className="font-semibold text-ink">{diagnosticLabels[state.diagnostic.diagnosticId]}</p><p className="mt-1 text-sm">Estado: {diagnosticStatusLabels[state.diagnostic.status]}</p><p className="mt-1 text-xs text-[var(--foreground-muted)]">Verificado: {new Date(state.diagnostic.verifiedAt).toLocaleString("es-MX")}</p></div> : null}</div>;
 }
 
 export function CreateSupportTicketForm() {
