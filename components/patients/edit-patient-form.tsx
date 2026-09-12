@@ -35,7 +35,7 @@ export function EditPatientForm({ patientId, initialValues, doctors, clinicToday
       <Field label="Ocupación" htmlFor="occupation"><Input id="occupation" name="occupation" defaultValue={v.occupation} />{error("occupation")}</Field>
       <Field label="Escolaridad" htmlFor="education_level"><Input id="education_level" name="education_level" defaultValue={v.educationLevel} />{error("educationLevel")}</Field>
     </div>
-    <fieldset className="grid gap-4 rounded-xl border border-slate-200 p-4"><legend className="px-2 font-semibold">Contacto de emergencia</legend><div className="grid gap-4 md:grid-cols-3">
+    <fieldset className="clinical-surface grid gap-4 p-4"><legend className="px-2 font-semibold">Contacto de emergencia</legend><div className="grid gap-4 md:grid-cols-3">
       <Field label="Nombre *" htmlFor="emergency_contact_name"><Input id="emergency_contact_name" name="emergency_contact_name" defaultValue={v.emergencyContactName} required />{error("emergencyContactName")}</Field>
       <Field label="Parentesco *" htmlFor="emergency_contact_relationship"><Input id="emergency_contact_relationship" name="emergency_contact_relationship" defaultValue={v.emergencyContactRelationship} required />{error("emergencyContactRelationship")}</Field>
       <Field label="Teléfono *" htmlFor="emergency_contact_phone"><Input id="emergency_contact_phone" name="emergency_contact_phone" type="tel" defaultValue={v.emergencyContactPhone} required />{error("emergencyContactPhone")}</Field>

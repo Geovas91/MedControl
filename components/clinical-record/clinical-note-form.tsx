@@ -41,7 +41,7 @@ export function ClinicalNoteForm({
   }).format(new Date(startsAt));
 
   return (
-    <form action={formAction} className="surface-card grid gap-5 p-4 sm:p-6">
+    <form action={formAction} className="glass-card-strong grid gap-5 p-4 sm:p-6">
       {state.error ? <p role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{state.error}</p> : null}
       {showRelations ? (
         <div className="grid gap-4 md:grid-cols-2">

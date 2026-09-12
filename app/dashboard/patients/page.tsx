@@ -39,7 +39,7 @@ function PatientsUnavailable({ title, description }: { title: string; descriptio
   return (
     <>
       <PageHeader title={title} description={description} />
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="glass-card-strong p-5">
         <p className="text-sm text-slate-600">No hay datos disponibles para mostrar en este momento.</p>
       </section>
     </>
@@ -87,7 +87,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
         }
       />
 
-      <form className="filter-toolbar print-hidden mb-5 grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
+      <form className="glass-toolbar print-hidden mb-5 grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end">
         <label className="grid gap-1.5 text-sm font-medium text-slate-700">
           <span>Buscar pacientes</span>
           <span className="relative">
@@ -144,20 +144,20 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
         </form>
       </div>
 
-      <section className="surface-card overflow-hidden">
-        <div className="hidden grid-cols-[1.2fr_1fr_0.8fr_0.6fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
+      <section className="glass-card-strong overflow-hidden">
+        <div className="glass-divider hidden grid-cols-[1.2fr_1fr_0.8fr_0.6fr] gap-4 border-b bg-white/65 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 lg:grid">
           <span>Paciente</span>
           <span>Contacto</span>
           <span>Nacimiento</span>
           <span>Estado</span>
         </div>
-        <div className="divide-y divide-slate-200">
+        <div className="divide-y divide-[var(--border)]">
           {data.patients.map((patient) => (
             <Link
               key={patient.id}
               href={`/dashboard/patients/${patient.id}`}
               aria-label={`Ver detalle de ${patient.full_name}`}
-              className="grid gap-4 px-4 py-4 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-clinic sm:px-5 lg:grid-cols-[1.2fr_1fr_0.8fr_0.6fr] lg:items-center lg:gap-3"
+              className="grid gap-4 px-4 py-4 transition hover:bg-white/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-clinic sm:px-5 lg:grid-cols-[1.2fr_1fr_0.8fr_0.6fr] lg:items-center lg:gap-3"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-teal-50 text-clinic">
@@ -221,7 +221,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
             {data.page > 1 ? (
               <Link
                 href={buildPatientListHref(query, data.page - 1)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                className="glass-control inline-flex h-10 items-center justify-center gap-2 px-3 text-sm font-semibold text-slate-700"
               >
                 <ChevronLeft className="h-4 w-4" />
                 Anterior
@@ -238,7 +238,7 @@ export default async function PatientsPage({ searchParams }: PatientsPageProps) 
             {data.page < data.pageCount ? (
               <Link
                 href={buildPatientListHref(query, data.page + 1)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                className="glass-control inline-flex h-10 items-center justify-center gap-2 px-3 text-sm font-semibold text-slate-700"
               >
                 Siguiente
                 <ChevronRight className="h-4 w-4" />

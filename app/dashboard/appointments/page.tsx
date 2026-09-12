@@ -38,6 +38,10 @@ type AppointmentsPageProps = {
 };
 
 function statusVariant(status: AppointmentStatus) {
+  if (status === "cancelled") {
+    return "red" as const;
+  }
+
   if (status === "completed") {
     return "green" as const;
   }
@@ -57,7 +61,7 @@ function AppointmentsUnavailable({ title, description }: { title: string; descri
   return (
     <>
       <PageHeader title={title} description={description} />
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="glass-card-strong p-5">
         <p className="text-sm text-slate-600">No hay datos disponibles para mostrar en este momento.</p>
       </section>
     </>
@@ -168,7 +172,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         <p role="alert" className="mb-4 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{rangeError}</p>
       ) : null}
 
-      <section className="surface-card mb-5 p-4 sm:p-5">
+      <section className="glass-card mb-5 p-4 sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha de la agenda</p>
@@ -181,21 +185,21 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
           <nav className="grid grid-cols-3 gap-2" aria-label="Navegación por fecha">
             <Link
               href={buildAppointmentAgendaHref(data.query, { date: previousDate, period: "day", from: null, to: null, page: 1 })}
-              className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+              className="glass-control inline-flex h-10 items-center justify-center gap-1 px-3 text-sm font-semibold text-slate-700"
             >
               <ChevronLeft className="h-4 w-4" />
               Anterior
             </Link>
             <Link
               href={buildAppointmentAgendaHref(data.query, { date: data.clinicToday, period: "day", from: null, to: null, page: 1 })}
-              className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+              className="glass-control inline-flex h-10 items-center justify-center gap-1 px-3 text-sm font-semibold text-slate-700"
             >
               <CalendarDays className="h-4 w-4" />
               Hoy
             </Link>
             <Link
               href={buildAppointmentAgendaHref(data.query, { date: nextDate, period: "day", from: null, to: null, page: 1 })}
-              className="inline-flex h-10 items-center justify-center gap-1 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+              className="glass-control inline-flex h-10 items-center justify-center gap-1 px-3 text-sm font-semibold text-slate-700"
             >
               Siguiente
               <ChevronRight className="h-4 w-4" />
@@ -224,7 +228,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         </p>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           {totals.map((total) => (
-            <div key={total.label} className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
+            <div key={total.label} className="glass-card p-4">
               <p className="text-xs font-semibold text-slate-500">{total.label}</p>
               <p className="mt-2 text-2xl font-bold text-ink">{total.value}</p>
             </div>
@@ -232,7 +236,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         </div>
       </section>
 
-      <section className="surface-card mt-5 p-4 sm:p-5">
+      <section className="glass-card-strong mt-5 p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-1 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
           <p className="font-semibold text-ink">Periodo activo: <span className="capitalize">{activePeriod}</span></p>
           <p>{data.filteredTotal ? `Mostrando ${data.visibleFrom}–${data.visibleTo} de ${data.filteredTotal}` : "Sin resultados"}</p>
@@ -245,7 +249,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
             return (
               <article
                 key={appointment.id}
-                className="grid min-w-0 gap-4 rounded-md border border-slate-200 p-4 lg:grid-cols-[10rem_minmax(0,1fr)_auto] lg:items-center"
+                className="clinical-surface grid min-w-0 gap-4 p-4 transition hover:border-[var(--clinic-border)] lg:grid-cols-[10rem_minmax(0,1fr)_auto] lg:items-center"
               >
                 <div>
                   <p className="mb-1 text-xs font-semibold capitalize text-slate-500">
@@ -287,13 +291,13 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
                   </Badge>
                   <Link
                     href={`/dashboard/appointments/${appointment.id}`}
-                    className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+                    className="glass-control inline-flex h-9 items-center gap-2 px-3 text-sm font-semibold text-slate-700"
                   >
                     <Eye className="h-4 w-4" />
                     Ver detalle
                   </Link>
                   {canEditAppointments(data.tenant.membership.role) ? (
-                    <Link href={`/dashboard/appointments/${appointment.id}/edit`} className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-semibold text-clinic ring-1 ring-teal-200 hover:bg-teal-50">
+                    <Link href={`/dashboard/appointments/${appointment.id}/edit`} className="glass-control inline-flex h-9 items-center gap-2 px-3 text-sm font-semibold text-clinic">
                       <Pencil className="h-4 w-4" />
                       Editar
                     </Link>
@@ -304,7 +308,7 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
           })}
 
           {data.appointments.length === 0 ? (
-            <div className="rounded-md border border-dashed border-slate-200 px-5 py-12 text-center text-sm text-slate-500">
+            <div className="clinical-surface border-dashed px-5 py-12 text-center text-sm text-slate-500">
               {rangeError ? "Corrige el rango para consultar citas." : "No hay citas que coincidan con el periodo y los filtros actuales."}
             </div>
           ) : null}
@@ -313,8 +317,8 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
           <nav className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between" aria-label="Paginación de citas">
             <p className="text-sm text-slate-600">Página {data.page} de {data.pageCount}</p>
             <div className="flex gap-2">
-              {data.page > 1 ? <Link href={buildAppointmentAgendaHref(data.query, { page: data.page - 1 })} className="inline-flex h-10 items-center gap-1 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"><ChevronLeft className="h-4 w-4" />Anterior</Link> : null}
-              {data.page < data.pageCount ? <Link href={buildAppointmentAgendaHref(data.query, { page: data.page + 1 })} className="inline-flex h-10 items-center gap-1 rounded-md bg-white px-3 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">Siguiente<ChevronRight className="h-4 w-4" /></Link> : null}
+              {data.page > 1 ? <Link href={buildAppointmentAgendaHref(data.query, { page: data.page - 1 })} className="glass-control inline-flex h-10 items-center gap-1 px-3 text-sm font-semibold text-slate-700"><ChevronLeft className="h-4 w-4" />Anterior</Link> : null}
+              {data.page < data.pageCount ? <Link href={buildAppointmentAgendaHref(data.query, { page: data.page + 1 })} className="glass-control inline-flex h-10 items-center gap-1 px-3 text-sm font-semibold text-slate-700">Siguiente<ChevronRight className="h-4 w-4" /></Link> : null}
             </div>
           </nav>
         ) : null}

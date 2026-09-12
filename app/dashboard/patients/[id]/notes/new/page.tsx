@@ -15,7 +15,7 @@ export default async function NewClinicalNotePage({ params }: { params: Promise<
   if (result.state === "invalid_id" || result.state === "not_found") notFound();
   if (result.state === "unauthenticated") redirect("/login");
   if (result.state !== "ready") {
-    return <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">No tienes permiso para crear notas clinicas.</section>;
+    return <section className="glass-card-strong p-5 text-sm text-slate-600">No tienes permiso para crear notas clinicas.</section>;
   }
 
   const action = createClinicalNoteAction.bind(null, id);

@@ -138,9 +138,9 @@ button, [role="button"], a, input, select, textarea { -webkit-tap-highlight-colo
 
   .clinical-surface {
     border: 1px solid rgba(190, 216, 224, 0.68);
-    border-radius: var(--radius-md);
-    background: rgba(255, 255, 255, 0.7);
-    box-shadow: var(--shadow-xs), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: var(--shadow-sm), inset 0 1px 0 #fff;
   }
 
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

@@ -65,7 +65,7 @@ export function PendingConsentWorkspace({
   }, []);
 
   return <>
-    <section className="mt-4 rounded-md border border-slate-200 bg-slate-50/50 p-4">
+    <section className="clinical-surface mt-4 p-4">
       <h1 className="text-xl font-bold text-ink">Contenido del consentimiento</h1>
       <p className="mt-2 text-sm text-slate-600">Este es el snapshot emitido para este paciente. Guardarlo no modifica la plantilla reutilizable.</p>
       {linkActive ? <p role="status" className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Revoca el enlace vigente antes de editar el consentimiento.</p> : null}

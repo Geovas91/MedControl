@@ -58,7 +58,7 @@ export function AppointmentStatusActions({
   }
 
   return (
-    <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+    <section className="glass-card mt-6 p-4 sm:p-6">
       <h2 className="text-lg font-bold text-ink">Acciones de la cita</h2>
       <p className="mt-1 text-sm text-slate-500">Solo se muestran cambios válidos para el estado y horario actuales.</p>
 
@@ -92,7 +92,7 @@ export function AppointmentStatusActions({
         aria-labelledby="appointment-status-dialog-title"
         aria-describedby="appointment-status-dialog-description"
         onClose={() => setSelectedAction(null)}
-        className="w-[calc(100%-2rem)] max-w-md rounded-lg border border-slate-200 bg-white p-0 shadow-xl backdrop:bg-slate-950/50"
+        className="glass-card-strong w-[calc(100%-2rem)] max-w-md p-0 shadow-dialog backdrop:bg-slate-950/50 backdrop:backdrop-blur-sm"
       >
         {selectedAction ? (
           <form action={formAction} className="p-5 sm:p-6">
@@ -110,7 +110,7 @@ export function AppointmentStatusActions({
               <button
                 type="button"
                 onClick={() => dialogRef.current?.close()}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-ink"
+                className="glass-control grid h-9 w-9 shrink-0 place-items-center text-slate-500 hover:text-ink"
                 aria-label="Cerrar diálogo"
               >
                 <X className="h-4 w-4" />
@@ -128,7 +128,7 @@ export function AppointmentStatusActions({
                 ref={cancelButtonRef}
                 type="button"
                 onClick={() => dialogRef.current?.close()}
-                className="inline-flex h-11 items-center justify-center rounded-md bg-white px-4 text-sm font-semibold text-ink ring-1 ring-slate-200 hover:bg-slate-50"
+                className="glass-control inline-flex h-11 items-center justify-center px-4 text-sm font-semibold text-ink"
               >
                 Volver
               </button>

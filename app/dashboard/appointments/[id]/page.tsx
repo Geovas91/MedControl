@@ -47,7 +47,7 @@ function AppointmentDetailUnavailable({ title, description }: { title: string; d
         Volver a la agenda
       </Link>
       <PageHeader title={title} description={description} />
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="glass-card-strong p-5">
         <p className="text-sm text-slate-600">No hay información disponible para mostrar en este momento.</p>
       </section>
     </>
@@ -64,7 +64,7 @@ function DetailItem({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-w-0 rounded-md bg-slate-50 p-4">
+    <div className="clinical-surface min-w-0 p-4">
       <dt className="flex items-center gap-2 text-sm font-semibold text-slate-500">
         {icon}
         {label}
@@ -165,10 +165,10 @@ export default async function AppointmentDetailPage({
         description="Información administrativa de la cita dentro de la clínica activa."
       />
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+      <section className="glass-card-strong p-4 sm:p-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <Badge variant={getAppointmentDetailStatusVariant(appointment.status)}>
+            <Badge variant={appointment.status === "cancelled" ? "red" : getAppointmentDetailStatusVariant(appointment.status)}>
               {getAppointmentStatusLabel(appointment.status)}
             </Badge>
             <h1 className="mt-4 break-words text-2xl font-bold text-ink sm:text-3xl">{appointment.title}</h1>
