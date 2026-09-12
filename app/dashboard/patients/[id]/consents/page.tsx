@@ -19,7 +19,7 @@ export default async function PatientConsentsPage({ params }: { params: Promise<
   const result = await getClinicalRecordForActiveTenant(id, {});
   if (result.state === "invalid_id" || result.state === "not_found") notFound();
   if (result.state === "unauthenticated") redirect("/login");
-  if (result.state !== "ready") return <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">No tienes acceso a consentimientos clínicos.</section>;
+  if (result.state !== "ready") return <section className="glass-card-strong p-5 text-sm text-slate-600">No tienes acceso a consentimientos clínicos.</section>;
   const { data } = result;
 
   return (
@@ -31,7 +31,7 @@ export default async function PatientConsentsPage({ params }: { params: Promise<
       </div>
       <div className="grid gap-3">
         {data.consents.length ? data.consents.map((consent) => (
-          <article key={consent.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <article key={consent.id} className="glass-card p-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-clinic" /><h2 className="font-semibold text-ink">{consent.consent_type}</h2></div>

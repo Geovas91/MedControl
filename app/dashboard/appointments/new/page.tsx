@@ -21,7 +21,7 @@ function AppointmentCreationUnavailable({
   return (
     <>
       <PageHeader title={title} description={description} />
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="glass-card-strong p-5">
         <p className="text-sm text-slate-600">No es posible mostrar el formulario en este momento.</p>
       </section>
     </>

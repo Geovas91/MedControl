@@ -28,7 +28,7 @@ export function AppointmentAgendaFilters({
   const [period, setPeriod] = useState<AppointmentPeriod>(query.period);
 
   return (
-    <form className="filter-toolbar print-hidden mb-5 grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-5 xl:items-end">
+    <form className="glass-toolbar print-hidden mb-5 grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-5 xl:items-end">
       <input type="hidden" name="date" value={query.date} />
       <label className="grid gap-1.5 text-sm font-medium text-slate-700">
         <span>Buscar</span>
@@ -59,7 +59,7 @@ export function AppointmentAgendaFilters({
       </label>
       <div className="flex flex-wrap gap-2">
         <Button type="submit">Aplicar filtros</Button>
-        <Link href="/dashboard/appointments" className="inline-flex h-11 items-center justify-center rounded-md bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
+        <Link href="/dashboard/appointments" className="glass-control inline-flex h-11 items-center justify-center px-4 text-sm font-semibold text-slate-700">
           Limpiar filtros
         </Link>
       </div>

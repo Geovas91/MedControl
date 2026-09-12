@@ -37,7 +37,7 @@ function SubmitChoices() {
 }
 
 function Section({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return <fieldset className="grid gap-4 rounded-xl border border-slate-200 bg-white/80 p-4 sm:p-5"><legend className="px-2 font-bold text-ink">{title}</legend><p className="text-sm text-slate-500">{description}</p>{children}</fieldset>;
+  return <fieldset className="clinical-surface grid gap-4 p-4 sm:p-5"><legend className="px-2 font-bold text-ink">{title}</legend><p className="text-sm text-slate-500">{description}</p>{children}</fieldset>;
 }
 
 export function CreatePatientForm({ doctors, clinicToday }: Props) {

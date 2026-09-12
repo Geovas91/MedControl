@@ -16,7 +16,7 @@ export default async function EditClinicalNotePage({ params }: { params: Promise
   if (noteResult.state === "unauthenticated" || optionsResult.state === "unauthenticated") redirect("/login");
   if (noteResult.state === "ready" && !noteResult.data.canEdit) notFound();
   if (noteResult.state !== "ready" || optionsResult.state !== "ready") {
-    return <section className="rounded-lg border border-slate-200 bg-white p-5 text-sm text-slate-600">Esta nota no puede editarse.</section>;
+    return <section className="glass-card-strong p-5 text-sm text-slate-600">Esta nota no puede editarse.</section>;
   }
 
   const note = noteResult.data.note;

@@ -72,7 +72,7 @@ export function CreateAppointmentForm({
   const defaultDoctorId = doctors.length === 1 ? doctors[0].id : "";
 
   return (
-    <form action={formAction} className="surface-card grid gap-6 p-4 sm:p-6">
+    <form action={formAction} className="glass-card-strong grid gap-6 p-4 sm:p-6">
       <div className="flex items-start gap-3">
         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-teal-50 text-clinic">
           <CalendarPlus className="h-5 w-5" />

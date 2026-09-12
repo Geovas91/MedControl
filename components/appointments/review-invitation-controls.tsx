@@ -22,7 +22,7 @@ export function ReviewInvitationControls({ issueAction, emailAction, revokeActio
   const effectiveStatus = revokeState.status ?? emailState.status ?? issueState.status ?? initialStatus;
   const active = effectiveStatus === "pending" || effectiveStatus === "sent";
   const url = issueState.url;
-  return <section className="mt-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+  return <section className="glass-card mt-6 p-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-bold text-ink">Solicitud de reseña</h2><p className="mt-1 text-sm text-slate-600">Genera un enlace personal, expirable y de un solo uso.</p></div>{effectiveStatus ? <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{labels[effectiveStatus]}</span> : null}</div>
     <div className="mt-4 flex flex-wrap gap-3">
       <form action={issueFormAction}><Button type="submit" disabled={issuePending || effectiveStatus === "completed"}><Link2 className="h-4 w-4" />{issuePending ? "Generando…" : active || effectiveStatus === "expired" || effectiveStatus === "revoked" ? "Regenerar enlace" : "Solicitar reseña"}</Button></form>
@@ -31,7 +31,7 @@ export function ReviewInvitationControls({ issueAction, emailAction, revokeActio
       {active ? <form action={revokeFormAction}><Button type="submit" variant="secondary" disabled={revokePending}><XCircle className="h-4 w-4" />{revokePending ? "Revocando…" : "Revocar"}</Button></form> : null}
     </div>
     {!patientHasEmail ? <p className="mt-2 text-xs text-slate-500">El paciente no tiene correo registrado; puedes copiar el enlace.</p> : null}
-    {url ? <div className="mt-4 rounded-md bg-teal-50 p-3"><p className="break-all text-sm text-slate-700">{url}</p><p className="mt-1 text-xs text-slate-500">No será posible recuperar este enlace después de recargar.</p></div> : null}
+    {url ? <div className="clinical-surface mt-4 p-3"><p className="break-all text-sm text-slate-700">{url}</p><p className="mt-1 text-xs text-slate-500">No será posible recuperar este enlace después de recargar.</p></div> : null}
     {[issueState, emailState, revokeState].map((state, index) => state.error ? <p key={`error-${index}`} role="alert" className="mt-3 text-sm text-rose-700">{state.error}</p> : state.message ? <p key={`message-${index}`} role="status" className="mt-3 text-sm text-emerald-700">{state.message}</p> : null)}
   </section>;
 }
