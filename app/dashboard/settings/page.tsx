@@ -1,4 +1,4 @@
-import { ClipboardList, Plug, UserRoundCog } from "lucide-react";
+import { CalendarClock, ClipboardList, Plug, UserRoundCog } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { getOnboardingStatus } from "@/lib/onboarding";
@@ -22,6 +22,12 @@ const settings = [
     description: "Conexión personal con Google Calendar e invitaciones de calendario para citas.",
     icon: Plug,
     href: "/dashboard/settings/integrations"
+  },
+  {
+    title: "Disponibilidad profesional",
+    description: "Define los intervalos recurrentes de consulta por profesional.",
+    icon: CalendarClock,
+    href: "/dashboard/settings/availability"
   }
 ];
 

@@ -1,0 +1,32 @@
+import "server-only";
+import { createClient } from "@/lib/supabase/server";
+import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { addDaysToAppointmentDate } from "@/lib/appointments/query";
+import { getClinicDayRange } from "@/lib/dashboard/timezone";
+import type { AvailabilityWeek } from "@/lib/availability/form";
+
+export type AvailabilityData = { clinic: { id: string; name: string; timezone: string }; role: string; canEdit: boolean; today: string; effectiveFrom: string; professionals: { id: string; name: string }[]; selectedProfessionalId: string; week: AvailabilityWeek };
+const rpc = (client: Awaited<ReturnType<typeof createClient>>) => client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string; code?: string } | null }> };
+
+export async function getProfessionalAvailability(professionalId?: string): Promise<{ state: string; data?: AvailabilityData }> {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: context.state };
+  const client = await createClient(); const clinicId = context.tenant.clinic.id;
+  const members = await client.from("clinic_members").select("id, role, user_id").eq("clinic_id", clinicId).eq("status", "active").in("role", ["owner", "doctor"]);
+  if (members.error) return { state: "error" };
+  const memberRows = (members.data ?? []) as unknown as { id: string }[];
+  const ids = memberRows.map((m) => m.id); const allowed = ids.includes(professionalId ?? "") ? professionalId! : context.tenant.membership.role === "doctor" ? context.tenant.membership.id : ids[0];
+  if (!allowed) return { state: "no_eligible" };
+  const profiles = await client.from("doctor_public_profiles").select("profile_id, display_name, clinic_member_id").eq("clinic_id", clinicId);
+  const profileRows = (profiles.data ?? []) as unknown as { clinic_member_id?: string | null; profile_id?: string | null; display_name: string }[];
+  const names = new Map(profileRows.map((p) => [p.clinic_member_id ?? p.profile_id ?? "", p.display_name]));
+  const today = getClinicDayRange(context.tenant.clinic.timezone).localDate; const week: AvailabilityWeek = {};
+  for (let day = 1; day <= 7; day += 1) { const date = addDaysToAppointmentDate(today, day - 1); const result = await rpc(client).rpc("get_professional_availability_for_date", { p_clinic_id: clinicId, p_clinic_member_id: allowed, p_date: date }); if (result.error) return { state: "error" }; week[day] = ((result.data ?? []) as { start_time: string; end_time: string }[]).map((r) => ({ start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5) })); }
+  return { state: "ready", data: { clinic: context.tenant.clinic, role: context.tenant.membership.role, canEdit: ["owner", "admin", "doctor"].includes(context.tenant.membership.role), today, effectiveFrom: today, professionals: ids.map((id) => ({ id, name: names.get(id) ?? "Profesional" })), selectedProfessionalId: allowed, week } };
+}
+
+export async function saveProfessionalAvailability(input: { professionalId: string; effectiveFrom: string; week: AvailabilityWeek }) {
+  const context = await getActiveTenantContext(); if (context.state !== "ready") return { state: context.state };
+  const result = await rpc(await createClient()).rpc("save_professional_availability_for_current_user", { p_clinic_id: context.tenant.clinic.id, p_clinic_member_id: input.professionalId, p_effective_from: input.effectiveFrom, p_intervals: Object.entries(input.week).flatMap(([weekday, intervals]) => intervals.map((item) => ({ weekday: Number(weekday), start_time: item.start, end_time: item.end }))) });
+  return result.error ? { state: "error", code: result.error.code } : { state: "success" };
+}

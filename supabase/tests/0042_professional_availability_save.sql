@@ -1,0 +1,16 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select extensions.plan(7);
+insert into auth.users(id,email) values ('42100000-0000-4000-8000-000000000001','save-owner@example.test'),('42100000-0000-4000-8000-000000000002','save-doctor@example.test');
+insert into public.clinics(id,name,timezone) values ('42200000-0000-4000-8000-000000000001','Save Clinic','America/Mexico_City');
+insert into public.clinic_members(id,clinic_id,user_id,role,status) values ('42300000-0000-4000-8000-000000000001','42200000-0000-4000-8000-000000000001','42100000-0000-4000-8000-000000000001','owner','active'),('42300000-0000-4000-8000-000000000002','42200000-0000-4000-8000-000000000001','42100000-0000-4000-8000-000000000002','doctor','active');
+select extensions.ok(has_function_privilege('authenticated','public.save_professional_availability_for_current_user(uuid,uuid,date,jsonb)','execute') and not has_function_privilege('anon','public.save_professional_availability_for_current_user(uuid,uuid,date,jsonb)','execute'),'save RPC is authenticated-only');
+select extensions.ok((select prosecdef and proconfig @> array['search_path=public, pg_temp'] from pg_proc where oid='public.save_professional_availability_for_current_user(uuid,uuid,date,jsonb)'::regprocedure),'save RPC has fixed definer boundary');
+set local role authenticated; select set_config('request.jwt.claim.sub','42100000-0000-4000-8000-000000000001',true);
+select extensions.is(public.save_professional_availability_for_current_user('42200000-0000-4000-8000-000000000001','42300000-0000-4000-8000-000000000002',date '2026-10-01','[{"weekday":1,"start_time":"09:00","end_time":"12:00"}]'),true,'owner can save doctor schedule');
+select extensions.is((select count(*)::int from public.professional_availability_rules where clinic_id='42200000-0000-4000-8000-000000000001' and clinic_member_id='42300000-0000-4000-8000-000000000002' and is_active),1,'one interval persisted');
+select extensions.throws_ok($$select public.save_professional_availability_for_current_user('42200000-0000-4000-8000-000000000001','42300000-0000-4000-8000-000000000002',date '2026-10-01','[{"weekday":1,"start_time":"14:00","end_time":"13:00"}]')$$,'22023',null,'invalid interval rejected');
+select extensions.is((select count(*)::int from public.professional_availability_rules where clinic_member_id='42300000-0000-4000-8000-000000000002' and is_active),1,'failed save is atomic');
+reset role; set local role authenticated; select set_config('request.jwt.claim.sub','42100000-0000-4000-8000-000000000002',true);
+select extensions.throws_ok($$select public.save_professional_availability_for_current_user('42200000-0000-4000-8000-000000000001','42300000-0000-4000-8000-000000000001',date '2026-10-01','[]'::jsonb)$$,'42501',null,'doctor cannot manage another professional');
+select extensions.finish(); rollback;
