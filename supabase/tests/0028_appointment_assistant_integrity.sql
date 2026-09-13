@@ -87,16 +87,16 @@ begin
   ) then
     raise exception 'The appointment tenant/patient foreign key is not validated';
   end if;
-  if (select count(*) from information_schema.role_table_grants where table_schema='public' and table_name='appointments' and grantee='authenticated') <> 3
+  if (select count(*) from information_schema.role_table_grants where table_schema='public' and table_name='appointments' and grantee='authenticated') <> 2
     or exists (
       select 1 from information_schema.role_table_grants
       where table_schema='public' and table_name='appointments' and grantee='authenticated'
-        and privilege_type not in ('SELECT', 'INSERT', 'UPDATE')
+        and privilege_type not in ('SELECT', 'UPDATE')
     ) or exists (
       select 1 from information_schema.role_table_grants
       where table_schema='public' and table_name='appointments' and grantee in ('anon', 'PUBLIC')
     ) then
-    raise exception 'Appointment grants are broader than SELECT, INSERT, UPDATE for authenticated';
+    raise exception 'Appointment grants are broader than SELECT and UPDATE for authenticated';
   end if;
   if exists (
     select 1 from information_schema.role_table_grants
@@ -250,7 +250,7 @@ begin
       'Cross tenant patient', now() + interval '3 days', now() + interval '3 days 1 hour'
     );
     raise exception 'Cross-tenant patient appointment was accepted';
-  exception when foreign_key_violation then null;
+  exception when foreign_key_violation or insufficient_privilege then null;
   end;
   begin
     update public.appointments
@@ -319,6 +319,9 @@ $$;
 
 select set_config('request.jwt.claim.sub', 'd1000000-0000-4000-8000-000000000003', true);
 do $$
+declare
+  v_scheduled_id uuid;
+  v_past_id uuid;
 begin
   if (select count(*) from public.bot_settings) <> 0 then
     raise exception 'Doctor read global assistant settings';
@@ -349,61 +352,57 @@ begin
   exception when insufficient_privilege then null;
   end;
 
-  insert into public.appointments(
-    id, clinic_id, patient_id, doctor_id, title, starts_at, ends_at
-  ) values (
-    'd4000000-0000-4000-8000-000000000003',
+  select appointment_id into v_scheduled_id from public.create_appointment_for_current_user(
     'd2000000-0000-4000-8000-000000000001',
     'd3000000-0000-4000-8000-000000000003',
     'd1000000-0000-4000-8000-000000000003',
-    'Doctor scheduled appointment', now() + interval '4 days', now() + interval '4 days 1 hour'
+    'Doctor scheduled appointment', null, null, null,
+    now() + interval '4 days', now() + interval '4 days 1 hour'
   );
 
   update public.appointments set title='Doctor updated allowed content'
-  where id='d4000000-0000-4000-8000-000000000003';
+  where id=v_scheduled_id;
   if not found then
     raise exception 'Doctor could not perform an allowed appointment update';
   end if;
 
   begin
     update public.appointments set status='completed'
-    where id='d4000000-0000-4000-8000-000000000003';
+    where id=v_scheduled_id;
     raise exception 'Doctor completed a future appointment directly';
   exception when insufficient_privilege then null;
   end;
   begin
     update public.appointments set status='waiting'
-    where id='d4000000-0000-4000-8000-000000000003';
+    where id=v_scheduled_id;
     raise exception 'Doctor moved a future appointment to waiting directly';
   exception when insufficient_privilege then null;
   end;
 
-  insert into public.appointments(
-    id, clinic_id, patient_id, doctor_id, title, starts_at, ends_at
-  ) values (
-    'd4000000-0000-4000-8000-000000000004',
+  select appointment_id into v_past_id from public.create_appointment_for_current_user(
     'd2000000-0000-4000-8000-000000000001',
     'd3000000-0000-4000-8000-000000000003',
     'd1000000-0000-4000-8000-000000000003',
-    'Doctor past appointment', now() - interval '2 days', now() - interval '2 days' + interval '1 hour'
+    'Doctor past appointment', null, null, null,
+    now() - interval '2 days', now() - interval '2 days' + interval '1 hour'
   );
   begin
     update public.appointments set status='confirmed'
-    where id='d4000000-0000-4000-8000-000000000004';
+    where id=v_past_id;
     raise exception 'Doctor confirmed a past appointment directly';
   exception when insufficient_privilege then null;
   end;
   update public.appointments set status='completed'
-  where id='d4000000-0000-4000-8000-000000000004';
+  where id=v_past_id;
   begin
     update public.appointments set status='cancelled'
-    where id='d4000000-0000-4000-8000-000000000004';
+    where id=v_past_id;
     raise exception 'Completed appointment left its terminal state';
   exception when insufficient_privilege then null;
   end;
   begin
     update public.appointments set starts_at=starts_at + interval '1 hour', ends_at=ends_at + interval '1 hour'
-    where id='d4000000-0000-4000-8000-000000000004';
+    where id=v_past_id;
     raise exception 'Completed appointment schedule changed directly';
   exception when insufficient_privilege then null;
   end;

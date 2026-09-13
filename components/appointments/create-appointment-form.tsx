@@ -11,7 +11,6 @@ import {
   type AppointmentFormField,
   type AppointmentFormState
 } from "@/lib/appointments/create";
-import { getAppointmentStatusLabel } from "@/lib/appointments/query";
 import type {
   AppointmentDoctorOption,
   AppointmentPatientOption
@@ -214,20 +213,7 @@ export function CreateAppointmentForm({
             <FieldError field="duration" errors={state.fieldErrors} />
           </Field>
 
-          <Field label="Estado inicial *" htmlFor="status">
-            <Select
-              id="status"
-              name="status"
-              defaultValue={values?.status ?? "scheduled"}
-              required
-              aria-invalid={Boolean(state.fieldErrors?.status)}
-              aria-describedby={state.fieldErrors?.status ? fieldErrorId("status") : undefined}
-            >
-              <option value="scheduled">{getAppointmentStatusLabel("scheduled")}</option>
-              <option value="confirmed">{getAppointmentStatusLabel("confirmed")}</option>
-            </Select>
-            <FieldError field="status" errors={state.fieldErrors} />
-          </Field>
+          <input type="hidden" name="status" value="scheduled" />
 
           <Field label="Ubicación" htmlFor="location">
             <Input

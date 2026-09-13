@@ -3,6 +3,7 @@ import "server-only";
 import {
   calculateAppointmentEnd,
   canCreateAppointments,
+  classifyAppointmentPersistenceError,
   combineClinicDateTime,
   validateAppointmentFormValues,
   type AppointmentFieldErrors,
@@ -20,7 +21,6 @@ import type { Database } from "@/types/database";
 type PatientStatus = Database["public"]["Enums"]["patient_status"];
 type PatientRow = Database["public"]["Tables"]["patients"]["Row"];
 type PatientOptionRow = Pick<PatientRow, "id" | "full_name" | "status">;
-type AppointmentInsert = Database["public"]["Tables"]["appointments"]["Insert"];
 
 export type AppointmentPatientOption = {
   id: string;
@@ -75,6 +75,28 @@ export type CreateAppointmentResult =
 type DoctorProfileRow = {
   profile_id: string | null;
   display_name: string;
+};
+
+type AppointmentCreationRpcRow = {
+  appointment_id: string;
+  appointment_updated_at: string;
+};
+
+type AppointmentCreationRpcClient = {
+  rpc(
+    fn: "create_appointment_for_current_user",
+    args: {
+      p_clinic_id: string;
+      p_patient_id: string;
+      p_doctor_id: string;
+      p_title: string;
+      p_appointment_type: string | null;
+      p_location: string | null;
+      p_meeting_url: string | null;
+      p_starts_at: string;
+      p_ends_at: string;
+    }
+  ): Promise<{ data: AppointmentCreationRpcRow[] | null; error: { code: string } | null }>;
 };
 
 export async function getAppointmentCreationOptions(
@@ -308,29 +330,46 @@ export async function createAppointmentForActiveTenant(
     };
   }
 
-  const insertValues = {
-    clinic_id: clinicId,
-    patient_id: input.patientId,
-    doctor_id: input.doctorId,
-    title: input.title,
-    appointment_type: input.appointmentType,
-    location: input.location,
-    meeting_url: input.meetingUrl,
-    starts_at: startsAt,
-    ends_at: endsAt,
-    status: input.status
-  } satisfies AppointmentInsert;
-  // The hand-maintained Database type lacks generated relationship metadata, so this table infers insert as never.
-  const insertResult = (await supabase
-    .from("appointments")
-    .insert(insertValues as never)
-    .select("id, updated_at")
-    .single()) as unknown as {
-    data: { id: string; updated_at: string } | null;
-    error: { code: string } | null;
-  };
+  const insertResult = await (supabase as unknown as AppointmentCreationRpcClient).rpc(
+    "create_appointment_for_current_user",
+    {
+      p_clinic_id: clinicId,
+      p_patient_id: input.patientId,
+      p_doctor_id: input.doctorId,
+      p_title: input.title,
+      p_appointment_type: input.appointmentType,
+      p_location: input.location,
+      p_meeting_url: input.meetingUrl,
+      p_starts_at: startsAt,
+      p_ends_at: endsAt
+    }
+  );
+  const persistenceError = classifyAppointmentPersistenceError(insertResult.error?.code);
 
-  if (insertResult.error || !insertResult.data) {
+  if (insertResult.error && persistenceError === "conflict") {
+    return {
+      state: "conflict",
+      error: "El médico ya tiene una cita que se cruza con ese horario. Elige otro horario.",
+      fieldErrors: { startTime: "Horario no disponible para el médico seleccionado." },
+      values
+    };
+  }
+
+  if (insertResult.error && persistenceError === "forbidden") {
+    return { state: "forbidden" };
+  }
+
+  if (insertResult.error && persistenceError === "relation_invalid") {
+    return {
+      state: "validation_error",
+      error: "El paciente o el médico ya no están disponibles para esta clínica.",
+      values
+    };
+  }
+
+  const createdAppointment = insertResult.data?.[0] ?? null;
+
+  if (insertResult.error || !createdAppointment) {
     logger.error("Appointment insert failed", {
       component: "create_appointment",
       status: insertResult.error ? "insert_error" : "missing_result",
@@ -344,14 +383,14 @@ export async function createAppointmentForActiveTenant(
   }
 
   const calendarOperation = buildAppointmentCalendarOperation(
-    insertResult.data.id,
+    createdAppointment.appointment_id,
     "created",
-    insertResult.data.updated_at
+    createdAppointment.appointment_updated_at
   );
 
   return {
     state: "success",
-    appointmentId: insertResult.data.id,
+    appointmentId: createdAppointment.appointment_id,
     date: input.date,
     patientId: input.patientId,
     ...calendarOperation

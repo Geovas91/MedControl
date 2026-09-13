@@ -2,11 +2,11 @@ import {
   isCanonicalAppointmentDate,
   isCanonicalAppointmentUuid,
   type AppointmentStatus
-} from "@/lib/appointments/query";
+} from "./query.ts";
 import type { Database } from "@/types/database";
 
 export const appointmentDurations = [15, 30, 45, 60, 90, 120] as const;
-export const newAppointmentStatuses = ["scheduled", "confirmed"] as const satisfies readonly AppointmentStatus[];
+export const newAppointmentStatuses = ["scheduled"] as const satisfies readonly AppointmentStatus[];
 export const appointmentCreatorRoles = ["owner", "doctor", "admin"] as const;
 
 export type AppointmentCreatorRole = Database["public"]["Enums"]["clinic_member_role"];
@@ -51,6 +51,15 @@ export type LocalDateTimeResult =
   | { state: "nonexistent"; iso: null }
   | { state: "ambiguous"; iso: null }
   | { state: "invalid_timezone"; iso: null };
+
+export type AppointmentPersistenceErrorKind = "conflict" | "forbidden" | "relation_invalid" | "error";
+
+export function classifyAppointmentPersistenceError(code: string | undefined): AppointmentPersistenceErrorKind {
+  if (code === "23P01") return "conflict";
+  if (code === "42501") return "forbidden";
+  if (code === "22023" || code === "23503") return "relation_invalid";
+  return "error";
+}
 
 function formString(formData: FormData, name: string) {
   const value = formData.get(name);
