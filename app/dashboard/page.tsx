@@ -82,24 +82,28 @@ export default async function DashboardPage() {
           value={`${data.patientCount}`}
           detail="Registros del tenant activo"
           icon={<UsersRound className="h-5 w-5" />}
+          href="/dashboard/patients"
         />
         <StatCard
           label="Citas activas"
           value={`${data.appointmentsToday.filter((appointment) => ["scheduled", "confirmed", "waiting"].includes(appointment.status)).length}`}
           detail={`Pendientes de atención hoy (${data.localDate})`}
           icon={<CalendarDays className="h-5 w-5" />}
+          href={`/dashboard/appointments?date=${data.localDate}&period=day`}
         />
         <StatCard
           label="Ingresos"
           value={formatMxnCurrency(data.paidMxn)}
           detail="Pagos cobrados totales en MXN"
           icon={<WalletCards className="h-5 w-5" />}
+          href="/dashboard/payments?status=paid"
         />
         <StatCard
           label="Pendiente"
           value={formatMxnCurrency(data.pendingMxn)}
           detail="Saldo pendiente total en MXN"
           icon={<CreditCard className="h-5 w-5" />}
+          href="/dashboard/payments?status=pending"
         />
       </div>
 

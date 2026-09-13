@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { useState } from "react";
 import { Star } from "lucide-react";
 import { submitVerifiedDoctorReviewAction } from "@/app/reviews/actions";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
@@ -11,6 +12,9 @@ type StarRatingFormProps = {
 
 export function StarRatingForm({ reviewToken }: StarRatingFormProps) {
   const [state, formAction] = useActionState(submitVerifiedDoctorReviewAction, {});
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [hoveredRating, setHoveredRating] = useState(0);
+  const visibleRating = hoveredRating || selectedRating;
 
   return (
     <form action={formAction} className="glass-card-strong grid gap-4 p-5">
@@ -19,11 +23,11 @@ export function StarRatingForm({ reviewToken }: StarRatingFormProps) {
         <h2 className="font-bold text-ink">Califica tu atención</h2>
         <p className="mt-1 text-sm text-slate-500">El comentario es opcional. No incluyas información médica o sensible.</p>
       </div>
-      <fieldset className="flex gap-2" aria-label="Calificación por estrellas">
+      <fieldset className="flex gap-2" aria-label="Calificación por estrellas" onMouseLeave={() => setHoveredRating(0)}>
         {[1, 2, 3, 4, 5].map((rating) => (
-          <label key={rating} className="glass-control grid cursor-pointer place-items-center p-2 focus-within:border-clinic focus-within:ring-4 focus-within:ring-teal-100/80">
-            <input type="radio" name="rating" value={rating} className="peer sr-only" required />
-            <Star className="h-6 w-6 text-amber-500 transition peer-checked:fill-amber-400 peer-checked:drop-shadow-[0_4px_8px_rgba(245,158,11,0.28)]" />
+          <label key={rating} onMouseEnter={() => setHoveredRating(rating)} className="glass-control grid cursor-pointer place-items-center p-2 focus-within:border-clinic focus-within:ring-4 focus-within:ring-teal-100/80">
+            <input type="radio" name="rating" value={rating} className="peer sr-only" required aria-label={`${rating} ${rating === 1 ? "estrella" : "estrellas"}`} onChange={() => setSelectedRating(rating)} />
+            <Star className={`h-6 w-6 text-amber-500 transition ${visibleRating >= rating ? "fill-amber-400 drop-shadow-[0_4px_8px_rgba(245,158,11,0.28)]" : ""}`} aria-hidden="true" />
             <span className="sr-only">{rating} estrellas</span>
           </label>
         ))}
