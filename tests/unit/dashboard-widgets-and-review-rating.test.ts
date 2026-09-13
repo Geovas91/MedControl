@@ -10,6 +10,9 @@ test("dashboard summary cards navigate to existing tenant-safe views", () => {
   assert.match(statCard, /href\?: string/);
   assert.match(statCard, /return href \? <Link href=\{href\}/);
   assert.match(statCard, /focus-visible:ring-4/);
+  assert.match(statCard, /pointer-events-none/);
+  assert.doesNotMatch(statCard, /onClick|preventDefault|stopPropagation/);
+  assert.equal((statCard.match(/<Link\b/g) ?? []).length, 1);
   assert.match(dashboard, /href="\/dashboard\/patients"/);
   assert.match(dashboard, /href=\{`\/dashboard\/appointments\?date=\$\{data\.localDate\}&period=day`\}/);
   assert.match(dashboard, /href="\/dashboard\/payments\?status=paid"/);
