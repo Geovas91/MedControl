@@ -11,7 +11,10 @@ function loggerCapture() {
   const entries: Array<{ message: string; context?: Record<string, unknown> }> = [];
   return {
     entries,
-    logger: { error(message: string, context?: Record<string, unknown>) { entries.push({ message, context }); } }
+    logger: {
+      info(message: string, context?: Record<string, unknown>) { entries.push({ message, context }); },
+      error(message: string, context?: Record<string, unknown>) { entries.push({ message, context }); }
+    }
   };
 }
 
@@ -36,6 +39,7 @@ test("start heartbeat RPC error fails before claiming jobs", async () => {
   assert.equal(executed, false);
   assert.deepEqual(calls.map((call) => call.args?.p_phase), ["start"]);
   assert.equal(capture.entries[0]?.context?.code, "21000");
+  assert.equal(capture.entries[0]?.context?.event, "heartbeat_failed");
 });
 
 test("finish OK heartbeat RPC error cannot report runner success", async () => {
@@ -97,6 +101,8 @@ test("finish error failure is best effort and does not leak raw details", async 
   assert.doesNotMatch(serializedLogs, /SECRET_SUPABASE_INTERNAL_MESSAGE|RAW_PROVIDER_BODY/);
   assert.match(serializedLogs, /finish_error/);
   assert.match(serializedLogs, /rpc_exception/);
+  assert.match(serializedLogs, /heartbeat_failed/);
+  assert.match(serializedLogs, /runner_failed/);
 });
 
 test("healthy execution returns the existing sanitized counters after finish OK", async () => {
@@ -116,7 +122,24 @@ test("healthy execution returns the existing sanitized counters after finish OK"
   assert.deepEqual(calls.map((call) => [call.args?.p_phase, call.args?.p_status ?? null]), [
     ["start", null], ["finish", "ok"]
   ]);
-  assert.equal(capture.entries.length, 0);
+  assert.deepEqual(capture.entries.map((entry) => entry.context?.event), ["heartbeat_started", "heartbeat_succeeded"]);
+  assert.equal(capture.entries.at(-1)?.context?.result_count, 2);
+});
+
+test("empty runner completion remains a healthy no-op", async () => {
+  const client: AutomationHeartbeatRpcClient = {
+    async rpc() {
+      return { data: true, error: null };
+    }
+  };
+  const capture = loggerCapture();
+  const result = await runWithAppointmentAutomationHeartbeat(client, async () => ({
+    claimed: 0, succeeded: 0, skipped: 0, retryPending: 0, failed: 0, uncertain: 0, lostLease: 0
+  }), capture.logger);
+
+  assert.equal(result.claimed, 0);
+  assert.equal(capture.entries.at(-1)?.context?.event, "heartbeat_succeeded");
+  assert.equal(capture.entries.at(-1)?.context?.result_count, 0);
 });
 
 test("uncertain persistence makes the heartbeat unhealthy", async () => {

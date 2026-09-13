@@ -65,8 +65,12 @@ async function loadCurrentContext(client: RpcClient, job: Job, workerId: string)
 function logPreflight(job: Job, stage: "initial" | "final", reason: string, retryable: boolean) {
   logger.warn("Appointment automation preflight blocked", {
     component: "appointment_automation",
+    event: "runner_job_processed",
     code: reason,
     job_id: job.id,
+    clinic_id: job.clinic_id,
+    job_type: job.type,
+    result_count: 0,
     stage,
     retryable
   });
@@ -81,9 +85,13 @@ async function retryContextLookup(
 ) {
   logger.warn("Appointment automation context lookup failed", {
     component: "appointment_automation",
+    event: "runner_job_processed",
     code: "context_lookup_failed",
     rpc_code: rpcCode,
     job_id: job.id,
+    clinic_id: job.clinic_id,
+    job_type: job.type,
+    result_count: 0,
     stage,
     retryable: true
   });
@@ -184,7 +192,11 @@ async function processReview(client: RpcClient, job: Job, context: Context, work
 export async function runAppointmentAutomations(): Promise<AutomationRunCounters> {
   const client = createAdminClient() as unknown as RpcClient;
   const workerId = `worker_${randomUUID()}`;
-  return runWithAppointmentAutomationHeartbeat(client, async () => {
+  logger.info("Appointment automation runner started", {
+    component: "appointment_automation",
+    event: "runner_started"
+  });
+  const counters = await runWithAppointmentAutomationHeartbeat(client, async () => {
     const counters = sanitizeAutomationCounters({});
     const claim = await client.rpc("claim_due_appointment_automation_jobs", {
       p_worker_id: workerId, p_limit: APPOINTMENT_AUTOMATION_BATCH_LIMIT,
@@ -199,16 +211,44 @@ export async function runAppointmentAutomations(): Promise<AutomationRunCounters
           // Phase 1 persists the domain only. No Meta call is reachable until a later phase explicitly enables it.
           const skipped = await finish(client, job, workerId, "skipped", "provider_not_enabled");
           counters[skipped ? "skipped" : "lostLease"] += 1;
+          logger.info("Appointment automation job processed", {
+            component: "appointment_automation",
+            event: "runner_job_processed",
+            job_id: job.id,
+            clinic_id: job.clinic_id,
+            job_type: job.type,
+            result_count: 1,
+            outcome: skipped ? "skipped" : "lost_lease"
+          });
           continue;
         }
         const lookup = await loadCurrentContext(client, job, workerId);
         if (lookup.state === "retryable") {
           const outcome = await retryContextLookup(client, job, workerId, "initial", lookup.code);
           counters[outcome] += 1;
+          logger.info("Appointment automation job processed", {
+            component: "appointment_automation",
+            event: "runner_job_processed",
+            job_id: job.id,
+            clinic_id: job.clinic_id,
+            job_type: job.type,
+            result_count: 1,
+            outcome
+          });
           continue;
         }
         if (lookup.state === "lostLease") {
           counters.lostLease += 1;
+          logger.warn("Appointment automation job lost lease", {
+            component: "appointment_automation",
+            event: "runner_job_processed",
+            code: "lease_ownership_lost",
+            job_id: job.id,
+            clinic_id: job.clinic_id,
+            job_type: job.type,
+            result_count: 1,
+            outcome: "lost_lease"
+          });
           continue;
         }
         const context = lookup.context;
@@ -216,20 +256,56 @@ export async function runAppointmentAutomations(): Promise<AutomationRunCounters
           ? await processReminder(client, job, context, workerId)
           : await processReview(client, job, context, workerId);
         counters[outcome] += 1;
+        logger.info("Appointment automation job processed", {
+          component: "appointment_automation",
+          event: "runner_job_processed",
+          job_id: job.id,
+          clinic_id: job.clinic_id,
+          job_type: job.type,
+          result_count: 1,
+          outcome
+        });
         if (outcome === "uncertain" || outcome === "lostLease") {
           logger.error("Appointment automation persistence not confirmed", {
             component: "appointment_automation",
+            event: "runner_job_processed",
             code: outcome === "uncertain" ? "delivery_persistence_uncertain" : "lease_ownership_lost",
-            job_id: job.id
+            job_id: job.id,
+            clinic_id: job.clinic_id,
+            job_type: job.type,
+            result_count: 1,
+            outcome
           });
         }
       } catch {
         // The exception may have happened during the provider call. Lease recovery inspects
         // the durable delivery state, so this worker must not finalize or resend blindly.
         counters.uncertain += 1;
-        logger.error("Appointment automation job failed", { component: "appointment_automation", code: "runner_error", job_id: job.id });
+        logger.error("Appointment automation job failed", {
+          component: "appointment_automation",
+          event: "runner_job_processed",
+          code: "runner_error",
+          job_id: job.id,
+          clinic_id: job.clinic_id,
+          job_type: job.type,
+          result_count: 1,
+          outcome: "uncertain"
+        });
       }
     }
     return sanitizeAutomationCounters(counters);
   }, logger);
+  logger.info("Appointment automation runner succeeded", {
+    component: "appointment_automation",
+    event: "runner_succeeded",
+    result_count: counters.claimed,
+    claimed: counters.claimed,
+    succeeded: counters.succeeded,
+    skipped: counters.skipped,
+    retry_pending: counters.retryPending,
+    failed: counters.failed,
+    uncertain: counters.uncertain,
+    lost_lease: counters.lostLease
+  });
+  return counters;
 }

@@ -5,6 +5,7 @@ export type AutomationHeartbeatRpcClient = {
 };
 
 type AutomationHeartbeatLogger = {
+  info?(message: string, context?: Record<string, unknown>): void;
   error(message: string, context?: Record<string, unknown>): void;
 };
 
@@ -39,11 +40,16 @@ export async function runWithAppointmentAutomationHeartbeat(
   if (!start.ok) {
     heartbeatLogger.error("Appointment automation heartbeat failed", {
       component: "appointment_automation",
+      event: "heartbeat_failed",
       phase: "start",
       code: start.code
     });
     throw new Error("Appointment automation heartbeat start failed.");
   }
+  heartbeatLogger.info?.("Appointment automation heartbeat started", {
+    component: "appointment_automation",
+    event: "heartbeat_started"
+  });
 
   try {
     const counters = sanitizeAutomationCounters(await execute());
@@ -60,23 +66,38 @@ export async function runWithAppointmentAutomationHeartbeat(
     if (!finish.ok) {
       heartbeatLogger.error("Appointment automation heartbeat failed", {
         component: "appointment_automation",
+        event: "heartbeat_failed",
         phase: "finish_ok",
         code: finish.code
       });
       throw new Error("Appointment automation heartbeat finish failed.");
     }
+    heartbeatLogger.info?.("Appointment automation heartbeat succeeded", {
+      component: "appointment_automation",
+      event: "heartbeat_succeeded",
+      result_count: counters.claimed,
+      claimed: counters.claimed,
+      succeeded: counters.succeeded,
+      skipped: counters.skipped,
+      retry_pending: counters.retryPending,
+      failed: counters.failed,
+      uncertain: counters.uncertain,
+      lost_lease: counters.lostLease
+    });
     return counters;
   } catch {
     const finishError = await recordHeartbeat(client, { p_phase: "finish", p_status: "error" });
     if (!finishError.ok) {
       heartbeatLogger.error("Appointment automation heartbeat failed", {
         component: "appointment_automation",
+        event: "heartbeat_failed",
         phase: "finish_error",
         code: finishError.code
       });
     }
     heartbeatLogger.error("Appointment automation runner failed", {
       component: "appointment_automation",
+      event: "runner_failed",
       code: "runner_failed"
     });
     throw new Error("Appointment automation run failed.");

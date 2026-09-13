@@ -6,6 +6,7 @@ import { executeAppointmentAutomationEndpoint, getAutomationRetryDelayMs, isAuth
 const migration = readFileSync("supabase/migrations/0031_appointment_automation_jobs.sql", "utf8");
 const heartbeatFix = readFileSync("supabase/migrations/0032_fix_appointment_automation_heartbeat.sql", "utf8");
 const runner = readFileSync("lib/server/appointment-automation-runner.ts", "utf8");
+const heartbeat = readFileSync("lib/appointment-automation-heartbeat.ts", "utf8");
 const route = readFileSync("app/api/internal/appointment-automations/run/route.ts", "utf8");
 const template = readFileSync("lib/email/templates/appointment-reminder.ts", "utf8");
 
@@ -35,6 +36,20 @@ test("endpoint result stays 200 for healthy runs and returns only run_failed on 
   const failure = await executeAppointmentAutomationEndpoint(async () => { throw new Error("RAW_INTERNAL_DATABASE_DETAIL"); });
   assert.deepEqual(failure, { status: 500, body: { error: "run_failed" } });
   assert.doesNotMatch(JSON.stringify(failure), /RAW_INTERNAL_DATABASE_DETAIL/);
+});
+
+test("internal runner is service-only and emits structured operational events without PHI", () => {
+  assert.match(runner, /import "server-only"/);
+  assert.match(runner, /createAdminClient\(\)/);
+  assert.doesNotMatch(runner, /createServerClient|createBrowserClient|getUser\(|getSession\(|refreshSession\(/);
+  assert.match(heartbeat, /event: "heartbeat_started"/);
+  assert.match(heartbeat, /event: "heartbeat_succeeded"/);
+  assert.match(heartbeat, /event: "heartbeat_failed"/);
+  assert.match(heartbeat, /event: "runner_failed"/);
+  assert.match(runner, /event: "runner_started"/);
+  assert.match(runner, /event: "runner_succeeded"/);
+  assert.match(runner, /clinic_id: job\.clinic_id[\s\S]+job_type: job\.type[\s\S]+result_count: 1/);
+  assert.doesNotMatch(runner, /logger\.(?:error|warn|info)\([^\n]+(?:patient_email|raw_token|reviewUrl|clinic_name|doctor_display_name)/i);
 });
 
 test("0032 keeps the heartbeat contract and qualifies both safe updates", () => {
