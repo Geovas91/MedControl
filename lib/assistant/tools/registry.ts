@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import { assistantToolError, assistantToolNames, toolSchemas, type AssistantToolContext, type AssistantToolDefinition, type AssistantToolName, type AssistantToolResult } from "./contracts";
 
 type ReadPatient = { patient_id: string; display_name: string; status: string };
-type ReadAppointment = { appointment_id: string; patient_display_name: string; professional_display_name: string | null; starts_at: string; ends_at: string; status: string };
+type ReadAppointment = { appointment_id: string; patient_id: string | null; patient_display_name: string; professional_id: string | null; professional_display_name: string | null; starts_at: string; ends_at: string; status: string };
 export type AssistantProposal = { actionId: string; toolName: AssistantToolName; expiresAt: string; summary: string };
 
 function safeFailure(state: string): AssistantToolResult<never> {
@@ -51,7 +51,7 @@ const searchAppointments: AssistantToolDefinition<{ patientId: string | null; pr
     const result = await getAppointmentAgendaForActiveTenant({ date, period: "day", doctor: input.professionalId ?? undefined, status: input.status ?? undefined });
     if (result.state !== "ready" || !result.data) return safeFailure(result.state);
     const rows = result.data.appointments.filter((appointment) => (!input.patientId || appointment.patient_id === input.patientId) && (context.role !== "doctor" || appointment.doctor_id === context.userId));
-    return { ok: true, data: rows.slice(0, 25).map((appointment) => ({ appointment_id: appointment.id, patient_display_name: appointment.patientName, professional_display_name: appointment.doctorName, starts_at: appointment.starts_at, ends_at: appointment.ends_at, status: appointment.status })) };
+    return { ok: true, data: rows.slice(0, 25).map((appointment) => ({ appointment_id: appointment.id, patient_id: appointment.patient_id, patient_display_name: appointment.patientName, professional_id: appointment.doctor_id, professional_display_name: appointment.doctorName, starts_at: appointment.starts_at, ends_at: appointment.ends_at, status: appointment.status })) };
   }
 };
 
@@ -61,7 +61,7 @@ const getAppointment: AssistantToolDefinition<{ appointmentId: string }, ReadApp
     const result = await getAppointmentDetailForActiveTenant(input.appointmentId);
     if (result.state !== "ready" || !result.data) return safeFailure(result.state);
     if (context.role === "doctor" && result.data.appointment.doctor_id !== context.userId) return assistantToolError("forbidden", "No tienes acceso a esta cita.");
-    return { ok: true, data: { appointment_id: result.data.appointment.id, patient_display_name: result.data.patient?.full_name ?? "Sin registro", professional_display_name: result.data.doctor?.display_name ?? null, starts_at: result.data.appointment.starts_at, ends_at: result.data.appointment.ends_at, status: result.data.appointment.status } };
+    return { ok: true, data: { appointment_id: result.data.appointment.id, patient_id: result.data.appointment.patient_id, patient_display_name: result.data.patient?.full_name ?? "Sin registro", professional_id: result.data.appointment.doctor_id, professional_display_name: result.data.doctor?.display_name ?? null, starts_at: result.data.appointment.starts_at, ends_at: result.data.appointment.ends_at, status: result.data.appointment.status } };
   }
 };
 

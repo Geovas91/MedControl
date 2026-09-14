@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Activity, CalendarClock, CalendarDays, CheckCircle2, Mail, MessageSquareOff, Settings2 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AppointmentAssistantSettings } from "@/components/bot/appointment-assistant-settings";
+import { AppointmentAssistant } from "@/components/bot/appointment-assistant";
 import { AppointmentAutomationLiveStatusPanel } from "@/components/bot/appointment-automation-live-status";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -98,6 +99,13 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
     <>
       <PageHeader title="Asistente de agenda" description="Resumen operativo, preferencias internas y actividad comprobable de la agenda de la clínica activa." />
 
+      <nav aria-label="Secciones del asistente de agenda" className="mb-5 flex flex-wrap gap-2">
+        <a href="#assistant" className="rounded-full bg-[var(--clinic-soft)] px-4 py-2 text-sm font-bold text-clinic focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clinic">Assistant</a>
+        <a href="#automation" className="rounded-full bg-white/70 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clinic">Automatizaciones y actividad</a>
+      </nav>
+
+      <div id="assistant"><AppointmentAssistant today={data.localDate} timeZone={data.tenant.clinic.timezone} /></div>
+
       {hasAppointmentAssistantSavedMessage(params) ? <p role="status" className="mb-5 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm font-medium text-[var(--success)]">La configuración se guardó para esta clínica.</p> : null}
       {hasAppointmentAssistantSettingsError(params) ? <p role="alert" className="mb-5 rounded-[var(--radius-md)] bg-red-50 p-3 text-sm font-medium text-red-700">No fue posible guardar la configuración. Revisa los valores y tus permisos.</p> : null}
 
@@ -118,7 +126,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         <StatCard label="Completadas hoy" value={`${data.totals.completed}`} detail="Atenciones finalizadas en la fecha local" icon={<Activity className="h-5 w-5" />} />
       </div>
 
-      <AppointmentAutomationLiveStatusPanel
+      <div id="automation"><AppointmentAutomationLiveStatusPanel
         initialStatus={initialAutomationLiveStatus}
         timeZone={data.tenant.clinic.timezone}
         assistantEnabled={data.assistantEnabled}
@@ -126,7 +134,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         reviewRequestEnabled={data.reviewRequestEnabled}
         googleCalendarAvailable={data.googleCalendarAvailable}
         emailCalendarConfigured={data.emailCalendarConfigured}
-      />
+      /></div>
 
       <section className="glass-card-strong mt-5 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
