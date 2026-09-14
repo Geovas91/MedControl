@@ -4,6 +4,7 @@ import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { addDaysToAppointmentDate } from "@/lib/appointments/query";
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import type { AvailabilityWeek } from "@/lib/availability/form";
+import type { AvailabilityException } from "@/lib/availability/exceptions";
 import { logger } from "@/lib/logger";
 
 export type AvailabilityData = { clinic: { id: string; name: string; timezone: string }; role: string; canEdit: boolean; today: string; effectiveFrom: string; professionals: { id: string; name: string }[]; selectedProfessionalId: string; week: AvailabilityWeek };
@@ -30,4 +31,11 @@ export async function saveProfessionalAvailability(input: { professionalId: stri
   const context = await getActiveTenantContext(); if (context.state !== "ready") return { state: context.state };
   const result = await rpc(await createClient()).rpc("save_professional_availability_for_current_user", { p_clinic_id: context.tenant.clinic.id, p_clinic_member_id: input.professionalId, p_effective_from: input.effectiveFrom, p_intervals: Object.entries(input.week).flatMap(([weekday, intervals]) => intervals.map((item) => ({ weekday: Number(weekday), start_time: item.start, end_time: item.end }))) });
   return result.error ? { state: "error", code: result.error.code } : { state: "success" };
+}
+
+export async function getProfessionalExceptions(clinicMemberId: string) {
+  const context = await getActiveTenantContext(); if (context.state !== "ready") return { state: context.state as string, data: [] as AvailabilityException[] };
+  const client = await createClient(); const result = await (client as unknown as { from: Function }).from("professional_availability_exceptions").select("id, clinic_member_id, exception_type, start_at, end_at, reason, is_active").eq("clinic_id", context.tenant.clinic.id).eq("clinic_member_id", clinicMemberId).eq("is_active", true).gte("end_at", new Date().toISOString()).order("start_at", { ascending: true });
+  if (result.error) return { state: "error", data: [] as AvailabilityException[] };
+  return { state: "ready", data: (result.data ?? []) as AvailabilityException[] };
 }
