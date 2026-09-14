@@ -204,7 +204,7 @@ test("Spanish email contains only the required summary and button URL", () => {
 test("production adapter stays tenant-scoped and preserves current permissions", () => {
   const service = readFileSync(new URL("../../lib/server/consent-email.ts", import.meta.url), "utf8");
   assert.match(service, /getActiveTenantContext\(\)/);
-  assert.match(service, /canCreateConsent\(context\.tenant\.membership\.role\)/);
+  assert.match(service, /canCreateConsent\(context\.tenant\.membership\)/);
   assert.match(service, /getClinicEntitlements\(context\.tenant\.clinic\.id\)/);
   assert.match(service, /from\("patients"\)[\s\S]*?\.eq\("id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
   assert.match(service, /from\("consents"\)[\s\S]*?\.eq\("id", input\.consentId\)\.eq\("patient_id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
@@ -212,7 +212,7 @@ test("production adapter stays tenant-scoped and preserves current permissions",
   assert.doesNotMatch(authenticatedConsentSelect, /signing_token_hash/);
   assert.match(service, /createAdminClient\(\)\.from\("consents"\)\.select\("signing_token_hash"\)\.eq\("id", input\.consentId\)\.eq\("patient_id", input\.patientId\)\.eq\("clinic_id", context\.clinicId\)/);
   assert.match(service, /return \{ data: patient \? \{ email: patient\.email \} : null \}/);
-  assert.equal(canCreateConsent("assistant"), false);
+  assert.equal(canCreateConsent({ role: "assistant", is_professional: false }), false);
 });
 
 test("client cannot select recipient", () => {

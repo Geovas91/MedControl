@@ -11,6 +11,7 @@ export type ManagedClinicMember = {
   email: string | null;
   role: ClinicMemberRole;
   status: Database["public"]["Enums"]["clinic_member_status"];
+  is_professional: boolean;
   created_at: string;
 };
 export type ManagedClinicInvitation = { id: string; invited_email: string; role: Exclude<ClinicMemberRole, "owner">; status: "pending" | "accepted" | "revoked" | "expired"; expires_at: string; created_at: string; last_rotated_at: string | null; rotation_count: number };
@@ -25,6 +26,7 @@ type ClinicMembersRpcClient = {
   rpc(fn: "list_clinic_member_invitations_for_current_user", args: { p_clinic_id: string }): Promise<{ data: ManagedClinicInvitation[] | null; error: PostgrestError | null }>;
   rpc(fn: "rotate_clinic_member_invitation_token_for_current_user", args: { p_invitation_id: string }): Promise<{ data: { raw_token: string; expires_at: string }[] | null; error: PostgrestError | null }>;
   rpc(fn: "revoke_clinic_member_invitation_for_current_user", args: { p_invitation_id: string }): Promise<{ data: boolean | null; error: PostgrestError | null }>;
+  rpc(fn: "set_clinic_member_professional_capability_for_current_user", args: { p_clinic_id: string; p_clinic_member_id: string; p_is_professional: boolean }): Promise<{ data: boolean | null; error: PostgrestError | null }>;
 };
 
 export async function listClinicMembersForClinic(clinicId: string) {
@@ -43,3 +45,11 @@ export async function createClinicInvitation(clinicId: string, email: string, ro
 export async function listClinicInvitations(clinicId: string) { const supabase = await createClient(); return (supabase as unknown as ClinicMembersRpcClient).rpc("list_clinic_member_invitations_for_current_user", { p_clinic_id: clinicId }); }
 export async function rotateClinicInvitation(invitationId: string) { const supabase = await createClient(); return (supabase as unknown as ClinicMembersRpcClient).rpc("rotate_clinic_member_invitation_token_for_current_user", { p_invitation_id: invitationId }); }
 export async function revokeClinicInvitation(invitationId: string) { const supabase = await createClient(); return (supabase as unknown as ClinicMembersRpcClient).rpc("revoke_clinic_member_invitation_for_current_user", { p_invitation_id: invitationId }); }
+export async function setClinicMemberProfessionalCapability(clinicId: string, memberId: string, isProfessional: boolean) {
+  const supabase = await createClient();
+  return (supabase as unknown as ClinicMembersRpcClient).rpc("set_clinic_member_professional_capability_for_current_user", {
+    p_clinic_id: clinicId,
+    p_clinic_member_id: memberId,
+    p_is_professional: isProfessional
+  });
+}

@@ -27,7 +27,7 @@ function profileDefaultName(member: ManagedClinicMember | null, currentFullName:
 }
 
 function canHavePublicProfile(member: ManagedClinicMember) {
-  return member.role === "owner" || member.role === "doctor";
+  return member.is_professional;
 }
 
 function canEditSelectedMember(currentMember: ManagedClinicMember, selectedMember: ManagedClinicMember) {
@@ -35,7 +35,7 @@ function canEditSelectedMember(currentMember: ManagedClinicMember, selectedMembe
     return true;
   }
 
-  return currentMember.id === selectedMember.id && currentMember.role === "doctor";
+  return currentMember.id === selectedMember.id && currentMember.is_professional;
 }
 
 export default async function DashboardDirectoryPage({ searchParams }: DashboardDirectoryPageProps) {
@@ -65,6 +65,7 @@ export default async function DashboardDirectoryPage({ searchParams }: Dashboard
       email: onboardingStatus.profile.email,
       role: onboardingStatus.membership.role,
       status: onboardingStatus.membership.status,
+      is_professional: onboardingStatus.membership.is_professional,
       created_at: onboardingStatus.membership.created_at
     } satisfies ManagedClinicMember);
   const selectedMember =

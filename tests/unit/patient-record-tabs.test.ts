@@ -13,14 +13,14 @@ const clinicalRecordService = readFileSync(new URL("../../lib/server/clinical-re
 const migration = readFileSync(new URL("../../supabase/migrations/0026_patient_safe_audit_timeline.sql", import.meta.url), "utf8");
 
 test("patient tab permissions keep clinical data narrow and audit at minimum privilege", () => {
-  assert.equal(canViewClinicalRecord("owner"), true);
-  assert.equal(canViewClinicalRecord("admin"), true);
-  assert.equal(canViewClinicalRecord("doctor"), true);
-  assert.equal(canViewClinicalRecord("assistant"), false);
-  assert.equal(canViewPatientAudit("owner"), true);
-  assert.equal(canViewPatientAudit("admin"), true);
-  assert.equal(canViewPatientAudit("doctor"), false);
-  assert.equal(canViewPatientAudit("assistant"), false);
+  assert.equal(canViewClinicalRecord({ role: "owner", is_professional: true }), true);
+  assert.equal(canViewClinicalRecord({ role: "admin", is_professional: true }), true);
+  assert.equal(canViewClinicalRecord({ role: "doctor", is_professional: true }), true);
+  assert.equal(canViewClinicalRecord({ role: "assistant", is_professional: false }), false);
+  assert.equal(canViewPatientAudit({ role: "owner", is_professional: false }), true);
+  assert.equal(canViewPatientAudit({ role: "admin", is_professional: false }), true);
+  assert.equal(canViewPatientAudit({ role: "doctor", is_professional: true }), false);
+  assert.equal(canViewPatientAudit({ role: "assistant", is_professional: false }), false);
   assert.match(patientPage, /key==='auditoria'\?"Requiere rol owner o admin"/);
 });
 

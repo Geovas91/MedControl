@@ -77,6 +77,10 @@ type DoctorProfileRow = {
   display_name: string;
 };
 
+type ProfessionalMemberRow = {
+  user_id: string;
+};
+
 type AppointmentCreationRpcRow = {
   appointment_id: string;
   appointment_updated_at: string;
@@ -130,27 +134,31 @@ export async function getAppointmentCreationOptions(
 
   const clinicId = context.tenant.clinic.id;
   const supabase = await createClient();
-  const [patientsResult, doctorsResult] = await Promise.all([
+  const [patientsResult, professionalsResult, doctorProfilesResult] = await Promise.all([
     supabase
       .from("patients")
       .select("id, full_name, status")
       .eq("clinic_id", clinicId)
       .order("full_name", { ascending: true }),
     supabase
+      .from("clinic_members")
+      .select("user_id")
+      .eq("clinic_id", clinicId)
+      .eq("status", "active")
+      .eq("is_professional", true),
+    supabase
       .from("doctor_public_profiles")
       .select("profile_id, display_name")
       .eq("clinic_id", clinicId)
-      .not("profile_id", "is", null)
-      .order("display_name", { ascending: true })
-      .limit(100)
   ]);
 
-  if (patientsResult.error || doctorsResult.error) {
+  if (patientsResult.error || professionalsResult.error || doctorProfilesResult.error) {
     logger.error("Appointment creation options query failed", {
       component: "create_appointment",
       status: "options_query_error",
       patientsCode: patientsResult.error?.code,
-      doctorsCode: doctorsResult.error?.code
+      professionalsCode: professionalsResult.error?.code,
+      doctorProfilesCode: doctorProfilesResult.error?.code
     });
     return { state: "error", data: null };
   }
@@ -160,15 +168,14 @@ export async function getAppointmentCreationOptions(
     name: patient.full_name,
     status: patient.status as PatientStatus
   }));
-  const doctors = ((doctorsResult.data ?? []) as DoctorProfileRow[])
-    .filter((doctor): doctor is DoctorProfileRow & { profile_id: string } => Boolean(doctor.profile_id))
-    .reduce<AppointmentDoctorOption[]>((options, doctor) => {
-      if (!options.some((option) => option.id === doctor.profile_id)) {
-        options.push({ id: doctor.profile_id, name: doctor.display_name });
-      }
-
-      return options;
-    }, []);
+  const profileNames = new Map(
+    ((doctorProfilesResult.data ?? []) as DoctorProfileRow[])
+      .filter((profile): profile is DoctorProfileRow & { profile_id: string } => Boolean(profile.profile_id))
+      .map((profile) => [profile.profile_id, profile.display_name])
+  );
+  const doctors = ((professionalsResult.data ?? []) as ProfessionalMemberRow[])
+    .map((professional) => ({ id: professional.user_id, name: profileNames.get(professional.user_id) ?? "Profesional" }))
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
   const preselectedPatientId =
     requestedPatientId &&
     isCanonicalAppointmentUuid(requestedPatientId) &&
@@ -236,11 +243,12 @@ export async function createAppointmentForActiveTenant(
       .eq("id", input.patientId)
       .maybeSingle(),
     supabase
-      .from("doctor_public_profiles")
-      .select("profile_id")
+      .from("clinic_members")
+      .select("user_id")
       .eq("clinic_id", clinicId)
-      .eq("profile_id", input.doctorId)
-      .limit(1)
+      .eq("user_id", input.doctorId)
+      .eq("status", "active")
+      .eq("is_professional", true)
       .maybeSingle()
   ]);
 

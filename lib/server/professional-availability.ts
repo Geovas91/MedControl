@@ -13,7 +13,7 @@ export async function getProfessionalAvailability(professionalId?: string): Prom
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state };
   const client = await createClient(); const clinicId = context.tenant.clinic.id;
-  const members = await client.from("clinic_members").select("id, role, user_id").eq("clinic_id", clinicId).eq("status", "active").in("role", ["owner", "doctor"]);
+  const members = await client.from("clinic_members").select("id, role, user_id").eq("clinic_id", clinicId).eq("status", "active").eq("is_professional", true);
   if (members.error) return { state: "error" };
   const memberRows = (members.data ?? []) as unknown as { id: string }[];
   const ids = memberRows.map((m) => m.id);

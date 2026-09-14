@@ -52,7 +52,7 @@ export async function deliverConsentSigningEmail(input: { patientId: string; con
       resolveContext: async () => {
         const context = await getActiveTenantContext();
         if (context.state === "unauthenticated") return { state: "unauthenticated" };
-        if (context.state !== "ready" || !canCreateConsent(context.tenant.membership.role)) return { state: "forbidden" };
+        if (context.state !== "ready" || !canCreateConsent(context.tenant.membership)) return { state: "forbidden" };
         if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return { state: "forbidden" };
         return {
           state: "ready",

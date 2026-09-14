@@ -75,7 +75,7 @@ async function authorizeEvidence(patientId: string, consentId: string): Promise<
   if (!isValidPatientUuid(patientId) || !isValidPatientUuid(consentId)) return { state: "invalid_id", data: null };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
-  if (!canViewClinicalRecord(context.tenant.membership.role)) return { state: "forbidden", data: null };
+  if (!canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden", data: null };
   const supabase = await createClient();
   const consent = await supabase.from("consents").select("id, patient_id, status").eq("id", consentId).eq("patient_id", patientId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (consent.error) {
@@ -212,7 +212,7 @@ export async function getConsentDocumentDownloadForActiveTenant(consentId: strin
   if (!isValidPatientUuid(consentId)) return { state: "invalid_id" as const };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state } as const;
-  if (!canViewClinicalRecord(context.tenant.membership.role)) return { state: "forbidden" as const };
+  if (!canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden" as const };
   const supabase = await createClient();
   const consent = await supabase.from("consents").select("id, patient_id, status").eq("id", consentId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (consent.error) return { state: "error" as const };

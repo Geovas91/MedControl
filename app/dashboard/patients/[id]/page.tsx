@@ -29,7 +29,7 @@ export default async function PatientPage({params,searchParams}:{params:Promise<
  const {id}=await params;const query=await searchParams;const result=await getPatientDetailForActiveTenant(id);
  if(result.state==='invalid_id'||result.state==='not_found')notFound();if(result.state==='unauthenticated')redirect('/login');
  if(result.state!=='ready')return <section className="glass-card-strong p-5"><h1 className="text-xl font-bold">Paciente no disponible</h1><p className="mt-2 text-sm text-slate-600">No fue posible cargar el registro dentro de la clínica activa.</p></section>;
- const {data}=result;const patient=data.patient;const canClinical=canViewClinicalRecord(data.tenant.membership.role);const canAudit=canViewPatientAudit(data.tenant.membership.role);const clinical=canClinical?await getPatientClinicalBundle(id):null;
+ const {data}=result;const patient=data.patient;const canClinical=canViewClinicalRecord(data.tenant.membership);const canAudit=canViewPatientAudit(data.tenant.membership);const clinical=canClinical?await getPatientClinicalBundle(id):null;
  const bundle=clinical?.state==='ready'?clinical.data:null;let tab=tabs.some(([key])=>key===query.tab)?query.tab!:'resumen';if((clinicalTabs.has(tab)&&!canClinical)||(tab==='auditoria'&&!canAudit))tab='resumen';
  const record=canClinical&&(tab==='consultas'||tab==='documentos')?await getClinicalRecordForActiveTenant(id,{page:query.page,appointmentsPage:query.appointments_page,documentsPage:query.documents_page,paginateAppointments:tab==='consultas',paginateDocuments:tab==='documentos'}):null;
  const audit=canAudit&&tab==='auditoria'?await getPatientAuditForActiveTenant(id,{before:query.audit_before,beforeId:query.audit_before_id}):null;

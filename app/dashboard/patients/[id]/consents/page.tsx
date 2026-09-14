@@ -27,7 +27,7 @@ export default async function PatientConsentsPage({ params }: { params: Promise<
       <Link href={`/dashboard/patients/${id}/clinical-record`} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-clinic"><ArrowLeft className="h-4 w-4" />Volver al expediente</Link>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div><h1 className="text-2xl font-bold text-ink">Consentimientos</h1><p className="mt-1 text-sm text-slate-500">Histórico documental de {data.patient.full_name}, del más reciente al más antiguo.</p></div>
-        {canCreateConsent(data.tenant.membership.role) ? <ButtonLink href={`/dashboard/patients/${id}/consents/new`}><Plus className="h-4 w-4" />Nuevo consentimiento</ButtonLink> : null}
+        {canCreateConsent(data.tenant.membership) ? <ButtonLink href={`/dashboard/patients/${id}/consents/new`}><Plus className="h-4 w-4" />Nuevo consentimiento</ButtonLink> : null}
       </div>
       <div className="grid gap-3">
         {data.consents.length ? data.consents.map((consent) => (

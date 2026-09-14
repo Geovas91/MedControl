@@ -120,6 +120,7 @@ export type Database = {
           user_id: string;
           role: Database["public"]["Enums"]["clinic_member_role"];
           status: Database["public"]["Enums"]["clinic_member_status"];
+          is_professional: boolean;
           created_at: Timestamp;
           updated_at: Timestamp;
         };
@@ -129,6 +130,7 @@ export type Database = {
           user_id: string;
           role?: Database["public"]["Enums"]["clinic_member_role"];
           status?: Database["public"]["Enums"]["clinic_member_status"];
+          is_professional?: boolean;
           created_at?: Timestamp;
           updated_at?: Timestamp;
         };

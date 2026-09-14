@@ -18,7 +18,7 @@ export type ClinicalBundle = {
 export async function getPatientClinicalBundle(patientId:string): Promise<{state:"ready";data:ClinicalBundle}|{state:"forbidden"|"not_found"|"error";data:null}> {
   const context=await getActiveTenantContext();
   if(context.state!=="ready") return {state:"error",data:null};
-  if(!canViewClinicalRecord(context.tenant.membership.role)) return {state:"forbidden",data:null};
+  if(!canViewClinicalRecord(context.tenant.membership)) return {state:"forbidden",data:null};
   const db:any=await createClient(); const clinicId=context.tenant.clinic.id;
   const recordResult=await db.from("clinical_records").select("id, opened_at, status").eq("clinic_id",clinicId).eq("patient_id",patientId).eq("status","active").is("archived_at",null).maybeSingle();
   if(recordResult.error) return {state:"error",data:null}; if(!recordResult.data) return {state:"not_found",data:null};
@@ -40,7 +40,7 @@ export async function getPatientClinicalBundle(patientId:string): Promise<{state
 
 export async function saveHistoryForActiveTenant(patientId:string, formData:FormData) {
   const context=await getActiveTenantContext();
-  if(context.state!=="ready"||!canViewClinicalRecord(context.tenant.membership.role)) return {ok:false,error:"No tienes permiso para actualizar la historia clínica."};
+  if(context.state!=="ready"||!canViewClinicalRecord(context.tenant.membership)) return {ok:false,error:"No tienes permiso para actualizar la historia clínica."};
   if(!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return {ok:false,error:"La clínica no tiene permisos de escritura disponibles."};
   const status=formText(formData,"status") as HistoryStatus; const reliability=formText(formData,"information_reliability") as Reliability;
   if(!["draft","pending","completed"].includes(status)) return {ok:false,error:"Selecciona un estado válido."};
@@ -61,7 +61,7 @@ export async function saveHistoryForActiveTenant(patientId:string, formData:Form
 }
 
 export async function createVitalForActiveTenant(patientId:string,formData:FormData){
-  const context=await getActiveTenantContext(); if(context.state!=="ready"||!canViewClinicalRecord(context.tenant.membership.role)) return {ok:false,error:"No tienes permiso para registrar signos vitales."};
+  const context=await getActiveTenantContext(); if(context.state!=="ready"||!canViewClinicalRecord(context.tenant.membership)) return {ok:false,error:"No tienes permiso para registrar signos vitales."};
   if(!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return {ok:false,error:"La clínica no tiene permisos de escritura disponibles."};
   const input=parseVitalForm(formData); const validation=validateVitalInput(input); if(validation)return {ok:false,error:validation};
   const db:any=await createClient(); const record=await db.from("clinical_records").select("id").eq("clinic_id",context.tenant.clinic.id).eq("patient_id",patientId).eq("status","active").is("archived_at",null).maybeSingle();

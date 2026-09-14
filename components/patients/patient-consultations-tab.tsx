@@ -29,7 +29,7 @@ export function PatientConsultationsTab({ data }: { data: ClinicalRecordData }) 
     <section className="glass-card-strong p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div><h2 className="flex items-center gap-2 text-lg font-bold"><FileText className="h-5 w-5 text-clinic" />Notas clínicas</h2><p className="mt-1 text-sm text-slate-500">Registro clínico del paciente. Una nota puede estar vinculada a una cita, pero conserva su propia identidad clínica.</p></div>
-        <div className="flex flex-wrap gap-2"><ButtonLink href={`/dashboard/patients/${patientId}/clinical-record`} variant="secondary">Ver expediente universal</ButtonLink>{canCreateClinicalNote(data.tenant.membership.role) ? <ButtonLink href={`/dashboard/patients/${patientId}/notes/new`}><Plus className="h-4 w-4" />Nueva nota</ButtonLink> : null}</div>
+        <div className="flex flex-wrap gap-2"><ButtonLink href={`/dashboard/patients/${patientId}/clinical-record`} variant="secondary">Ver expediente universal</ButtonLink>{canCreateClinicalNote(data.tenant.membership) ? <ButtonLink href={`/dashboard/patients/${patientId}/notes/new`}><Plus className="h-4 w-4" />Nueva nota</ButtonLink> : null}</div>
       </div>
       <div className="mt-5 grid gap-3">
         {data.notes.length ? data.notes.map((note) => <article key={note.id} className="clinical-surface p-4">

@@ -77,7 +77,7 @@ export async function getClinicalRecordForActiveTenant(
   if (!isValidPatientUuid(patientId)) return { state: "invalid_id", data: null };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
-  if (!canViewClinicalRecord(context.tenant.membership.role)) return { state: "forbidden", data: null };
+  if (!canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden", data: null };
 
   const clinicId = context.tenant.clinic.id;
   const supabase = await createClient();

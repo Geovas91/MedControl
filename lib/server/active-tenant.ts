@@ -14,7 +14,7 @@ type MembershipRow = Tables["clinic_members"]["Row"];
 
 export type ActiveTenant = {
   clinic: Pick<ClinicRow, "id" | "name" | "timezone" | "tenant_type">;
-  membership: Pick<MembershipRow, "id" | "clinic_id" | "role" | "status" | "created_at">;
+  membership: Pick<MembershipRow, "id" | "clinic_id" | "role" | "status" | "is_professional" | "created_at">;
   hasMultipleActiveMemberships: boolean;
   availableClinics: Array<Pick<ClinicRow, "id" | "name">>;
 };
@@ -25,7 +25,7 @@ export type ActiveTenantContextResult =
   | { state: "no_active_membership"; user: User; tenant: null }
   | { state: "error"; user: User | null; tenant: null };
 
-type ActiveMembership = Pick<MembershipRow, "id" | "clinic_id" | "role" | "status" | "created_at">;
+type ActiveMembership = Pick<MembershipRow, "id" | "clinic_id" | "role" | "status" | "is_professional" | "created_at">;
 
 export const getActiveTenantContext = cache(async (): Promise<ActiveTenantContextResult> => {
   if (!hasSupabaseConfig()) {
@@ -48,7 +48,7 @@ export const getActiveTenantContext = cache(async (): Promise<ActiveTenantContex
 
   const { data: membershipData, error: membershipError } = await supabase
     .from("clinic_members")
-    .select("id, clinic_id, role, status, created_at")
+    .select("id, clinic_id, role, status, is_professional, created_at")
     .eq("user_id", user.id)
     .eq("status", "active")
     .order("created_at", { ascending: true })

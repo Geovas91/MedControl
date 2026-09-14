@@ -42,7 +42,7 @@ async function resolvePatient(patientId: string, canCreate = false): Promise<Res
   if (!isValidPatientUuid(patientId)) return { state: "invalid_id", data: null };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
-  if (canCreate ? !canCreateConsent(context.tenant.membership.role) : !canViewClinicalRecord(context.tenant.membership.role)) return { state: "forbidden", data: null };
+  if (canCreate ? !canCreateConsent(context.tenant.membership) : !canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden", data: null };
   const supabase = await createClient();
   const patientResult = await supabase.from("patients").select("id, full_name, email").eq("id", patientId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (patientResult.error) { logger.error("Consent patient query failed", { component: "clinical_consents", operation: "patient", status: "query_error", code: patientResult.error.code }); return { state: "error", data: null }; }

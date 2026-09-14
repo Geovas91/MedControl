@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { AddMemberForm } from "@/components/dashboard/add-member-form";
 import { InvitationActions } from "@/components/dashboard/invitation-actions";
+import { MemberProfessionalCapability } from "@/components/dashboard/member-professional-capability";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { listClinicInvitations, listClinicMembersForClinic, type ClinicMemberRole } from "@/lib/supabase/clinic-members";
@@ -128,6 +129,7 @@ export default async function MembersPage() {
                 <th className="px-5 py-3 font-semibold">Nombre</th>
                 <th className="px-5 py-3 font-semibold">Email</th>
                 <th className="px-5 py-3 font-semibold">Rol</th>
+                <th className="px-5 py-3 font-semibold">Profesional</th>
                 <th className="px-5 py-3 font-semibold">Estado</th>
                 <th className="px-5 py-3 font-semibold">Creado</th>
               </tr>
@@ -138,6 +140,7 @@ export default async function MembersPage() {
                   <td className="px-5 py-4 font-semibold text-ink">{member.full_name ?? "Sin nombre"}</td>
                   <td className="px-5 py-4 text-slate-600">{member.email ?? "Sin correo"}</td>
                   <td className="px-5 py-4"><Badge variant={roleVariants[member.role]}>{roleLabels[member.role]}</Badge></td>
+                  <td className="px-5 py-4"><MemberProfessionalCapability memberId={member.id} role={member.role} isProfessional={member.is_professional} isCurrentMember={member.user_id === activeTenant.user.id} canManage={["owner", "admin"].includes(activeTenant.tenant.membership.role)} /></td>
                   <td className="px-5 py-4">
                     <Badge variant={statusVariant[member.status]}>{statusLabels[member.status]}</Badge>
                   </td>
@@ -146,7 +149,7 @@ export default async function MembersPage() {
               ))}
               {members.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-6 text-center text-slate-500" colSpan={5}>
+                  <td className="px-5 py-6 text-center text-slate-500" colSpan={6}>
                     Todavía no hay miembros registrados.
                   </td>
                 </tr>

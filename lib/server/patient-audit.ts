@@ -52,7 +52,7 @@ export async function getPatientAuditForActiveTenant(
   if (!isValidPatientUuid(patientId)) return { state: "invalid_id", data: null };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
-  if (!canViewPatientAudit(context.tenant.membership.role)) return { state: "forbidden", data: null };
+  if (!canViewPatientAudit(context.tenant.membership)) return { state: "forbidden", data: null };
 
   const supabase = await createClient();
   const auditRpcClient = supabase as unknown as AuditRpcClient;

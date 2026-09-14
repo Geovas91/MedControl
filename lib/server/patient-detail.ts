@@ -148,7 +148,7 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
   }
 
   const now = new Date().toISOString();
-  const canViewClinical = canViewClinicalRecord(context.tenant.membership.role);
+  const canViewClinical = canViewClinicalRecord(context.tenant.membership);
   const [
     upcomingResult,
     recentResult,

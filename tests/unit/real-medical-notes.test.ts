@@ -48,21 +48,21 @@ test("global creation selects real paginated patients and reuses the patient flo
   assert.match(createAction, /patients\/\$\{result\.patientId\}\/notes\/\$\{result\.noteId\}\?note_created=1/);
 });
 
-test("global access keeps the existing clinical role model", () => {
+test("global access requires professional capability", () => {
   for (const role of ["owner", "admin", "doctor"] as const) {
-    assert.equal(canViewClinicalRecord(role), true);
-    assert.equal(canCreateClinicalNote(role), true);
-    assert.equal(canFinalizeClinicalNote(role), true);
+    assert.equal(canViewClinicalRecord({ role, is_professional: true }), true);
+    assert.equal(canCreateClinicalNote({ role, is_professional: true }), true);
+    assert.equal(canFinalizeClinicalNote({ role, is_professional: true }), true);
   }
-  assert.equal(canViewClinicalRecord("assistant"), false);
-  assert.equal(canCreateClinicalNote("assistant"), false);
-  assert.equal(canFinalizeClinicalNote("assistant"), false);
-  assert.equal(canEditClinicalNote({ role: "doctor", authorId: "doctor-a", currentUserId: "doctor-a", status: "draft" }), true);
-  assert.equal(canEditClinicalNote({ role: "doctor", authorId: "doctor-b", currentUserId: "doctor-a", status: "draft" }), false);
-  assert.equal(canEditClinicalNote({ role: "admin", authorId: "doctor-b", currentUserId: "admin-a", status: "draft" }), true);
-  assert.equal(canEditClinicalNote({ role: "owner", authorId: "doctor-b", currentUserId: "owner-a", status: "finalized" }), false);
-  assert.match(clinicalNotes, /!canViewClinicalRecord\(context\.tenant\.membership\.role\)/);
-  assert.match(clinicalNotes, /!canCreateClinicalNote\(context\.tenant\.membership\.role\)/);
+  assert.equal(canViewClinicalRecord({ role: "assistant", is_professional: false }), false);
+  assert.equal(canCreateClinicalNote({ role: "assistant", is_professional: false }), false);
+  assert.equal(canFinalizeClinicalNote({ role: "assistant", is_professional: false }), false);
+  assert.equal(canEditClinicalNote({ membership: { role: "doctor", is_professional: true }, authorId: "doctor-a", currentUserId: "doctor-a", status: "draft" }), true);
+  assert.equal(canEditClinicalNote({ membership: { role: "doctor", is_professional: true }, authorId: "doctor-b", currentUserId: "doctor-a", status: "draft" }), false);
+  assert.equal(canEditClinicalNote({ membership: { role: "admin", is_professional: true }, authorId: "doctor-b", currentUserId: "admin-a", status: "draft" }), true);
+  assert.equal(canEditClinicalNote({ membership: { role: "owner", is_professional: true }, authorId: "doctor-b", currentUserId: "owner-a", status: "finalized" }), false);
+  assert.match(clinicalNotes, /!canViewClinicalRecord\(context\.tenant\.membership\)/);
+  assert.match(clinicalNotes, /!canCreateClinicalNote\(context\.tenant\.membership\)/);
 });
 
 test("patient and note URL manipulation stays tenant and patient constrained", () => {

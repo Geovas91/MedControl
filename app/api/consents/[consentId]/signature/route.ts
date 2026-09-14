@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ con
   const { consentId } = await params;
   const context = await getActiveTenantContext();
   if (context.state === "unauthenticated") return NextResponse.json({ error: "authentication_required" }, { status: 401 });
-  if (context.state !== "ready" || !canViewClinicalRecord(context.tenant.membership.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (context.state !== "ready" || !canViewClinicalRecord(context.tenant.membership)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const supabase = await createClient();
   const consent = await supabase.from("consents").select("patient_id").eq("id", consentId).eq("clinic_id", context.tenant.clinic.id).eq("status", "signed").maybeSingle();
   const consentData = consent.data as { patient_id: string } | null;

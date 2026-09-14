@@ -23,6 +23,11 @@ insert into public.clinic_members(id, clinic_id, user_id, role, status) values
   ('41300000-0000-4000-8000-000000000005', '41200000-0000-4000-8000-000000000002', '41100000-0000-4000-8000-000000000006', 'owner', 'active'),
   ('41300000-0000-4000-8000-000000000006', '41200000-0000-4000-8000-000000000002', '41100000-0000-4000-8000-000000000003', 'doctor', 'active');
 
+-- B4.4 keeps new owner memberships non-professional by default. This fixture
+-- explicitly models the owner as a professional for the legacy schedule test.
+update public.clinic_members set is_professional = true
+where id = '41300000-0000-4000-8000-000000000001';
+
 select extensions.ok(
   has_function_privilege('authenticated', 'public.get_professional_availability_for_date(uuid,uuid,date)', 'EXECUTE')
   and not has_function_privilege('anon', 'public.get_professional_availability_for_date(uuid,uuid,date)', 'EXECUTE'),

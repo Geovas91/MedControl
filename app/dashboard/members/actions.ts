@@ -9,6 +9,7 @@ import {
   listClinicInvitations,
   revokeClinicInvitation,
   rotateClinicInvitation,
+  setClinicMemberProfessionalCapability,
   type ClinicMemberRole
 } from "@/lib/supabase/clinic-members";
 import { getAppBaseUrl } from "@/lib/supabase/config";
@@ -136,4 +137,31 @@ export async function revokeClinicInvitationAction(
 
   revalidatePath("/dashboard/members");
   return { message: "La invitación fue revocada y su enlace ya no es válido." };
+}
+
+export async function setClinicMemberProfessionalCapabilityAction(
+  _previousState: InvitationActionState,
+  formData: FormData
+): Promise<InvitationActionState> {
+  const memberId = asString(formData.get("member_id"));
+  const isProfessional = formData.get("is_professional") === "true";
+  const activeTenant = await getActiveTenantContext();
+  if (activeTenant.state === "unauthenticated") redirect("/login");
+  if (activeTenant.state !== "ready" || !["owner", "admin"].includes(activeTenant.tenant.membership.role)) {
+    return { error: "No tienes permiso para administrar esta capacidad." };
+  }
+  if (!memberId) return { error: "No fue posible identificar al miembro." };
+  const { data, error } = await setClinicMemberProfessionalCapability(
+    activeTenant.tenant.clinic.id,
+    memberId,
+    isProfessional
+  );
+  if (error?.message === "professional_has_future_appointments") {
+    return {
+      error: "No puedes retirar la capacidad profesional mientras este miembro tenga citas futuras activas. Reprograma o cancela esas citas primero."
+    };
+  }
+  if (error || !data) return { error: "No fue posible actualizar la capacidad profesional." };
+  revalidatePath("/dashboard/members");
+  return { message: isProfessional ? "Capacidad profesional activada." : "Capacidad profesional desactivada." };
 }
