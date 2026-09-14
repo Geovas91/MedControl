@@ -1,12 +1,15 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select } from "@/components/ui/input";
 import { validateAvailabilityWeek, WEEKDAYS, WEEKDAY_LABELS, type AvailabilityWeek } from "@/lib/availability/form";
 import { saveAvailabilityAction } from "@/app/dashboard/settings/availability/actions";
 
 export function ProfessionalAvailabilityForm({ data }: { data: { role: string; canEdit: boolean; clinic: { timezone: string }; today: string; effectiveFrom: string; professionals: { id: string; name: string }[]; selectedProfessionalId: string; week: AvailabilityWeek } }) {
+  const router = useRouter();
   const [week, setWeek] = useState<AvailabilityWeek>(data.week); const [state, action] = useActionState(saveAvailabilityAction, { state: "idle" });
+  useEffect(() => { if (state.state === "success") router.refresh(); }, [router, state.state]);
   const update = (day: number, index: number, key: "start" | "end", value: string) => setWeek((current) => ({ ...current, [day]: (current[day] ?? []).map((item, i) => i === index ? { ...item, [key]: value } : item) }));
   return <>
     {data.professionals.length > 1 && data.role !== "doctor" ? <form method="get" className="glass-card mb-4 flex flex-wrap items-end gap-3 p-4"><Field label="Profesional" htmlFor="professional"><Select id="professional" name="professional" defaultValue={data.selectedProfessionalId} onChange={(event) => event.currentTarget.form?.requestSubmit()}>{data.professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><span className="pb-2 text-sm text-slate-500">Selecciona para cargar su horario.</span></form> : null}
