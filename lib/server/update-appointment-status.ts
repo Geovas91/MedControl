@@ -14,6 +14,7 @@ import {
 import { buildAppointmentCalendarOperation } from "@/lib/calendar/invitation";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { mutateAppointmentLifecycleForActiveTenant } from "@/lib/server/appointment-lifecycle";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -166,6 +167,31 @@ export async function updateAppointmentStatusForActiveTenant(
     if (conflictResult.data) {
       return { state: "conflict", error: "El profesional ya tiene una cita en ese horario." };
     }
+  }
+
+  if (input.targetStatus === "confirmed" || input.targetStatus === "cancelled") {
+    const lifecycle = await mutateAppointmentLifecycleForActiveTenant({
+      appointmentId,
+      operation: input.targetStatus === "confirmed" ? "confirm" : "cancel",
+      expectedStatus: input.expectedCurrentStatus
+    });
+
+    if (lifecycle.state !== "success") {
+      if (lifecycle.state === "forbidden") return { state: "forbidden" };
+      if (lifecycle.state === "conflict") return { state: "conflict", error: "El profesional ya tiene una cita en ese horario." };
+      if (lifecycle.state === "stale_state") return { state: "stale_state", error: "La cita cambió en otra sesión. Actualiza la página e intenta nuevamente." };
+      if (lifecycle.state === "invalid_transition") return { state: "invalid_transition", error: "El cambio de estado solicitado no está permitido." };
+      if (lifecycle.state === "not_found") return { state: "not_found" };
+      return { state: "error", error: "No fue posible actualizar el estado de la cita." };
+    }
+
+    const localDate = formatAppointmentDetailDateTime(
+      lifecycle.appointment.starts_at,
+      appointment.ends_at,
+      context.tenant.clinic.timezone
+    ).localDate;
+    const calendarOperation = buildAppointmentCalendarOperation(appointmentId, "status", lifecycle.appointment.updated_at);
+    return { state: "success", outcome, patientId: appointment.patient_id, localDate, ...calendarOperation };
   }
 
   const updateResult = (await supabase
