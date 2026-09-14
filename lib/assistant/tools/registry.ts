@@ -15,8 +15,7 @@ import { assistantToolError, assistantToolNames, toolSchemas, type AssistantTool
 
 type ReadPatient = { patient_id: string; display_name: string; status: string };
 type ReadAppointment = { appointment_id: string; patient_display_name: string; professional_display_name: string | null; starts_at: string; ends_at: string; status: string };
-type PendingAction = { readonly confirmationId: string; readonly toolName: AssistantToolName; readonly context: AssistantToolContext; readonly input: unknown; readonly expiresAt: number; readonly summary: string };
-const pendingActions = new WeakSet<object>();
+export type AssistantProposal = { actionId: string; toolName: AssistantToolName; expiresAt: string; summary: string };
 
 function safeFailure(state: string): AssistantToolResult<never> {
   const errors: Record<string, [Parameters<typeof assistantToolError>[0], string]> = {
@@ -94,7 +93,7 @@ const getAvailableSlots: AssistantToolDefinition<{ professionalId: string; date:
 const createAppointment: AssistantToolDefinition<ReturnType<typeof toolSchemas.createAppointment.parse> & {}, { appointment_id: string }> = {
   name: "create_appointment", description: "Crea una cita usando el contrato de creación existente.", inputSchema: toolSchemas.createAppointment, outputSchema: toolSchemas.output, mutation: true, requiresConfirmation: true,
   async execute(_context, input) {
-    const values: AppointmentFormValues = { patientId: input.patientId, doctorId: input.professionalId, title: input.title, appointmentType: "", date: input.date, startTime: input.startTime, duration: String(input.durationMinutes), status: "scheduled", location: "", meetingUrl: "" };
+    const values: AppointmentFormValues = { patientId: input.patientId, doctorId: input.professionalId, title: "Cita", appointmentType: "", date: input.date, startTime: input.startTime, duration: String(input.durationMinutes), status: "scheduled", location: "", meetingUrl: "" };
     const result = await createAppointmentForActiveTenant(values);
     return result.state === "success" ? { ok: true, data: { appointment_id: result.appointmentId } } : safeFailure(result.state);
   }
@@ -132,21 +131,51 @@ export async function executeAssistantReadTool(name: string, rawInput: unknown):
   const result = await executable.execute(context.data, input); logTool(result.ok ? "succeeded" : "failed", context.data, tool.name, startedAt, result.ok ? undefined : result.error.code); return result;
 }
 
-export async function prepareAssistantMutation(name: string, rawInput: unknown): Promise<AssistantToolResult<{ action: PendingAction }>> {
+function persistedArguments(toolName: AssistantToolName, input: Record<string, unknown>) {
+  if (toolName === "create_appointment") return { patient_id: input.patientId, professional_id: input.professionalId, local_date: input.date, local_time: input.startTime, duration_minutes: input.durationMinutes };
+  if (toolName === "reschedule_appointment") return { appointment_id: input.appointmentId, expected_status: input.expectedStatus, local_date: input.date, local_time: input.startTime, duration_minutes: input.durationMinutes };
+  return { appointment_id: input.appointmentId, expected_status: input.expectedStatus };
+}
+
+function registryArguments(toolName: AssistantToolName, value: Record<string, unknown>) {
+  if (toolName === "create_appointment") return { patientId: value.patient_id, professionalId: value.professional_id, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
+  if (toolName === "reschedule_appointment") return { appointmentId: value.appointment_id, expectedStatus: value.expected_status, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
+  return { appointmentId: value.appointment_id, expectedStatus: value.expected_status };
+}
+
+export async function prepareAssistantMutation(name: string, rawInput: unknown): Promise<AssistantToolResult<AssistantProposal>> {
   const tool = getAssistantTool(name); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La herramienta solicitada no admite una acción confirmable.");
   const context = await getAssistantToolContext(); if (!context.ok) return context;
   const input = tool.inputSchema.parse(rawInput); if (!input) return assistantToolError("validation_error", "Los datos de la acción no son válidos.");
-  const action: PendingAction = Object.freeze({ confirmationId: crypto.randomUUID(), toolName: tool.name, context: context.data, input, expiresAt: Date.now() + 5 * 60_000, summary: `Acción propuesta: ${tool.name}.` }); pendingActions.add(action);
+  const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+  const rpc = await (await createClient()).rpc("create_assistant_pending_action_for_current_user" as never, { p_clinic_id: context.data.clinicId, p_tool_name: tool.name, p_validated_arguments: persistedArguments(tool.name, input as Record<string, unknown>), p_expires_at: expiresAt } as never) as unknown as { data: Array<{ id: string; tool_name: AssistantToolName; expires_at: string }> | null; error: { code?: string } | null };
+  if (rpc.error || !rpc.data?.[0]) return safeFailure(rpc.error?.code === "42501" ? "forbidden" : "error");
   logger.info("assistant_action_proposed", { tool_name: tool.name, clinic_id: context.data.clinicId, actor_user_id: context.data.userId, actor_role: context.data.role });
-  return { ok: true, data: { action } };
+  return { ok: true, data: { actionId: rpc.data[0].id, toolName: rpc.data[0].tool_name, expiresAt: rpc.data[0].expires_at, summary: `Acción propuesta: ${tool.name}.` } };
 }
 
-export async function executeConfirmedAssistantAction(action: PendingAction): Promise<AssistantToolResult<unknown>> {
-  if (!pendingActions.has(action) || action.expiresAt < Date.now()) return assistantToolError("confirmation_required", "La confirmación ya no es válida.");
+export async function executeConfirmedAssistantAction(actionId: string): Promise<AssistantToolResult<unknown>> {
   const current = await getAssistantToolContext(); if (!current.ok) return current;
-  if (current.data.userId !== action.context.userId || current.data.clinicId !== action.context.clinicId || current.data.role !== action.context.role || current.data.isProfessional !== action.context.isProfessional) return assistantToolError("forbidden", "La confirmación no corresponde a tu sesión actual.");
-  const tool = getAssistantTool(action.toolName); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La acción ya no está disponible.");
+  const claim = await (await createClient()).rpc("claim_assistant_pending_action_for_current_user" as never, { p_action_id: actionId } as never) as unknown as { data: Array<{ tool_name: string; validated_arguments: Record<string, unknown>; status: string }> | null; error: { code?: string } | null };
+  if (claim.error || !claim.data?.[0]) return safeFailure(claim.error?.code === "42501" ? "forbidden" : "error");
+  const pending = claim.data[0];
+  if (pending.status === "expired") { logger.info("assistant_action_expired", { clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role }); return assistantToolError("confirmation_required", "La confirmación venció. Prepara una propuesta nueva."); }
+  if (pending.status !== "claimed") return assistantToolError("confirmation_required", "La propuesta ya no puede ejecutarse.");
+  const tool = getAssistantTool(pending.tool_name); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La acción ya no está disponible.");
   const startedAt = Date.now(); logger.info("assistant_action_confirmed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role });
   const executable = tool as unknown as { execute(context: AssistantToolContext, input: unknown): Promise<AssistantToolResult<unknown>> };
-  const result = await executable.execute(current.data, action.input); logger.info(result.ok ? "assistant_action_executed" : "assistant_action_failed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role, duration_ms: Date.now() - startedAt, error_code: result.ok ? undefined : result.error.code }); pendingActions.delete(action); return result;
+  const result = await executable.execute(current.data, registryArguments(tool.name, pending.validated_arguments));
+  const finish = await (await createClient()).rpc("finish_assistant_pending_action_for_current_user" as never, { p_action_id: actionId, p_outcome: result.ok ? "executed" : "failed", p_error_code: result.ok ? null : result.error.code } as never) as unknown as { data: string | null; error: { code?: string } | null };
+  if (finish.error || finish.data !== (result.ok ? "executed" : "failed")) {
+    logger.error("assistant_action_failed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role, error_code: "generic" });
+    return assistantToolError("generic", "No fue posible confirmar el resultado de la acción. Prepara una propuesta nueva.");
+  }
+  logger.info(result.ok ? "assistant_action_executed" : "assistant_action_failed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role, duration_ms: Date.now() - startedAt, error_code: result.ok ? undefined : result.error.code }); return result;
+}
+
+export async function cancelAssistantPendingAction(actionId: string): Promise<AssistantToolResult<{ status: string }>> {
+  const context = await getAssistantToolContext(); if (!context.ok) return context;
+  const result = await (await createClient()).rpc("cancel_assistant_pending_action_for_current_user" as never, { p_action_id: actionId } as never) as unknown as { data: string | null; error: { code?: string } | null };
+  if (result.error || !result.data) return safeFailure(result.error?.code === "42501" ? "forbidden" : "error");
+  logger.info("assistant_action_cancelled", { clinic_id: context.data.clinicId, actor_user_id: context.data.userId, actor_role: context.data.role }); return { ok: true, data: { status: result.data } };
 }
