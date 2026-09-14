@@ -27,7 +27,7 @@ import {
 } from "@/lib/appointments/detail";
 import { canEditAppointments } from "@/lib/appointments/edit";
 import { getAppointmentStatusLabel } from "@/lib/appointments/query";
-import { getAvailableAppointmentStatusActions } from "@/lib/appointments/status";
+import { canManageAppointmentLifecycle, getAvailableAppointmentStatusActions } from "@/lib/appointments/status";
 import { getAppointmentDetailForActiveTenant } from "@/lib/server/appointment-detail";
 import { getReviewInvitationStatus } from "@/lib/server/review-invitations";
 import { ReviewInvitationControls } from "@/components/appointments/review-invitation-controls";
@@ -181,9 +181,9 @@ export default async function AppointmentDetailPage({
             {canEditAppointments(tenant.membership.role) ? (
               <>
                 <ButtonLink href={`/dashboard/appointments/${appointment.id}/edit`} variant="secondary" className="shrink-0"><Pencil className="h-4 w-4" />Editar cita</ButtonLink>
-                {canManageThisAppointment && (appointment.status === "scheduled" || appointment.status === "confirmed") ? <ButtonLink href={`/dashboard/appointments/${appointment.id}/reschedule`} variant="secondary" className="shrink-0"><CalendarDays className="h-4 w-4" />Reprogramar</ButtonLink> : null}
               </>
             ) : null}
+            {canManageThisAppointment && canManageAppointmentLifecycle(tenant.membership.role) && (appointment.status === "scheduled" || appointment.status === "confirmed") ? <ButtonLink href={`/dashboard/appointments/${appointment.id}/reschedule`} variant="secondary" className="shrink-0"><CalendarDays className="h-4 w-4" />Reprogramar</ButtonLink> : null}
             {patient ? (
               <ButtonLink href={`/dashboard/patients/${patient.id}`} className="shrink-0">
                 <UserRound className="h-4 w-4" />

@@ -105,13 +105,13 @@ select extensions.throws_ok(
 );
 
 select set_config('request.jwt.claim.sub', '40100000-0000-4000-8000-000000000003', true);
-select extensions.throws_ok(
+select extensions.lives_ok(
   $$select * from public.create_appointment_for_current_user(
     '40200000-0000-4000-8000-000000000001', '40300000-0000-4000-8000-000000000001',
     '40100000-0000-4000-8000-000000000002', 'Assistant denied', null, null, null,
     timestamptz '2035-09-17 15:30:00+00', timestamptz '2035-09-17 16:00:00+00'
   )$$,
-  '42501', 'Appointment creation is not allowed.', 'assistant cannot create appointments'
+  'assistant can create appointments through the guarded RPC'
 );
 
 select set_config('request.jwt.claim.sub', '40100000-0000-4000-8000-000000000004', true);

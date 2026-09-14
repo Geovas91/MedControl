@@ -3,7 +3,7 @@ import "server-only";
 import { formatAppointmentDetailDateTime } from "@/lib/appointments/detail";
 import { isCanonicalAppointmentUuid, type AppointmentStatus } from "@/lib/appointments/query";
 import {
-  canManageAppointmentStatus,
+  canManageAppointmentStatusTarget,
   canRestoreAppointment,
   getAppointmentStatusOutcome,
   isAllowedAppointmentStatusTransition,
@@ -68,7 +68,7 @@ export async function updateAppointmentStatusForActiveTenant(
   }
 
   if (context.state !== "ready") return { state: context.state };
-  if (!canManageAppointmentStatus(context.tenant.membership.role)) return { state: "forbidden" };
+  if (!canManageAppointmentStatusTarget(context.tenant.membership.role, input.targetStatus)) return { state: "forbidden" };
 
   const clinicId = context.tenant.clinic.id;
   const supabase = await createClient();

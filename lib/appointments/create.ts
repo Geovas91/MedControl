@@ -7,7 +7,7 @@ import type { Database } from "@/types/database";
 
 export const appointmentDurations = [15, 30, 45, 60, 90, 120] as const;
 export const newAppointmentStatuses = ["scheduled"] as const satisfies readonly AppointmentStatus[];
-export const appointmentCreatorRoles = ["owner", "doctor", "admin"] as const;
+export const appointmentCreatorRoles = ["owner", "doctor", "admin", "assistant"] as const;
 
 export type AppointmentCreatorRole = Database["public"]["Enums"]["clinic_member_role"];
 export type AppointmentDuration = (typeof appointmentDurations)[number];

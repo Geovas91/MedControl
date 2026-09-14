@@ -42,7 +42,7 @@ select extensions.is((select changed from public.mutate_appointment_lifecycle_fo
 select extensions.is((select count(*)::int from public.appointment_events where appointment_id='46500000-0000-4000-8000-000000000001' and event_type='cancelled'),1,'cancel event is not duplicated');
 select extensions.throws_ok($$select * from public.mutate_appointment_lifecycle_for_current_user('46200000-0000-4000-8000-000000000001','46500000-0000-4000-8000-000000000001','confirm','cancelled',null,null)$$,'22023',null,'cancelled cannot be confirmed');
 select set_config('request.jwt.claim.sub','46100000-0000-4000-8000-000000000003',true);
-select extensions.throws_ok($$select * from public.mutate_appointment_lifecycle_for_current_user('46200000-0000-4000-8000-000000000001','46500000-0000-4000-8000-000000000002','cancel','scheduled',null,null)$$,'42501',null,'assistant is denied');
+select extensions.is((select status::text from public.mutate_appointment_lifecycle_for_current_user('46200000-0000-4000-8000-000000000001','46500000-0000-4000-8000-000000000002','cancel','scheduled',null,null)),'cancelled','assistant cancels a clinic appointment');
 select set_config('request.jwt.claim.sub','46100000-0000-4000-8000-000000000004',true);
 select extensions.throws_ok($$select * from public.mutate_appointment_lifecycle_for_current_user('46200000-0000-4000-8000-000000000001','46500000-0000-4000-8000-000000000002','cancel','scheduled',null,null)$$,'42501',null,'cross-tenant actor is denied');
 reset role; select extensions.finish(); rollback;

@@ -16,7 +16,10 @@ export async function getProfessionalAvailability(professionalId?: string): Prom
   const members = await client.from("clinic_members").select("id, role, user_id").eq("clinic_id", clinicId).eq("status", "active").in("role", ["owner", "doctor"]);
   if (members.error) return { state: "error" };
   const memberRows = (members.data ?? []) as unknown as { id: string }[];
-  const ids = memberRows.map((m) => m.id); const allowed = ids.includes(professionalId ?? "") ? professionalId! : context.tenant.membership.role === "doctor" ? context.tenant.membership.id : ids[0];
+  const ids = memberRows.map((m) => m.id);
+  const allowed = context.tenant.membership.role === "doctor"
+    ? context.tenant.membership.id
+    : ids.includes(professionalId ?? "") ? professionalId! : ids[0];
   if (!allowed) return { state: "no_eligible" };
   const profiles = await client.from("doctor_public_profiles").select("profile_id, display_name, clinic_member_id").eq("clinic_id", clinicId);
   const profileRows = (profiles.data ?? []) as unknown as { clinic_member_id?: string | null; profile_id?: string | null; display_name: string }[];

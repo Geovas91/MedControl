@@ -31,7 +31,7 @@ export async function getAppointmentRescheduleForActiveTenant(
   if (context.state !== "ready") return { state: context.state, data: null };
   const clinicId = context.tenant.clinic.id;
   const role = context.tenant.membership.role;
-  if (!(["owner", "admin", "doctor"] as string[]).includes(role)) return { state: "forbidden", data: null };
+  if (!(["owner", "admin", "doctor", "assistant"] as string[]).includes(role)) return { state: "forbidden", data: null };
   const supabase = await createClient();
   const result = await supabase.from("appointments")
     .select("id, doctor_id, status, starts_at, ends_at, updated_at")

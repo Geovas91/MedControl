@@ -33,6 +33,7 @@ const statusTransitions: Record<AppointmentStatus, readonly AppointmentStatus[]>
 };
 
 const statusManagerRoles = ["owner", "admin", "doctor"] as const;
+const lifecycleManagerRoles = ["owner", "admin", "doctor", "assistant"] as const;
 const statusRestorerRoles = ["owner", "admin"] as const;
 
 function isAppointmentStatus(value: FormDataEntryValue | null): value is AppointmentStatus {
@@ -58,6 +59,14 @@ function clinicDate(value: Date, timeZone: string) {
 
 export function canManageAppointmentStatus(role: ClinicMemberRole) {
   return statusManagerRoles.includes(role as (typeof statusManagerRoles)[number]);
+}
+
+export function canManageAppointmentLifecycle(role: ClinicMemberRole) {
+  return lifecycleManagerRoles.includes(role as (typeof lifecycleManagerRoles)[number]);
+}
+
+export function canManageAppointmentStatusTarget(role: ClinicMemberRole, targetStatus: AppointmentStatus) {
+  return canManageAppointmentStatus(role) || (role === "assistant" && (targetStatus === "confirmed" || targetStatus === "cancelled"));
 }
 
 export function canRestoreAppointment(role: ClinicMemberRole) {
@@ -170,9 +179,10 @@ export function getAvailableAppointmentStatusActions({
   hasAssignedDoctor?: boolean;
   now?: Date;
 }) {
-  if (!canManageAppointmentStatus(role)) return [];
+  if (!canManageAppointmentLifecycle(role)) return [];
 
   return statusTransitions[currentStatus]
+    .filter((targetStatus) => canManageAppointmentStatusTarget(role, targetStatus))
     .filter((targetStatus) => currentStatus !== "cancelled" || canRestoreAppointment(role))
     .filter((targetStatus) => currentStatus !== "cancelled" || targetStatus !== "scheduled" || hasAssignedDoctor)
     .filter((targetStatus) => validateAppointmentStatusTiming(targetStatus, startsAt, timeZone, now) === "allowed")
