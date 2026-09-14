@@ -1,7 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { addDaysToAppointmentDate } from "@/lib/appointments/query";
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import type { AvailabilityWeek } from "@/lib/availability/form";
 import type { AvailabilityException } from "@/lib/availability/exceptions";
@@ -23,7 +22,10 @@ export async function getProfessionalAvailability(professionalId?: string): Prom
   const profileRows = (profiles.data ?? []) as unknown as { clinic_member_id?: string | null; profile_id?: string | null; display_name: string }[];
   const names = new Map(profileRows.map((p) => [p.clinic_member_id ?? p.profile_id ?? "", p.display_name]));
   const today = getClinicDayRange(context.tenant.clinic.timezone).localDate; const week: AvailabilityWeek = {};
-  for (let day = 1; day <= 7; day += 1) { const date = addDaysToAppointmentDate(today, day - 1); const result = await rpc(client).rpc("get_professional_availability_for_date", { p_clinic_id: clinicId, p_clinic_member_id: allowed, p_local_date: date }); if (result.error) { logger.error("Professional availability lookup failed", { component: "professional_availability", operation: "get_for_date", clinic_id: clinicId, role: context.tenant.membership.role, code: result.error.code ?? "rpc_error" }); return { state: "error" }; } week[day] = ((result.data ?? []) as { start_time: string; end_time: string }[]).map((r) => ({ start: r.start_time.slice(0, 5), end: r.end_time.slice(0, 5) })); }
+  const result = await rpc(client).rpc("get_professional_availability_week", { p_clinic_id: clinicId, p_clinic_member_id: allowed, p_effective_date: today });
+  if (result.error) { logger.error("Professional availability week lookup failed", { component: "professional_availability", operation: "get_week", clinic_id: clinicId, role: context.tenant.membership.role, code: result.error.code ?? "rpc_error" }); return { state: "error" }; }
+  for (let day = 1; day <= 7; day += 1) week[day] = [];
+  for (const row of (result.data ?? []) as { weekday: number; start_time: string; end_time: string }[]) { if (Number.isInteger(row.weekday) && row.weekday >= 1 && row.weekday <= 7) week[row.weekday].push({ start: row.start_time.slice(0, 5), end: row.end_time.slice(0, 5) }); }
   return { state: "ready", data: { clinic: context.tenant.clinic, role: context.tenant.membership.role, canEdit: ["owner", "admin", "doctor"].includes(context.tenant.membership.role), today, effectiveFrom: today, professionals: ids.map((id) => ({ id, name: names.get(id) ?? "Profesional" })), selectedProfessionalId: allowed, week } };
 }
 
