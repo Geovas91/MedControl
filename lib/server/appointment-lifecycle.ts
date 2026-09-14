@@ -30,6 +30,28 @@ export type AppointmentLifecycleResult =
   | { state: "unauthenticated" | "no_active_membership" | "forbidden" }
   | { state: "not_found" | "invalid_transition" | "conflict" | "stale_state" | "error" };
 
+export type AppointmentEvent = {
+  id: string;
+  event_type: "created" | "confirmed" | "cancelled" | "rescheduled";
+  old_status: AppointmentStatus | null;
+  new_status: AppointmentStatus | null;
+  old_starts_at: string | null;
+  new_starts_at: string | null;
+  created_at: string;
+};
+
+export async function getAppointmentEventsForActiveTenant(appointmentId: string) {
+  if (!isCanonicalAppointmentUuid(appointmentId)) return { state: "invalid_input" as const, data: [] as AppointmentEvent[] };
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: context.state, data: [] as AppointmentEvent[] };
+  const result = await (await createClient()).from("appointment_events")
+    .select("id, event_type, old_status, new_status, old_starts_at, new_starts_at, created_at")
+    .eq("clinic_id", context.tenant.clinic.id).eq("appointment_id", appointmentId)
+    .order("created_at", { ascending: false }).limit(20);
+  if (result.error) return { state: "error" as const, data: [] as AppointmentEvent[] };
+  return { state: "ready" as const, data: (result.data ?? []) as unknown as AppointmentEvent[] };
+}
+
 function classifyLifecycleError(code?: string): "forbidden" | "conflict" | "stale_state" | "invalid_transition" | "error" {
   if (code === "42501") return "forbidden";
   if (code === "23P01") return "conflict";

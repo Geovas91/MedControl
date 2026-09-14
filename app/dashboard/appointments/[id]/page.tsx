@@ -33,6 +33,7 @@ import { getReviewInvitationStatus } from "@/lib/server/review-invitations";
 import { ReviewInvitationControls } from "@/components/appointments/review-invitation-controls";
 import { issueReviewInvitationAction, revokeReviewInvitationAction, sendReviewInvitationEmailAction } from "./actions";
 import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
+import { getAppointmentEventsForActiveTenant } from "@/lib/server/appointment-lifecycle";
 
 export const dynamic = "force-dynamic";
 
@@ -115,16 +116,18 @@ export default async function AppointmentDetailPage({
   const successMessage = getAppointmentDetailMessage(query);
   const calendarEmailMessage = getAppointmentCalendarEmailMessage(query);
   const meetingUrl = getSafeAppointmentMeetingUrl(appointment.meeting_url);
-  const statusActions = getAvailableAppointmentStatusActions({
+  const canManageThisAppointment = tenant.membership.role !== "doctor" || appointment.doctor_id === currentUserId;
+  const statusActions = canManageThisAppointment ? getAvailableAppointmentStatusActions({
     currentStatus: appointment.status,
     role: tenant.membership.role,
     startsAt: appointment.starts_at,
     timeZone,
     hasAssignedDoctor: Boolean(appointment.doctor_id)
-  });
+  }) : [];
   const canRequestReviewByRole = appointment.status === "completed" && (tenant.membership.role === "owner" || tenant.membership.role === "admin" || (tenant.membership.role === "doctor" && appointment.doctor_id === currentUserId));
   const canRequestReview = canRequestReviewByRole && canCreateWithEntitlements(await getClinicEntitlements(tenant.clinic.id));
   const reviewStatus = canRequestReview ? await getReviewInvitationStatus(appointment.id, tenant.clinic.id) : { data: null };
+  const eventHistory = await getAppointmentEventsForActiveTenant(appointment.id);
 
   return (
     <>
@@ -176,14 +179,10 @@ export default async function AppointmentDetailPage({
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             {canEditAppointments(tenant.membership.role) ? (
-              <ButtonLink
-                href={`/dashboard/appointments/${appointment.id}/edit`}
-                variant="secondary"
-                className="shrink-0"
-              >
-                <Pencil className="h-4 w-4" />
-                Editar cita
-              </ButtonLink>
+              <>
+                <ButtonLink href={`/dashboard/appointments/${appointment.id}/edit`} variant="secondary" className="shrink-0"><Pencil className="h-4 w-4" />Editar cita</ButtonLink>
+                {canManageThisAppointment && (appointment.status === "scheduled" || appointment.status === "confirmed") ? <ButtonLink href={`/dashboard/appointments/${appointment.id}/reschedule`} variant="secondary" className="shrink-0"><CalendarDays className="h-4 w-4" />Reprogramar</ButtonLink> : null}
+              </>
             ) : null}
             {patient ? (
               <ButtonLink href={`/dashboard/patients/${patient.id}`} className="shrink-0">
@@ -245,6 +244,14 @@ export default async function AppointmentDetailPage({
         currentStatus={appointment.status}
         actions={statusActions}
       />
+      {eventHistory.state === "ready" && eventHistory.data.length > 0 ? (
+        <section className="glass-card-strong mt-6 p-4 sm:p-6">
+          <h2 className="text-lg font-bold text-ink">Historial de la cita</h2>
+          <ol className="mt-4 grid gap-3">
+            {eventHistory.data.map((event) => <li key={event.id} className="clinical-surface flex flex-col gap-1 p-3 text-sm sm:flex-row sm:items-center sm:justify-between"><span className="font-semibold text-ink">{appointmentEventLabel(event.event_type)}</span><time dateTime={event.created_at} className="text-slate-500">{new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(event.created_at))}</time></li>)}
+          </ol>
+        </section>
+      ) : null}
       {canRequestReview ? <ReviewInvitationControls
         issueAction={issueReviewInvitationAction.bind(null, appointment.id)}
         emailAction={sendReviewInvitationEmailAction.bind(null, appointment.id)}
@@ -254,4 +261,8 @@ export default async function AppointmentDetailPage({
       /> : null}
     </>
   );
+}
+
+function appointmentEventLabel(event: "created" | "confirmed" | "cancelled" | "rescheduled") {
+  return { created: "Cita creada", confirmed: "Cita confirmada", cancelled: "Cita cancelada", rescheduled: "Cita reprogramada" }[event];
 }

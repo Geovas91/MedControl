@@ -135,7 +135,7 @@ export function EditAppointmentForm({
         </div>
 
         <p className="rounded-md bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-          Se verificará la disponibilidad del profesional sin comparar la cita contra sí misma.
+          Para cambiar fecha, hora o profesional usa Reprogramar cita; ese flujo verifica disponibilidad de forma atómica.
         </p>
 
         <div className="flex flex-col-reverse gap-3 sm:ml-auto sm:flex-row">

@@ -69,7 +69,7 @@ export type UpdateAppointmentResult =
   | { state: "forbidden" }
   | { state: "not_found" }
   | {
-      state: "validation_error" | "conflict" | "error";
+      state: "validation_error" | "conflict" | "reschedule_required" | "error";
       error: string;
       fieldErrors?: AppointmentFieldErrors;
       values: AppointmentFormValues;
@@ -317,6 +317,7 @@ export async function updateAppointmentForActiveTenant(
 
   const scheduleChanged =
     Date.parse(startsAt) !== Date.parse(original.starts_at) || Date.parse(endsAt) !== Date.parse(original.ends_at);
+  const doctorChanged = input.doctorId !== original.doctor_id;
   const calendarChanged = hasAppointmentCalendarRelevantChange(
     { doctorId: original.doctor_id, startsAt: original.starts_at, endsAt: original.ends_at, location: original.location },
     { doctorId: input.doctorId, startsAt, endsAt, location: input.location ?? null }
@@ -331,36 +332,12 @@ export async function updateAppointmentForActiveTenant(
     };
   }
 
-  if (original.status !== "cancelled") {
-    const conflictResult = await supabase
-      .from("appointments")
-      .select("id")
-      .eq("clinic_id", clinicId)
-      .eq("doctor_id", input.doctorId)
-      .neq("id", appointmentId)
-      .neq("status", "cancelled")
-      .lt("starts_at", endsAt)
-      .gt("ends_at", startsAt)
-      .limit(1)
-      .maybeSingle();
-
-    if (conflictResult.error) {
-      logger.error("Appointment edit conflict query failed", {
-        component: "edit_appointment",
-        status: "conflict_query_error",
-        code: conflictResult.error.code
-      });
-      return { state: "error", error: "No fue posible verificar la disponibilidad. Intenta nuevamente.", values };
-    }
-
-    if (conflictResult.data) {
-      return {
-        state: "conflict",
-        error: "El profesional ya tiene una cita en ese horario.",
-        fieldErrors: { startTime: "Horario no disponible para el profesional seleccionado." },
-        values
-      };
-    }
+  if (scheduleChanged || doctorChanged) {
+    return {
+      state: "reschedule_required",
+      error: "Los cambios de horario o profesional deben hacerse desde Reprogramar cita.",
+      values
+    };
   }
 
   const oldValues = getAppointmentEditInitialValues(original, context.tenant.clinic.timezone);

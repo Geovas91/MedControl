@@ -7,6 +7,7 @@ type RawDetailQueryValue = string | string[] | undefined;
 export type AppointmentDetailSearchParams = {
   created?: RawDetailQueryValue;
   updated?: RawDetailQueryValue;
+  rescheduled?: RawDetailQueryValue;
   status_updated?: RawDetailQueryValue;
   calendar_email?: RawDetailQueryValue;
 };
@@ -98,6 +99,7 @@ export function getAppointmentDetailMessage(searchParams: AppointmentDetailSearc
   const statusMessage = getAppointmentStatusSuccessMessage(searchParams.status_updated);
   if (statusMessage) return statusMessage;
   if (searchParams.updated === "1") return "La cita se actualizó correctamente.";
+  if (searchParams.rescheduled === "1") return "La cita se reprogramó correctamente.";
   if (searchParams.created === "1") return "La cita se creó correctamente.";
   return null;
 }
