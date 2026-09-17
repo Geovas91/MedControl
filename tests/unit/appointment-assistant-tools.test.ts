@@ -62,12 +62,13 @@ test("confirm, cancel, and reschedule only plan a unique appointment", () => {
 });
 
 test("pending action storage is minimal and terminal actions are not retried", () => {
-  const migration = readFileSync("supabase/migrations/0049_assistant_pending_actions.sql", "utf8");
+  const migration = readFileSync("supabase/migrations/0050_patient_professional_scope.sql", "utf8");
+  const lifecycleMigration = readFileSync("supabase/migrations/0049_assistant_pending_actions.sql", "utf8");
   assert.match(registry, /patient_id.*professional_clinic_member_id.*local_date.*local_time.*duration_minutes/);
   assert.doesNotMatch(registry, /validated_arguments:.*title/);
-  assert.match(migration, /key not in \('appointment_id','patient_id','professional_id','local_date','local_time','duration_minutes','expected_status'\)/);
+  assert.match(migration, /key not in \('appointment_id','patient_id','professional_clinic_member_id','local_date','local_time','duration_minutes','expected_status'\)/);
   assert.match(registry, /if \(pending\.status !== "claimed"\) return assistantToolError\("confirmation_required"/);
-  assert.match(migration, /v_action\.status <> 'claimed'/);
+  assert.match(lifecycleMigration, /v_action\.status <> 'claimed'/);
 });
 
 test("availability uses clinic member identity and resolves user identity only for appointment writes", () => {

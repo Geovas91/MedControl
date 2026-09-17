@@ -12,6 +12,7 @@ import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
+import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
 import type { Database } from "@/types/database";
 
 type Tables = Database["public"]["Tables"];
@@ -159,6 +160,8 @@ async function resolvePatient(patientId: string, requireCreate = false): Promise
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
   if (requireCreate ? !canCreateClinicalNote(context.tenant.membership) : !canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden", data: null };
+  const access = await canAccessClinicalPatientForActiveTenant(patientId);
+  if (access.state !== "ready" || !access.allowed) return { state: access.state === "error" ? "error" : "forbidden", data: null };
   const supabase = await createClient();
   const patientResult = await supabase.from("patients").select("id, full_name").eq("id", patientId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (patientResult.error) {

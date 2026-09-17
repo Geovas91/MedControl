@@ -5,6 +5,7 @@ import { isValidPatientUuid } from "@/lib/patients/detail";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
+import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
 import type { Database } from "@/types/database";
 
 type Tables = Database["public"]["Tables"];
@@ -78,6 +79,9 @@ export async function getClinicalRecordForActiveTenant(
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
   if (!canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden", data: null };
+  const access = await canAccessClinicalPatientForActiveTenant(patientId);
+  if (access.state !== "ready") return { state: access.state === "error" ? "error" : access.state, data: null };
+  if (!access.allowed) return { state: "forbidden", data: null };
 
   const clinicId = context.tenant.clinic.id;
   const supabase = await createClient();

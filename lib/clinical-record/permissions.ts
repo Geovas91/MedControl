@@ -15,7 +15,7 @@ export const canUseClinicalTemplate = canViewClinicalRecord;
 export const canFinalizeClinicalNote = canViewClinicalRecord;
 
 export function canViewPatientAudit(membership: ClinicalPermissionMembership) {
-  return membership.role === "owner" || membership.role === "admin";
+  return canViewClinicalRecord(membership);
 }
 
 export function canEditClinicalNote({

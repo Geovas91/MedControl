@@ -8,6 +8,7 @@ import { CONSENT_PDF_RENDERER_VERSION, renderSignedConsentPdf, type SignedConsen
 import { logger } from "@/lib/logger";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -76,6 +77,8 @@ async function authorizeEvidence(patientId: string, consentId: string): Promise<
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
   if (!canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden", data: null };
+  const access = await canAccessClinicalPatientForActiveTenant(patientId);
+  if (access.state !== "ready" || !access.allowed) return { state: access.state === "error" ? "error" : "forbidden", data: null };
   const supabase = await createClient();
   const consent = await supabase.from("consents").select("id, patient_id, status").eq("id", consentId).eq("patient_id", patientId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (consent.error) {
@@ -218,6 +221,8 @@ export async function getConsentDocumentDownloadForActiveTenant(consentId: strin
   if (consent.error) return { state: "error" as const };
   const consentData = consent.data as Pick<Database["public"]["Tables"]["consents"]["Row"], "id" | "patient_id" | "status"> | null;
   if (!consentData || consentData.status !== "signed") return { state: "not_found" as const };
+  const access = await canAccessClinicalPatientForActiveTenant(consentData.patient_id);
+  if (access.state !== "ready" || !access.allowed) return { state: access.state === "error" ? "error" : "forbidden" as const };
   const admin = createAdminClient();
   const document = await admin.from("consent_documents").select("id, status, storage_bucket, storage_path, sha256, size_bytes").eq("consent_id", consentId).eq("patient_id", consentData.patient_id).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (document.error) return { state: "error" as const };

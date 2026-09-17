@@ -17,11 +17,11 @@ test("patient tab permissions keep clinical data narrow and audit at minimum pri
   assert.equal(canViewClinicalRecord({ role: "admin", is_professional: true }), true);
   assert.equal(canViewClinicalRecord({ role: "doctor", is_professional: true }), true);
   assert.equal(canViewClinicalRecord({ role: "assistant", is_professional: false }), false);
-  assert.equal(canViewPatientAudit({ role: "owner", is_professional: false }), true);
-  assert.equal(canViewPatientAudit({ role: "admin", is_professional: false }), true);
-  assert.equal(canViewPatientAudit({ role: "doctor", is_professional: true }), false);
+  assert.equal(canViewPatientAudit({ role: "owner", is_professional: false }), false);
+  assert.equal(canViewPatientAudit({ role: "admin", is_professional: false }), false);
+  assert.equal(canViewPatientAudit({ role: "doctor", is_professional: true }), true);
   assert.equal(canViewPatientAudit({ role: "assistant", is_professional: false }), false);
-  assert.match(patientPage, /key==='auditoria'\?"Requiere rol owner o admin"/);
+  assert.match(patientPage, /data\.canAccessClinicalData/);
 });
 
 test("Consultas keeps clinical notes and appointments as separate real resources", () => {

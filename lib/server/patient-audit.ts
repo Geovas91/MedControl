@@ -1,6 +1,7 @@
 import "server-only";
 
 import { canViewPatientAudit } from "@/lib/clinical-record/permissions";
+import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
 import { logger } from "@/lib/logger";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { getPatientAuditActionLabel, getPatientAuditResourceHref, getPatientAuditResourceLabel } from "@/lib/patients/record-tabs";
@@ -53,6 +54,8 @@ export async function getPatientAuditForActiveTenant(
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
   if (!canViewPatientAudit(context.tenant.membership)) return { state: "forbidden", data: null };
+  const access = await canAccessClinicalPatientForActiveTenant(patientId);
+  if (access.state !== "ready" || !access.allowed) return { state: access.state === "error" ? "error" : "forbidden", data: null };
 
   const supabase = await createClient();
   const auditRpcClient = supabase as unknown as AuditRpcClient;

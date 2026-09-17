@@ -6,6 +6,7 @@ import { isValidPatientUuid } from "@/lib/patients/detail";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
+import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
 import type { Database } from "@/types/database";
 
 type Tables = Database["public"]["Tables"];
@@ -71,6 +72,7 @@ export type PatientDetailData = {
   payments: PatientDetailPayment[];
   medicalNotes: PatientDetailMedicalNote[];
   consents: PatientDetailConsent[];
+  canAccessClinicalData: boolean;
 };
 
 export type PatientDetailResult =
@@ -148,7 +150,10 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
   }
 
   const now = new Date().toISOString();
-  const canViewClinical = canViewClinicalRecord(context.tenant.membership);
+  const scope = canViewClinicalRecord(context.tenant.membership)
+    ? await canAccessClinicalPatientForActiveTenant(id)
+    : null;
+  const canViewClinical = scope?.state === "ready" && scope.allowed;
   const [
     upcomingResult,
     recentResult,
@@ -242,7 +247,8 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
       ),
       payments: (paymentsResult.data ?? []) as PatientDetailPayment[],
       medicalNotes: (medicalNotesResult.data ?? []) as PatientDetailMedicalNote[],
-      consents: (consentsResult.data ?? []) as PatientDetailConsent[]
+      consents: (consentsResult.data ?? []) as PatientDetailConsent[],
+      canAccessClinicalData: canViewClinical
     }
   };
 }
