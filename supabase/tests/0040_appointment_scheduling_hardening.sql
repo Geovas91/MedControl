@@ -85,7 +85,7 @@ select extensions.throws_ok(
     '40100000-0000-4000-8000-000000000005', 'Cross doctor', null, null, null,
     timestamptz '2035-09-16 15:30:00+00', timestamptz '2035-09-16 16:00:00+00'
   )$$,
-  '22023', 'Doctor is unavailable.', 'cross-clinic doctor is rejected'
+  '22023', 'Professional is unavailable.', 'cross-clinic doctor is rejected'
 );
 select extensions.throws_ok(
   $$select * from public.create_appointment_for_current_user(
