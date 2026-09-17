@@ -80,14 +80,23 @@ const getProfessionals: AssistantToolDefinition<Record<string, never>, { profess
   }
 };
 
+async function getProfessionalMember(context: AssistantToolContext, clinicMemberId: string) {
+  const rpc = await (await createClient()).rpc("list_clinic_members_for_current_user" as never, { target_clinic_id: context.clinicId } as never) as unknown as {
+    data: Array<{ id: string; user_id: string; status: string; is_professional: boolean }> | null;
+    error: { code?: string } | null;
+  };
+  if (rpc.error) return { state: "error" as const, error: rpc.error.code === "42501" ? "forbidden" : "error" };
+  const member = (rpc.data ?? []).find((candidate) => candidate.id === clinicMemberId && candidate.status === "active" && candidate.is_professional);
+  return member ? { state: "ready" as const, data: member } : { state: "not_found" as const };
+}
+
 const getAvailableSlots: AssistantToolDefinition<{ professionalClinicMemberId: string; date: string; durationMinutes: number }, { start_at: string; end_at: string; local_start: string; local_end: string; time_zone: string }[]> = {
   name: "get_available_slots", description: "Consulta slots mediante el Slot Engine de la clínica activa.", inputSchema: toolSchemas.availableSlots, outputSchema: toolSchemas.output, mutation: false, requiresConfirmation: false,
   async execute(context, input) {
-    const memberResult = await (await createClient()).from("clinic_members").select("id, user_id").eq("clinic_id", context.clinicId).eq("id", input.professionalClinicMemberId).eq("status", "active").eq("is_professional", true).maybeSingle();
-    if (memberResult.error) return safeFailure("error");
-    if (!memberResult.data) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
-    const member = memberResult.data as { id: string; user_id: string } | null;
-    if (!member) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+    const memberResult = await getProfessionalMember(context, input.professionalClinicMemberId);
+    if (memberResult.state === "error") return safeFailure(memberResult.error);
+    if (memberResult.state !== "ready") return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+    const member = memberResult.data;
     if (context.role === "doctor" && member.user_id !== context.userId) return assistantToolError("forbidden", "No tienes acceso a la disponibilidad de otro profesional.");
     const slots = await getProfessionalAvailableSlots({ clinicMemberId: member.id, localDate: input.date, durationMinutes: input.durationMinutes, slotIntervalMinutes: 15 });
     if (slots.state !== "ready" || !slots.data) return safeFailure(slots.state);
@@ -98,11 +107,10 @@ const getAvailableSlots: AssistantToolDefinition<{ professionalClinicMemberId: s
 const createAppointment: AssistantToolDefinition<ReturnType<typeof toolSchemas.createAppointment.parse> & {}, { appointment_id: string }> = {
   name: "create_appointment", description: "Crea una cita usando el contrato de creación existente.", inputSchema: toolSchemas.createAppointment, outputSchema: toolSchemas.output, mutation: true, requiresConfirmation: true,
   async execute(context, input) {
-    const memberResult = await (await createClient()).from("clinic_members").select("user_id").eq("clinic_id", context.clinicId).eq("id", input.professionalClinicMemberId).eq("status", "active").eq("is_professional", true).maybeSingle();
-    if (memberResult.error) return safeFailure("error");
-    if (!memberResult.data) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
-    const member = memberResult.data as { user_id: string } | null;
-    if (!member) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+    const memberResult = await getProfessionalMember(context, input.professionalClinicMemberId);
+    if (memberResult.state === "error") return safeFailure(memberResult.error);
+    if (memberResult.state !== "ready") return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+    const member = memberResult.data;
     const values: AppointmentFormValues = { patientId: input.patientId, doctorId: member.user_id, title: "Cita", appointmentType: "", date: input.date, startTime: input.startTime, duration: String(input.durationMinutes), status: "scheduled", location: "", meetingUrl: "" };
     const result = await createAppointmentForActiveTenant(values);
     return result.state === "success" ? { ok: true, data: { appointment_id: result.appointmentId } } : safeFailure(result.state);

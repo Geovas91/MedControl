@@ -56,3 +56,11 @@ test("appointment creation derives self professional from authenticated context"
   assert.match(actions, /professionalClinicMemberId: defaultProfessionalId/);
   assert.match(actions, /Agendaremos la cita contigo/);
 });
+
+test("availability failures expose a recoverable appointment intent and safe alternatives", () => {
+  assert.match(actions, /state: "availability_retry"/);
+  assert.match(actions, /localTime: undefined/);
+  assert.match(actions, /Puedes elegir otro horario/);
+  assert.match(component, /chooseAlternative/);
+  assert.match(component, /message\.response\.alternatives/);
+});

@@ -87,3 +87,18 @@ test("self scheduling defaults only to an active professional actor", () => {
   assert.equal(getDefaultSchedulingProfessional({ ...context, role: "assistant" }), null);
   assert.equal(getDefaultSchedulingProfessional({ ...context, isProfessional: false, role: "owner" }), null);
 });
+
+test("availability retry keeps patient and professional while replacing date and time", () => {
+  const pending: AssistantIntent = {
+    type: "create_appointment", patientId: "patient-1", professionalClinicMemberId: "member-1",
+    localDate: "2026-09-17", localTime: "17:00", durationMinutes: 30
+  };
+  const result = resolveConversationInput({ ...pending, localDate: undefined, localTime: undefined }, "19 de septiembre a las 14:00", today);
+  assert.equal(result.state, "parsed");
+  if (result.state === "parsed" && result.result.state === "intent" && result.result.intent.type === "create_appointment") {
+    assert.equal(result.result.intent.patientId, "patient-1");
+    assert.equal(result.result.intent.professionalClinicMemberId, "member-1");
+    assert.equal(result.result.intent.localDate, "2026-09-19");
+    assert.equal(result.result.intent.localTime, "14:00");
+  }
+});

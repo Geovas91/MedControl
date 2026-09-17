@@ -45,7 +45,8 @@ export function applyFollowUpToIntent({ intent, message, clinicLocalDate }: { in
   const missing = getMissingFields(intent);
   let updatedIntent = intent;
   // Structural slots are deterministic and take precedence over entity text.
-  if (missing.includes("localDate") && date) updatedIntent = { ...intent, localDate: date } as AssistantIntent;
+  if (missing.includes("localDate") && date && missing.includes("localTime") && time) updatedIntent = { ...intent, localDate: date, localTime: time } as AssistantIntent;
+  else if (missing.includes("localDate") && date) updatedIntent = { ...intent, localDate: date } as AssistantIntent;
   else if (missing.includes("localTime") && time) updatedIntent = { ...intent, localTime: time } as AssistantIntent;
   else if (missing.includes("patient") && intent.type === "create_appointment") updatedIntent = { ...intent, patientQuery: query };
   else if (missing.includes("professional") && (intent.type === "create_appointment" || intent.type === "check_availability")) updatedIntent = { ...intent, professionalQuery: query };

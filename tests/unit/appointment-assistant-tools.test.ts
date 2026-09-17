@@ -73,7 +73,8 @@ test("pending action storage is minimal and terminal actions are not retried", (
 
 test("availability uses clinic member identity and resolves user identity only for appointment writes", () => {
   assert.match(registry, /professional_clinic_member_id/);
-  assert.match(registry, /eq\("id", input\.professionalClinicMemberId\)/);
+  assert.match(registry, /list_clinic_members_for_current_user/);
+  assert.match(registry, /candidate\.id === clinicMemberId/);
   assert.match(registry, /getProfessionalAvailableSlots\(\{ clinicMemberId: member\.id/);
   assert.match(registry, /doctorId: member\.user_id/);
 });
