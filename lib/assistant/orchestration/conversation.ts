@@ -3,9 +3,20 @@ import { parseAssistantText, parseDateExpression, parseTimeExpression, type Pars
 
 export type AssistantMissingField = "patient" | "professional" | "appointment" | "localDate" | "localTime" | "duration";
 
+export type ContextualHelper = "patients" | "professionals";
+
+export function classifyContextualHelper(intent: AssistantIntent, value: string): ContextualHelper | null {
+  const text = value.normalize("NFKC").replace(/\s+/g, " ").trim();
+  const plain = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const missing = getMissingFields(intent);
+  if (missing.includes("patient") && /^(?:dame la lista de pacientes|ver pacientes|que pacientes hay|muestrame pacientes)$/.test(plain)) return "patients";
+  if (missing.includes("professional") && /^(?:dame la lista de medicos|ver medicos|que doctores hay|muestrame profesionales)$/.test(plain)) return "professionals";
+  return null;
+}
+
 export function getMissingFields(intent: AssistantIntent): AssistantMissingField[] {
-  if (intent.type === "check_availability") return [...(!intent.professionalId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : [])];
-  if (intent.type === "create_appointment") return [...(!intent.patientId ? ["patient" as const] : []), ...(!intent.professionalId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : []), ...(!intent.localTime ? ["localTime" as const] : [])];
+  if (intent.type === "check_availability") return [...(!intent.professionalClinicMemberId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : [])];
+  if (intent.type === "create_appointment") return [...(!intent.patientId ? ["patient" as const] : []), ...(!intent.professionalClinicMemberId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : []), ...(!intent.localTime ? ["localTime" as const] : [])];
   if (intent.type === "reschedule_appointment") return [...(!intent.appointmentId ? ["appointment" as const] : []), ...(!intent.localDate ? ["localDate" as const] : []), ...(!intent.localTime ? ["localTime" as const] : [])];
   if (intent.type === "confirm_appointment" || intent.type === "cancel_appointment") return intent.appointmentId ? [] : ["appointment"];
   return [];

@@ -7,10 +7,11 @@ import {
   cancelAssistantProposalAction,
   confirmAssistantProposalAction,
   submitAssistantIntentAction,
+  submitAssistantContextualHelperAction,
   type AssistantUiResponse
 } from "@/app/dashboard/bot/actions";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
-import { resolveConversationInput } from "@/lib/assistant/orchestration/conversation";
+import { classifyContextualHelper, resolveConversationInput } from "@/lib/assistant/orchestration/conversation";
 
 type Message = { id: number; author: "user" | "assistant"; text: string; response?: AssistantUiResponse };
 type Props = { today: string; timeZone: string };
@@ -26,7 +27,7 @@ function formatInstant(value: string, timeZone: string) {
 
 function applyChoice(intent: AssistantIntent, id: string, field: "patient" | "professional" | "appointment") {
   if (field === "patient" && intent.type === "create_appointment") return { ...intent, patientId: id, patientQuery: undefined };
-  if (field === "professional" && (intent.type === "create_appointment" || intent.type === "check_availability")) return { ...intent, professionalId: id, professionalQuery: undefined };
+  if (field === "professional" && (intent.type === "create_appointment" || intent.type === "check_availability")) return { ...intent, professionalClinicMemberId: id, professionalQuery: undefined };
   if (field === "appointment" && (intent.type === "confirm_appointment" || intent.type === "cancel_appointment" || intent.type === "reschedule_appointment")) return { ...intent, appointmentId: id, appointmentQuery: undefined };
   return intent;
 }
@@ -50,10 +51,10 @@ export function AppointmentAssistant({ today, timeZone }: Props) {
 
   const append = (message: Message) => { setMessages((current) => [...current, message]); setNextId((current) => current + 1); };
 
-  const submitIntent = (intent: AssistantIntent, text: string) => {
+  const submitIntent = (intent: AssistantIntent, text: string, helper?: "patients" | "professionals") => {
     append({ id: nextId, author: "user", text });
     startTransition(async () => {
-      const response = await submitAssistantIntentAction(intent);
+      const response = helper ? await submitAssistantContextualHelperAction(intent, helper) : await submitAssistantIntentAction(intent);
       append({ id: nextId + 1, author: "assistant", text: responseText(response), response });
       if (response.state === "proposal") { setProposal(response); setPendingIntent(null); setChoiceField(null); }
       else if (response.state === "choices") { setPendingIntent(intent); setChoiceField(response.field); }
@@ -66,6 +67,8 @@ export function AppointmentAssistant({ today, timeZone }: Props) {
     const text = raw.trim();
     if (!text || isPending) return;
     setValue("");
+    const helper = pendingIntent ? classifyContextualHelper(pendingIntent, text) : null;
+    if (helper) { submitIntent(pendingIntent!, text, helper); return; }
     const resolved = resolveConversationInput(pendingIntent, text, today);
     if (resolved.state === "reset") {
       append({ id: nextId, author: "user", text });

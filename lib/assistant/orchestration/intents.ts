@@ -1,8 +1,8 @@
 export type AssistantIntent =
   | { type: "search_patients"; query: string }
   | { type: "search_appointments"; query?: string; patientId?: string; professionalId?: string; localDate?: string }
-  | { type: "check_availability"; professionalQuery?: string; professionalId?: string; localDate?: string; durationMinutes: number }
-  | { type: "create_appointment"; patientQuery?: string; patientId?: string; professionalQuery?: string; professionalId?: string; localDate?: string; localTime?: string; durationMinutes: number }
+  | { type: "check_availability"; professionalQuery?: string; professionalClinicMemberId?: string; localDate?: string; durationMinutes: number }
+  | { type: "create_appointment"; patientQuery?: string; patientId?: string; professionalQuery?: string; professionalClinicMemberId?: string; localDate?: string; localTime?: string; durationMinutes: number }
   | { type: "confirm_appointment" | "cancel_appointment"; appointmentQuery?: string; appointmentId?: string; expectedStatus?: string }
   | { type: "reschedule_appointment"; appointmentQuery?: string; appointmentId?: string; expectedStatus?: string; localDate?: string; localTime?: string; durationMinutes: number };
 

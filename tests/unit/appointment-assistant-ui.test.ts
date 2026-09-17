@@ -36,6 +36,13 @@ test("UI gives recognized intents precedence over follow-up state and supports r
   assert.match(component, /setPendingIntent\(null\)/);
 });
 
+test("pending entity helper commands use a read action and preserve the pending intent", () => {
+  assert.match(component, /classifyContextualHelper\(pendingIntent, text\)/);
+  assert.match(component, /submitAssistantContextualHelperAction\(intent, helper\)/);
+  assert.match(actions, /state: "choices", field: "patient"/);
+  assert.match(actions, /state: "choices", field: "professional"/);
+});
+
 test("professional lookup uses the protected internal members projection", () => {
   const registry = readFileSync("lib/assistant/tools/registry.ts", "utf8");
   assert.match(registry, /list_clinic_members_for_current_user/);

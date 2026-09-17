@@ -65,30 +65,30 @@ const getAppointment: AssistantToolDefinition<{ appointmentId: string }, ReadApp
   }
 };
 
-const getProfessionals: AssistantToolDefinition<Record<string, never>, { professional_id: string; display_name: string }[]> = {
+const getProfessionals: AssistantToolDefinition<Record<string, never>, { professional_clinic_member_id: string; professional_user_id: string; display_name: string }[]> = {
   name: "get_professionals", description: "Lista profesionales activos que pueden recibir citas.", inputSchema: { parse(value) { return value === undefined || (value && typeof value === "object" && !Array.isArray(value)) ? {} : null; } }, outputSchema: toolSchemas.output, mutation: false, requiresConfirmation: false,
   async execute(context) {
     const rpc = await (await createClient()).rpc("list_clinic_members_for_current_user" as never, { target_clinic_id: context.clinicId } as never) as unknown as {
-      data: Array<{ user_id: string; full_name: string | null; role: string; status: string; is_professional: boolean }> | null;
+      data: Array<{ id: string; user_id: string; full_name: string | null; role: string; status: string; is_professional: boolean }> | null;
       error: { code?: string } | null;
     };
     if (rpc.error) return safeFailure(rpc.error.code === "42501" ? "forbidden" : "error");
     const doctors = (rpc.data ?? [])
       .filter((member) => member.status === "active" && member.is_professional && (context.role !== "doctor" || member.user_id === context.userId))
-      .map((member) => ({ professional_id: member.user_id, display_name: member.full_name?.trim() || "Profesional" }));
+      .map((member) => ({ professional_clinic_member_id: member.id, professional_user_id: member.user_id, display_name: member.full_name?.trim() || "Profesional" }));
     return { ok: true, data: doctors.slice(0, 25) };
   }
 };
 
-const getAvailableSlots: AssistantToolDefinition<{ professionalId: string; date: string; durationMinutes: number }, { start_at: string; end_at: string; local_start: string; local_end: string; time_zone: string }[]> = {
+const getAvailableSlots: AssistantToolDefinition<{ professionalClinicMemberId: string; date: string; durationMinutes: number }, { start_at: string; end_at: string; local_start: string; local_end: string; time_zone: string }[]> = {
   name: "get_available_slots", description: "Consulta slots mediante el Slot Engine de la clínica activa.", inputSchema: toolSchemas.availableSlots, outputSchema: toolSchemas.output, mutation: false, requiresConfirmation: false,
   async execute(context, input) {
-    if (context.role === "doctor" && input.professionalId !== context.userId) return assistantToolError("forbidden", "No tienes acceso a la disponibilidad de otro profesional.");
-    const memberResult = await (await createClient()).from("clinic_members").select("id").eq("clinic_id", context.clinicId).eq("user_id", input.professionalId).eq("status", "active").eq("is_professional", true).maybeSingle();
+    const memberResult = await (await createClient()).from("clinic_members").select("id, user_id").eq("clinic_id", context.clinicId).eq("id", input.professionalClinicMemberId).eq("status", "active").eq("is_professional", true).maybeSingle();
     if (memberResult.error) return safeFailure("error");
     if (!memberResult.data) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
-    const member = memberResult.data as { id: string } | null;
+    const member = memberResult.data as { id: string; user_id: string } | null;
     if (!member) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+    if (context.role === "doctor" && member.user_id !== context.userId) return assistantToolError("forbidden", "No tienes acceso a la disponibilidad de otro profesional.");
     const slots = await getProfessionalAvailableSlots({ clinicMemberId: member.id, localDate: input.date, durationMinutes: input.durationMinutes, slotIntervalMinutes: 15 });
     if (slots.state !== "ready" || !slots.data) return safeFailure(slots.state);
     return { ok: true, data: slots.data.map((slot) => ({ ...slot, time_zone: context.timeZone })) };
@@ -97,8 +97,13 @@ const getAvailableSlots: AssistantToolDefinition<{ professionalId: string; date:
 
 const createAppointment: AssistantToolDefinition<ReturnType<typeof toolSchemas.createAppointment.parse> & {}, { appointment_id: string }> = {
   name: "create_appointment", description: "Crea una cita usando el contrato de creación existente.", inputSchema: toolSchemas.createAppointment, outputSchema: toolSchemas.output, mutation: true, requiresConfirmation: true,
-  async execute(_context, input) {
-    const values: AppointmentFormValues = { patientId: input.patientId, doctorId: input.professionalId, title: "Cita", appointmentType: "", date: input.date, startTime: input.startTime, duration: String(input.durationMinutes), status: "scheduled", location: "", meetingUrl: "" };
+  async execute(context, input) {
+    const memberResult = await (await createClient()).from("clinic_members").select("user_id").eq("clinic_id", context.clinicId).eq("id", input.professionalClinicMemberId).eq("status", "active").eq("is_professional", true).maybeSingle();
+    if (memberResult.error) return safeFailure("error");
+    if (!memberResult.data) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+    const member = memberResult.data as { user_id: string } | null;
+    if (!member) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+    const values: AppointmentFormValues = { patientId: input.patientId, doctorId: member.user_id, title: "Cita", appointmentType: "", date: input.date, startTime: input.startTime, duration: String(input.durationMinutes), status: "scheduled", location: "", meetingUrl: "" };
     const result = await createAppointmentForActiveTenant(values);
     return result.state === "success" ? { ok: true, data: { appointment_id: result.appointmentId } } : safeFailure(result.state);
   }
@@ -137,13 +142,13 @@ export async function executeAssistantReadTool(name: string, rawInput: unknown):
 }
 
 function persistedArguments(toolName: AssistantToolName, input: Record<string, unknown>) {
-  if (toolName === "create_appointment") return { patient_id: input.patientId, professional_id: input.professionalId, local_date: input.date, local_time: input.startTime, duration_minutes: input.durationMinutes };
+  if (toolName === "create_appointment") return { patient_id: input.patientId, professional_clinic_member_id: input.professionalClinicMemberId, local_date: input.date, local_time: input.startTime, duration_minutes: input.durationMinutes };
   if (toolName === "reschedule_appointment") return { appointment_id: input.appointmentId, expected_status: input.expectedStatus, local_date: input.date, local_time: input.startTime, duration_minutes: input.durationMinutes };
   return { appointment_id: input.appointmentId, expected_status: input.expectedStatus };
 }
 
 function registryArguments(toolName: AssistantToolName, value: Record<string, unknown>) {
-  if (toolName === "create_appointment") return { patientId: value.patient_id, professionalId: value.professional_id, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
+  if (toolName === "create_appointment") return { patientId: value.patient_id, professionalClinicMemberId: value.professional_clinic_member_id, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
   if (toolName === "reschedule_appointment") return { appointmentId: value.appointment_id, expectedStatus: value.expected_status, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
   return { appointmentId: value.appointment_id, expectedStatus: value.expected_status };
 }

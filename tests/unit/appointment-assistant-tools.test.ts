@@ -17,8 +17,8 @@ test("assistant registry is closed to the approved scheduling tools", () => {
 });
 
 test("untrusted scheduling inputs require canonical identifiers and local clinic time", () => {
-  assert.equal(toolSchemas.createAppointment.parse({ patientId: "not-an-id", professionalId: "20000000-0000-4000-8000-000000000001", date: "2026-09-15", startTime: "09:00", durationMinutes: 30, title: "Consulta" }), null);
-  assert.equal(toolSchemas.availableSlots.parse({ professionalId: "20000000-0000-4000-8000-000000000001", date: "2026-09-15", durationMinutes: 17 }), null);
+  assert.equal(toolSchemas.createAppointment.parse({ patientId: "not-an-id", professionalClinicMemberId: "20000000-0000-4000-8000-000000000001", date: "2026-09-15", startTime: "09:00", durationMinutes: 30, title: "Consulta" }), null);
+  assert.equal(toolSchemas.availableSlots.parse({ professionalClinicMemberId: "20000000-0000-4000-8000-000000000001", date: "2026-09-15", durationMinutes: 17 }), null);
   assert.deepEqual(toolSchemas.lifecycle.parse({ appointmentId: "10000000-0000-4000-8000-000000000001", expectedStatus: "scheduled" }), { appointmentId: "10000000-0000-4000-8000-000000000001", expectedStatus: "scheduled" });
 });
 
@@ -63,9 +63,16 @@ test("confirm, cancel, and reschedule only plan a unique appointment", () => {
 
 test("pending action storage is minimal and terminal actions are not retried", () => {
   const migration = readFileSync("supabase/migrations/0049_assistant_pending_actions.sql", "utf8");
-  assert.match(registry, /patient_id.*professional_id.*local_date.*local_time.*duration_minutes/);
+  assert.match(registry, /patient_id.*professional_clinic_member_id.*local_date.*local_time.*duration_minutes/);
   assert.doesNotMatch(registry, /validated_arguments:.*title/);
   assert.match(migration, /key not in \('appointment_id','patient_id','professional_id','local_date','local_time','duration_minutes','expected_status'\)/);
   assert.match(registry, /if \(pending\.status !== "claimed"\) return assistantToolError\("confirmation_required"/);
   assert.match(migration, /v_action\.status <> 'claimed'/);
+});
+
+test("availability uses clinic member identity and resolves user identity only for appointment writes", () => {
+  assert.match(registry, /professional_clinic_member_id/);
+  assert.match(registry, /eq\("id", input\.professionalClinicMemberId\)/);
+  assert.match(registry, /getProfessionalAvailableSlots\(\{ clinicMemberId: member\.id/);
+  assert.match(registry, /doctorId: member\.user_id/);
 });

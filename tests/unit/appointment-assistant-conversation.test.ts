@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyFollowUpToIntent, getMissingFields, isConversationResetCommand, resolveConversationInput } from "../../lib/assistant/orchestration/conversation.ts";
+import { applyFollowUpToIntent, classifyContextualHelper, getMissingFields, isConversationResetCommand, resolveConversationInput } from "../../lib/assistant/orchestration/conversation.ts";
 import type { AssistantIntent } from "../../lib/assistant/orchestration/intents.ts";
 
 const today = "2026-09-14";
@@ -43,7 +43,7 @@ test("reset commands clear conversational state without a mutation", () => {
 });
 
 test("generic slot filling consumes date formats after professional resolution", () => {
-  const intent: AssistantIntent = { type: "check_availability", professionalId: "professional-1", localDate: undefined, durationMinutes: 30 };
+  const intent: AssistantIntent = { type: "check_availability", professionalClinicMemberId: "member-1", localDate: undefined, durationMinutes: 30 };
   const first = applyFollowUpToIntent({ intent, message: "19 de septiembre de 2026", clinicLocalDate: today });
   assert.equal(first.consumed, true);
   assert.deepEqual(first.missingFields, []);
@@ -54,17 +54,24 @@ test("generic slot filling consumes date formats after professional resolution",
 });
 
 test("weekday-only input remains unconsumed when relative weekdays are unsupported", () => {
-  const intent: AssistantIntent = { type: "check_availability", professionalId: "professional-1", durationMinutes: 30 };
+  const intent: AssistantIntent = { type: "check_availability", professionalClinicMemberId: "member-1", durationMinutes: 30 };
   const result = applyFollowUpToIntent({ intent, message: "Miércoles", clinicLocalDate: today });
   assert.equal(result.consumed, false);
   assert.deepEqual(result.missingFields, ["localDate"]);
 });
 
 test("generic slot filling consumes local time and entity queries", () => {
-  const timeIntent: AssistantIntent = { type: "create_appointment", patientId: "patient-1", professionalId: "professional-1", localDate: today, durationMinutes: 30 };
+  const timeIntent: AssistantIntent = { type: "create_appointment", patientId: "patient-1", professionalClinicMemberId: "member-1", localDate: today, durationMinutes: 30 };
   const time = applyFollowUpToIntent({ intent: timeIntent, message: "10:30 am", clinicLocalDate: today });
   if (time.updatedIntent.type === "create_appointment") assert.equal(time.updatedIntent.localTime, "10:30");
-  const patientIntent: AssistantIntent = { type: "create_appointment", professionalId: "professional-1", localDate: today, localTime: "10:00", durationMinutes: 30 };
+  const patientIntent: AssistantIntent = { type: "create_appointment", professionalClinicMemberId: "member-1", localDate: today, localTime: "10:00", durationMinutes: 30 };
   const patient = applyFollowUpToIntent({ intent: patientIntent, message: "Juan Pérez", clinicLocalDate: today });
   if (patient.updatedIntent.type === "create_appointment") assert.equal(patient.updatedIntent.patientQuery, "Juan Pérez");
+});
+
+test("contextual helper commands do not become entity queries", () => {
+  const create: AssistantIntent = { type: "create_appointment", localDate: today, localTime: "10:00", durationMinutes: 30 };
+  assert.equal(classifyContextualHelper(create, "Dame la lista de pacientes"), "patients");
+  assert.equal(classifyContextualHelper({ ...create, patientId: "patient-1" }, "Dame la lista de médicos"), "professionals");
+  assert.equal(classifyContextualHelper(create, "Juan Pérez"), null);
 });
