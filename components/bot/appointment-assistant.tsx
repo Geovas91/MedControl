@@ -57,7 +57,7 @@ export function AppointmentAssistant({ today, timeZone }: Props) {
       append({ id: nextId + 1, author: "assistant", text: responseText(response), response });
       if (response.state === "proposal") { setProposal(response); setPendingIntent(null); setChoiceField(null); }
       else if (response.state === "choices") { setPendingIntent(intent); setChoiceField(response.field); }
-      else if (response.state === "message") setPendingIntent(intent);
+      else if (response.state === "message") setPendingIntent(response.intent ?? intent);
       else { setPendingIntent(null); setChoiceField(null); }
     });
   };

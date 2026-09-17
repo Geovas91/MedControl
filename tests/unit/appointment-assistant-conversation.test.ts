@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isConversationResetCommand, resolveConversationInput } from "../../lib/assistant/orchestration/conversation.ts";
+import { applyFollowUpToIntent, getMissingFields, isConversationResetCommand, resolveConversationInput } from "../../lib/assistant/orchestration/conversation.ts";
 import type { AssistantIntent } from "../../lib/assistant/orchestration/intents.ts";
 
 const today = "2026-09-14";
@@ -40,4 +40,31 @@ test("recognized intents replace pending availability and suggested prompts", ()
 test("reset commands clear conversational state without a mutation", () => {
   assert.equal(isConversationResetCommand("  Empezar   de nuevo "), true);
   assert.deepEqual(resolveConversationInput(availability, "Nueva consulta", today), { state: "reset" });
+});
+
+test("generic slot filling consumes date formats after professional resolution", () => {
+  const intent: AssistantIntent = { type: "check_availability", professionalId: "professional-1", localDate: undefined, durationMinutes: 30 };
+  const first = applyFollowUpToIntent({ intent, message: "19 de septiembre de 2026", clinicLocalDate: today });
+  assert.equal(first.consumed, true);
+  assert.deepEqual(first.missingFields, []);
+  if (first.updatedIntent.type === "check_availability") assert.equal(first.updatedIntent.localDate, "2026-09-19");
+  assert.equal(getMissingFields(intent).includes("localDate"), true);
+  const todayResult = applyFollowUpToIntent({ intent, message: "hoy", clinicLocalDate: today });
+  if (todayResult.updatedIntent.type === "check_availability") assert.equal(todayResult.updatedIntent.localDate, today);
+});
+
+test("weekday-only input remains unconsumed when relative weekdays are unsupported", () => {
+  const intent: AssistantIntent = { type: "check_availability", professionalId: "professional-1", durationMinutes: 30 };
+  const result = applyFollowUpToIntent({ intent, message: "Miércoles", clinicLocalDate: today });
+  assert.equal(result.consumed, false);
+  assert.deepEqual(result.missingFields, ["localDate"]);
+});
+
+test("generic slot filling consumes local time and entity queries", () => {
+  const timeIntent: AssistantIntent = { type: "create_appointment", patientId: "patient-1", professionalId: "professional-1", localDate: today, durationMinutes: 30 };
+  const time = applyFollowUpToIntent({ intent: timeIntent, message: "10:30 am", clinicLocalDate: today });
+  if (time.updatedIntent.type === "create_appointment") assert.equal(time.updatedIntent.localTime, "10:30");
+  const patientIntent: AssistantIntent = { type: "create_appointment", professionalId: "professional-1", localDate: today, localTime: "10:00", durationMinutes: 30 };
+  const patient = applyFollowUpToIntent({ intent: patientIntent, message: "Juan Pérez", clinicLocalDate: today });
+  if (patient.updatedIntent.type === "create_appointment") assert.equal(patient.updatedIntent.patientQuery, "Juan Pérez");
 });

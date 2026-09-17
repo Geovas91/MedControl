@@ -30,7 +30,7 @@ export async function saveAppointmentAssistantSettingsAction(formData: FormData)
 }
 
 export type AssistantUiResponse =
-  | { state: "message"; message: string }
+  | { state: "message"; message: string; intent?: AssistantIntent }
   | { state: "error"; message: string }
   | { state: "choices"; message: string; field: "patient" | "professional" | "appointment"; choices: Array<{ id: string; label: string }> }
   | { state: "slots"; professional: string; date: string; slots: Array<{ start: string; end: string }> }
@@ -111,9 +111,9 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
 
   if (intent.type === "check_availability") {
     if (!intent.professionalQuery && !intent.professionalId) return { state: "message", message: "¿De qué profesional quieres consultar la disponibilidad?" };
-    if (!intent.localDate) return { state: "message", message: "¿Para qué fecha necesitas los horarios?" };
     const professional = intent.professionalId ? { state: "ready" as const, id: intent.professionalId, label: "Profesional" } : await resolveProfessional(intent.professionalQuery);
     if (professional.state !== "ready") return professional.state === "error" || professional.state === "none" || professional.state === "ambiguous" ? professional.response : { state: "message", message: "¿De qué profesional quieres consultar la disponibilidad?" };
+    if (!intent.localDate) return { state: "message", message: "Necesito una fecha específica, por ejemplo '23 de septiembre' o 'mañana'.", intent: { ...intent, professionalId: professional.id, professionalQuery: undefined } };
     const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalId: professional.id, date: intent.localDate, durationMinutes: intent.durationMinutes });
     if (!slots.ok) return safeToolError(slots);
     if (slots.data.length === 0) return { state: "message", message: `No encontré horarios disponibles para ${professional.label} en esa fecha.` };

@@ -1,32 +1,39 @@
 import type { AssistantIntent } from "./intents";
 import { parseAssistantText, parseDateExpression, parseTimeExpression, type ParserResult } from "../parser/deterministic";
 
+export type AssistantMissingField = "patient" | "professional" | "appointment" | "localDate" | "localTime" | "duration";
+
+export function getMissingFields(intent: AssistantIntent): AssistantMissingField[] {
+  if (intent.type === "check_availability") return [...(!intent.professionalId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : [])];
+  if (intent.type === "create_appointment") return [...(!intent.patientId ? ["patient" as const] : []), ...(!intent.professionalId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : []), ...(!intent.localTime ? ["localTime" as const] : [])];
+  if (intent.type === "reschedule_appointment") return [...(!intent.appointmentId ? ["appointment" as const] : []), ...(!intent.localDate ? ["localDate" as const] : []), ...(!intent.localTime ? ["localTime" as const] : [])];
+  if (intent.type === "confirm_appointment" || intent.type === "cancel_appointment") return intent.appointmentId ? [] : ["appointment"];
+  return [];
+}
+
+export type FollowUpResult = { updatedIntent: AssistantIntent; consumed: boolean; missingFields: AssistantMissingField[] };
+
+export function applyFollowUpToIntent({ intent, message, clinicLocalDate }: { intent: AssistantIntent; message: string; clinicLocalDate: string }): FollowUpResult {
+  const query = message.normalize("NFKC").replace(/\s+/g, " ").trim();
+  const date = parseDateExpression(query, clinicLocalDate);
+  const time = parseTimeExpression(query);
+  const missing = getMissingFields(intent);
+  let updatedIntent = intent;
+  // Structural slots are deterministic and take precedence over entity text.
+  if (missing.includes("localDate") && date) updatedIntent = { ...intent, localDate: date } as AssistantIntent;
+  else if (missing.includes("localTime") && time) updatedIntent = { ...intent, localTime: time } as AssistantIntent;
+  else if (missing.includes("patient") && intent.type === "create_appointment") updatedIntent = { ...intent, patientQuery: query };
+  else if (missing.includes("professional") && (intent.type === "create_appointment" || intent.type === "check_availability")) updatedIntent = { ...intent, professionalQuery: query };
+  else if (missing.includes("appointment") && (intent.type === "confirm_appointment" || intent.type === "cancel_appointment" || intent.type === "reschedule_appointment")) updatedIntent = { ...intent, appointmentQuery: query };
+  return { updatedIntent, consumed: updatedIntent !== intent, missingFields: getMissingFields(updatedIntent) };
+}
+
 export function isConversationResetCommand(value: string) {
   return /^(?:cancelar|empezar de nuevo|nueva consulta)$/i.test(value.normalize("NFKC").replace(/\s+/g, " ").trim());
 }
 
 export function followUpIntent(intent: AssistantIntent, text: string, today: string): AssistantIntent {
-  const date = parseDateExpression(text, today) ?? undefined;
-  const time = parseTimeExpression(text) ?? undefined;
-  const query = text.normalize("NFKC").replace(/\s+/g, " ").trim();
-  if (intent.type === "create_appointment") {
-    if (!intent.patientId && !intent.patientQuery) return { ...intent, patientQuery: query };
-    if (!intent.professionalId && !intent.professionalQuery) return { ...intent, professionalQuery: query };
-    if (!intent.professionalId && intent.professionalQuery) return { ...intent, professionalQuery: query };
-    if (!intent.localDate && date) return { ...intent, localDate: date };
-    if (!intent.localTime && time) return { ...intent, localTime: time };
-  }
-  if (intent.type === "check_availability") {
-    if (!intent.professionalId && !intent.professionalQuery) return { ...intent, professionalQuery: query };
-    if (!intent.professionalId && intent.professionalQuery) return { ...intent, professionalQuery: query };
-    if (!intent.localDate && date) return { ...intent, localDate: date };
-  }
-  if (intent.type === "reschedule_appointment") {
-    if (!intent.appointmentId && !intent.appointmentQuery) return { ...intent, appointmentQuery: query };
-    if (!intent.localDate && date) return { ...intent, localDate: date };
-    if (!intent.localTime && time) return { ...intent, localTime: time };
-  }
-  return intent;
+  return applyFollowUpToIntent({ intent, message: text, clinicLocalDate: today }).updatedIntent;
 }
 
 export type ConversationInput =
