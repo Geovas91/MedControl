@@ -6,12 +6,13 @@ import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { parseAppointmentAssistantSettings } from "@/lib/appointment-assistant";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
 import { resolveUniqueEntity } from "@/lib/assistant/orchestration/intents";
-import type { ContextualHelper } from "@/lib/assistant/orchestration/conversation";
+import { getDefaultSchedulingProfessional, type ContextualHelper } from "@/lib/assistant/orchestration/conversation";
 import { isAssistantIntent, matchesAssistantQuery } from "@/lib/assistant/parser/deterministic";
 import {
   cancelAssistantPendingAction,
   executeAssistantReadTool,
   executeConfirmedAssistantAction,
+  getAssistantToolContext,
   prepareAssistantMutation,
   type AssistantProposal
 } from "@/lib/assistant/tools/registry";
@@ -111,31 +112,50 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
   }
 
   if (intent.type === "check_availability") {
-    if (!intent.professionalQuery && !intent.professionalClinicMemberId) return { state: "message", message: "¿De qué profesional quieres consultar la disponibilidad?" };
-    const professional = intent.professionalClinicMemberId ? { state: "ready" as const, id: intent.professionalClinicMemberId, label: "Profesional" } : await resolveProfessional(intent.professionalQuery);
+    const context = await getAssistantToolContext();
+    if (!context.ok) return safeToolError(context);
+    const defaultProfessionalId = !intent.professionalClinicMemberId && !intent.professionalQuery
+      ? getDefaultSchedulingProfessional(context.data)
+      : null;
+    const workingIntent = defaultProfessionalId
+      ? { ...intent, professionalClinicMemberId: defaultProfessionalId }
+      : intent;
+    if (!workingIntent.professionalQuery && !workingIntent.professionalClinicMemberId) return { state: "message", message: "¿De qué profesional quieres consultar la disponibilidad?", intent: workingIntent };
+    const professional = workingIntent.professionalClinicMemberId ? { state: "ready" as const, id: workingIntent.professionalClinicMemberId, label: defaultProfessionalId ? "Tú" : "Profesional" } : await resolveProfessional(workingIntent.professionalQuery);
     if (professional.state !== "ready") return professional.state === "error" || professional.state === "none" || professional.state === "ambiguous" ? professional.response : { state: "message", message: "¿De qué profesional quieres consultar la disponibilidad?" };
-    if (!intent.localDate) return { state: "message", message: "Necesito una fecha específica, por ejemplo '23 de septiembre' o 'mañana'.", intent: { ...intent, professionalClinicMemberId: professional.id, professionalQuery: undefined } };
-    const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalClinicMemberId: professional.id, date: intent.localDate, durationMinutes: intent.durationMinutes });
+    if (!workingIntent.localDate) return { state: "message", message: "Necesito una fecha específica, por ejemplo '23 de septiembre' o 'mañana'.", intent: { ...workingIntent, professionalClinicMemberId: professional.id, professionalQuery: undefined } };
+    const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalClinicMemberId: professional.id, date: workingIntent.localDate, durationMinutes: workingIntent.durationMinutes });
     if (!slots.ok) return safeToolError(slots);
     if (slots.data.length === 0) return { state: "message", message: `No encontré horarios disponibles para ${professional.label} en esa fecha.` };
-    return { state: "slots", professional: professional.label, date: intent.localDate, slots: slots.data.map((slot) => ({ start: slot.local_start, end: slot.local_end })) };
+    return { state: "slots", professional: professional.label, date: workingIntent.localDate, slots: slots.data.map((slot) => ({ start: slot.local_start, end: slot.local_end })) };
   }
 
   if (intent.type === "create_appointment") {
-    if (!intent.patientId && !intent.patientQuery) return { state: "message", message: "¿Con qué paciente quieres agendarla?" };
-    if (!intent.professionalClinicMemberId && !intent.professionalQuery) return { state: "message", message: "¿Con qué profesional quieres agendarla?" };
-    if (!intent.localDate) return { state: "message", message: "¿Para qué fecha? Usa hoy, mañana o una fecha explícita." };
-    if (!intent.localTime) return { state: "message", message: "¿A qué hora?" };
-    const patient = intent.patientId ? { state: "ready" as const, id: intent.patientId, label: "Paciente" } : await resolvePatient(intent.patientQuery);
+    const context = await getAssistantToolContext();
+    if (!context.ok) return safeToolError(context);
+    const defaultProfessionalId = !intent.professionalClinicMemberId && !intent.professionalQuery
+      ? getDefaultSchedulingProfessional(context.data)
+      : null;
+    const workingIntent = defaultProfessionalId
+      ? { ...intent, professionalClinicMemberId: defaultProfessionalId }
+      : intent;
+    if (!workingIntent.patientId && !workingIntent.patientQuery) {
+      const message = defaultProfessionalId ? "Agendaremos la cita contigo. ¿Con qué paciente quieres agendarla?" : "¿Con qué paciente quieres agendarla?";
+      return { state: "message", message, intent: workingIntent };
+    }
+    if (!workingIntent.professionalClinicMemberId && !workingIntent.professionalQuery) return { state: "message", message: "¿Con qué profesional quieres agendarla?", intent: workingIntent };
+    if (!workingIntent.localDate) return { state: "message", message: "¿Para qué fecha? Usa hoy, mañana o una fecha explícita.", intent: workingIntent };
+    if (!workingIntent.localTime) return { state: "message", message: "¿A qué hora?", intent: workingIntent };
+    const patient = workingIntent.patientId ? { state: "ready" as const, id: workingIntent.patientId, label: "Paciente" } : await resolvePatient(workingIntent.patientQuery);
     if (patient.state !== "ready") return patient.state === "error" || patient.state === "none" || patient.state === "ambiguous" ? patient.response : { state: "message", message: "¿Con qué paciente quieres agendarla?" };
-    const professional = intent.professionalClinicMemberId ? { state: "ready" as const, id: intent.professionalClinicMemberId, label: "Profesional" } : await resolveProfessional(intent.professionalQuery);
+    const professional = workingIntent.professionalClinicMemberId ? { state: "ready" as const, id: workingIntent.professionalClinicMemberId, label: defaultProfessionalId ? "Tú" : "Profesional" } : await resolveProfessional(workingIntent.professionalQuery);
     if (professional.state !== "ready") return professional.state === "error" || professional.state === "none" || professional.state === "ambiguous" ? professional.response : { state: "message", message: "¿Con qué profesional quieres agendarla?" };
-    const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalClinicMemberId: professional.id, date: intent.localDate, durationMinutes: intent.durationMinutes });
+    const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalClinicMemberId: professional.id, date: workingIntent.localDate, durationMinutes: workingIntent.durationMinutes });
     if (!slots.ok) return safeToolError(slots);
-    if (!slots.data.some((slot) => slot.local_start === intent.localTime)) return { state: "message", message: "No encontré ese horario disponible para el profesional seleccionado." };
-    const proposal = await prepareAssistantMutation("create_appointment", { patientId: patient.id, professionalClinicMemberId: professional.id, date: intent.localDate, startTime: intent.localTime, durationMinutes: intent.durationMinutes });
+    if (!slots.data.some((slot) => slot.local_start === workingIntent.localTime)) return { state: "message", message: "No encontré ese horario disponible para el profesional seleccionado." };
+    const proposal = await prepareAssistantMutation("create_appointment", { patientId: patient.id, professionalClinicMemberId: professional.id, date: workingIntent.localDate, startTime: workingIntent.localTime, durationMinutes: workingIntent.durationMinutes });
     if (!proposal.ok) return safeToolError(proposal);
-    return proposalResponse(proposal.data, "Crear cita", { patient: patient.label, professional: professional.label, date: intent.localDate, time: intent.localTime });
+    return proposalResponse(proposal.data, "Crear cita", { patient: patient.label, professional: professional.label, date: workingIntent.localDate, time: workingIntent.localTime });
   }
 
   if (intent.type !== "confirm_appointment" && intent.type !== "cancel_appointment" && intent.type !== "reschedule_appointment") {

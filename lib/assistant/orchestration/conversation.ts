@@ -5,12 +5,26 @@ export type AssistantMissingField = "patient" | "professional" | "appointment" |
 
 export type ContextualHelper = "patients" | "professionals";
 
+export type SchedulingProfessionalContext = {
+  role: "owner" | "admin" | "assistant" | "doctor";
+  isProfessional: boolean;
+  clinicMemberId: string;
+};
+
+/** Resolve the authenticated professional for self-scheduling without trusting client input. */
+export function getDefaultSchedulingProfessional(context: SchedulingProfessionalContext): string | null {
+  if (!context.isProfessional) return null;
+  if (context.role === "doctor" || context.role === "owner" || context.role === "admin") return context.clinicMemberId;
+  return null;
+}
+
 export function classifyContextualHelper(intent: AssistantIntent, value: string): ContextualHelper | null {
   const text = value.normalize("NFKC").replace(/\s+/g, " ").trim();
   const plain = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const missing = getMissingFields(intent);
   if (missing.includes("patient") && /^(?:dame la lista de pacientes|ver pacientes|que pacientes hay|muestrame pacientes)$/.test(plain)) return "patients";
-  if (missing.includes("professional") && /^(?:dame la lista de medicos|ver medicos|que doctores hay|muestrame profesionales)$/.test(plain)) return "professionals";
+  const professionalHelper = /^(?:dame la lista de profesionales|dame la lista de medicos|ver profesionales|ver medicos|que profesionales hay|que doctores hay|muestrame profesionales|muestrame medicos|cambiar profesional|elegir otro medico)$/.test(plain);
+  if (professionalHelper && (missing.includes("professional") || intent.type === "create_appointment" || intent.type === "check_availability")) return "professionals";
   return null;
 }
 

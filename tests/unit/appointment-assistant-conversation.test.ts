@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyFollowUpToIntent, classifyContextualHelper, getMissingFields, isConversationResetCommand, resolveConversationInput } from "../../lib/assistant/orchestration/conversation.ts";
+import { applyFollowUpToIntent, classifyContextualHelper, getDefaultSchedulingProfessional, getMissingFields, isConversationResetCommand, resolveConversationInput } from "../../lib/assistant/orchestration/conversation.ts";
 import type { AssistantIntent } from "../../lib/assistant/orchestration/intents.ts";
 
 const today = "2026-09-14";
@@ -73,5 +73,17 @@ test("contextual helper commands do not become entity queries", () => {
   const create: AssistantIntent = { type: "create_appointment", localDate: today, localTime: "10:00", durationMinutes: 30 };
   assert.equal(classifyContextualHelper(create, "Dame la lista de pacientes"), "patients");
   assert.equal(classifyContextualHelper({ ...create, patientId: "patient-1" }, "Dame la lista de médicos"), "professionals");
+  for (const command of ["Dame la lista de profesionales", "Qué profesionales hay", "Muéstrame médicos", "Ver médicos", "Cambiar profesional", "Elegir otro médico"]) {
+    assert.equal(classifyContextualHelper({ ...create, patientId: "patient-1", professionalClinicMemberId: "member-1" }, command), "professionals");
+  }
   assert.equal(classifyContextualHelper(create, "Juan Pérez"), null);
+});
+
+test("self scheduling defaults only to an active professional actor", () => {
+  const context = { clinicMemberId: "member-1", isProfessional: true } as const;
+  assert.equal(getDefaultSchedulingProfessional({ ...context, role: "doctor" }), "member-1");
+  assert.equal(getDefaultSchedulingProfessional({ ...context, role: "owner" }), "member-1");
+  assert.equal(getDefaultSchedulingProfessional({ ...context, role: "admin" }), "member-1");
+  assert.equal(getDefaultSchedulingProfessional({ ...context, role: "assistant" }), null);
+  assert.equal(getDefaultSchedulingProfessional({ ...context, isProfessional: false, role: "owner" }), null);
 });

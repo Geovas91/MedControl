@@ -49,3 +49,10 @@ test("professional lookup uses the protected internal members projection", () =>
   assert.doesNotMatch(registry, /getAppointmentCreationOptions/);
   assert.match(registry, /is_professional/);
 });
+
+test("appointment creation derives self professional from authenticated context", () => {
+  assert.match(actions, /getAssistantToolContext\(\)/);
+  assert.match(actions, /getDefaultSchedulingProfessional\(context\.data\)/);
+  assert.match(actions, /professionalClinicMemberId: defaultProfessionalId/);
+  assert.match(actions, /Agendaremos la cita contigo/);
+});
