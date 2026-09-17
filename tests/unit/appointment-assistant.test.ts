@@ -10,6 +10,7 @@ import {
 
 const page = readFileSync("app/dashboard/bot/page.tsx", "utf8");
 const server = readFileSync("lib/server/appointment-assistant.ts", "utf8");
+const actions = readFileSync("app/dashboard/bot/actions.ts", "utf8");
 const migration = readFileSync("supabase/migrations/0028_appointment_assistant_integrity.sql", "utf8");
 const navigation = readFileSync("components/dashboard/dashboard-shell.tsx", "utf8");
 
@@ -57,6 +58,11 @@ test("only owner and admin can manage global assistant settings", () => {
   assert.equal(canManageAppointmentAssistant("doctor"), false);
   assert.equal(canManageAppointmentAssistant("assistant"), false);
   assert.match(server, /canManageAppointmentAssistant\(context\.tenant\.membership\.role\)/);
+});
+
+test("availability distinguishes no slots from an unresolved professional", () => {
+  assert.match(actions, /No encontré un profesional que coincida/);
+  assert.match(actions, /No encontré horarios disponibles para \$\{professional\.label\}/);
 });
 
 test("activity uses a validated stable cursor and asks the RPC for one extra row", () => {

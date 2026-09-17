@@ -10,7 +10,7 @@ import {
   type AssistantUiResponse
 } from "@/app/dashboard/bot/actions";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
-import { parseAssistantText, parseDateExpression, parseTimeExpression } from "@/lib/assistant/parser/deterministic";
+import { resolveConversationInput } from "@/lib/assistant/orchestration/conversation";
 
 type Message = { id: number; author: "user" | "assistant"; text: string; response?: AssistantUiResponse };
 type Props = { today: string; timeZone: string };
@@ -22,27 +22,6 @@ function formatDate(value: string, timeZone: string) {
 
 function formatInstant(value: string, timeZone: string) {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(value));
-}
-
-function followUpIntent(intent: AssistantIntent, text: string, today: string): AssistantIntent {
-  const date = parseDateExpression(text, today) ?? undefined;
-  const time = parseTimeExpression(text) ?? undefined;
-  if (intent.type === "create_appointment") {
-    if (!intent.patientId && !intent.patientQuery) return { ...intent, patientQuery: text.trim() };
-    if (!intent.professionalId && !intent.professionalQuery) return { ...intent, professionalQuery: text.trim() };
-    if (!intent.localDate && date) return { ...intent, localDate: date };
-    if (!intent.localTime && time) return { ...intent, localTime: time };
-  }
-  if (intent.type === "check_availability") {
-    if (!intent.professionalId && !intent.professionalQuery) return { ...intent, professionalQuery: text.trim() };
-    if (!intent.localDate && date) return { ...intent, localDate: date };
-  }
-  if (intent.type === "reschedule_appointment") {
-    if (!intent.appointmentId && !intent.appointmentQuery) return { ...intent, appointmentQuery: text.trim() };
-    if (!intent.localDate && date) return { ...intent, localDate: date };
-    if (!intent.localTime && time) return { ...intent, localTime: time };
-  }
-  return intent;
 }
 
 function applyChoice(intent: AssistantIntent, id: string, field: "patient" | "professional" | "appointment") {
@@ -87,7 +66,15 @@ export function AppointmentAssistant({ today, timeZone }: Props) {
     const text = raw.trim();
     if (!text || isPending) return;
     setValue("");
-    const parsed = pendingIntent ? { state: "intent" as const, intent: followUpIntent(pendingIntent, text, today) } : parseAssistantText(text, today);
+    const resolved = resolveConversationInput(pendingIntent, text, today);
+    if (resolved.state === "reset") {
+      append({ id: nextId, author: "user", text });
+      append({ id: nextId + 1, author: "assistant", text: "Empecemos una nueva consulta." });
+      setPendingIntent(null);
+      setChoiceField(null);
+      return;
+    }
+    const parsed = resolved.result;
     if (parsed.state !== "intent") { append({ id: nextId, author: "user", text }); append({ id: nextId + 1, author: "assistant", text: parsed.message }); if (parsed.state === "needs_input" && parsed.intent) setPendingIntent(parsed.intent); return; }
     submitIntent(parsed.intent, text);
   };

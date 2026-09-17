@@ -19,9 +19,21 @@ test("deterministic parser recognizes the Spanish appointment intents", () => {
   assert.equal(parseAssistantText("Cancela la cita de Juan", today).state, "intent");
   assert.equal(parseAssistantText("Reprograma la cita de Juan para las 11:30", today).state, "intent");
   assert.equal(parseAssistantText("¿Qué citas tengo mañana?", today).state, "intent");
+  const todaySearch = parseAssistantText("Ver citas de hoy", today);
+  assert.equal(todaySearch.state, "intent");
+  if (todaySearch.state === "intent") {
+    assert.equal(todaySearch.intent.type, "search_appointments");
+    assert.equal(todaySearch.intent.localDate, today);
+  }
   const availabilityPrompt = parseAssistantText("Ver disponibilidad", today);
   assert.equal(availabilityPrompt.state, "intent");
   if (availabilityPrompt.state === "intent") assert.equal(availabilityPrompt.intent.type, "check_availability");
+});
+
+test("professional matching is case, accent, whitespace and order insensitive", async () => {
+  const { matchesAssistantQuery } = await import("../../lib/assistant/parser/deterministic.ts");
+  assert.equal(matchesAssistantQuery("QA Doctor 1 Norte", " Doctor   1 QA Norte "), true);
+  assert.equal(matchesAssistantQuery("QA Doctor 1 Norte", "Doctor 3 QA Norte"), false);
 });
 
 test("date and time normalization uses the supplied clinic date", () => {

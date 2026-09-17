@@ -6,7 +6,7 @@ import { logger } from "@/lib/logger";
 import { getAppointmentAgendaForActiveTenant } from "@/lib/server/appointments";
 import { getAppointmentDetailForActiveTenant } from "@/lib/server/appointment-detail";
 import { mutateAppointmentLifecycleForActiveTenant } from "@/lib/server/appointment-lifecycle";
-import { getAppointmentCreationOptions, createAppointmentForActiveTenant } from "@/lib/server/create-appointment";
+import { createAppointmentForActiveTenant } from "@/lib/server/create-appointment";
 import { getPatientsForActiveTenant } from "@/lib/server/patients";
 import { getProfessionalAvailableSlots } from "@/lib/server/professional-slots";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
@@ -68,10 +68,15 @@ const getAppointment: AssistantToolDefinition<{ appointmentId: string }, ReadApp
 const getProfessionals: AssistantToolDefinition<Record<string, never>, { professional_id: string; display_name: string }[]> = {
   name: "get_professionals", description: "Lista profesionales activos que pueden recibir citas.", inputSchema: { parse(value) { return value === undefined || (value && typeof value === "object" && !Array.isArray(value)) ? {} : null; } }, outputSchema: toolSchemas.output, mutation: false, requiresConfirmation: false,
   async execute(context) {
-    const options = await getAppointmentCreationOptions();
-    if (options.state !== "ready" || !options.data) return safeFailure(options.state);
-    const doctors = context.role === "doctor" ? options.data.doctors.filter((doctor) => doctor.id === context.userId) : options.data.doctors;
-    return { ok: true, data: doctors.slice(0, 25).map((doctor) => ({ professional_id: doctor.id, display_name: doctor.name })) };
+    const rpc = await (await createClient()).rpc("list_clinic_members_for_current_user" as never, { target_clinic_id: context.clinicId } as never) as unknown as {
+      data: Array<{ user_id: string; full_name: string | null; role: string; status: string; is_professional: boolean }> | null;
+      error: { code?: string } | null;
+    };
+    if (rpc.error) return safeFailure(rpc.error.code === "42501" ? "forbidden" : "error");
+    const doctors = (rpc.data ?? [])
+      .filter((member) => member.status === "active" && member.is_professional && (context.role !== "doctor" || member.user_id === context.userId))
+      .map((member) => ({ professional_id: member.user_id, display_name: member.full_name?.trim() || "Profesional" }));
+    return { ok: true, data: doctors.slice(0, 25) };
   }
 };
 

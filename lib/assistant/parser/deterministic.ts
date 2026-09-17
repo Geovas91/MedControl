@@ -15,6 +15,16 @@ function normalize(value: string) {
   return value.normalize("NFKC").replace(/\s+/g, " ").trim();
 }
 
+export function normalizeAssistantQuery(value: string) {
+  return unaccent(normalize(value));
+}
+
+export function matchesAssistantQuery(label: string, query: string) {
+  const normalizedLabel = normalizeAssistantQuery(label);
+  const tokens = normalizeAssistantQuery(query).split(" ").filter(Boolean);
+  return tokens.length > 0 && tokens.every((token) => normalizedLabel.includes(token));
+}
+
 function unaccent(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
@@ -112,7 +122,7 @@ function baseIntent(value: string, today: string): ParserResult {
   if (/\b(?:confirma|confirmar)\b.*\bcita\b/i.test(plain)) {
     return { state: "intent", intent: { type: "confirm_appointment", appointmentQuery: extractAppointmentQuery(normalized) } };
   }
-  if (/\b(?:qué|que|muestra|muéstrame|mostrar)\b.*\bcitas?\b/i.test(plain)) {
+  if (/\b(?:ver|qué|que|muestra|muéstrame|mostrar)\b.*\bcitas?\b/i.test(plain)) {
     return { state: "intent", intent: { type: "search_appointments", query: undefined, localDate } };
   }
   return { state: "unsupported", message: "Puedo ayudarte con citas, disponibilidad, confirmaciones, cancelaciones y reprogramaciones." };

@@ -6,7 +6,7 @@ import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { parseAppointmentAssistantSettings } from "@/lib/appointment-assistant";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
 import { resolveUniqueEntity } from "@/lib/assistant/orchestration/intents";
-import { isAssistantIntent } from "@/lib/assistant/parser/deterministic";
+import { isAssistantIntent, matchesAssistantQuery } from "@/lib/assistant/parser/deterministic";
 import {
   cancelAssistantPendingAction,
   executeAssistantReadTool,
@@ -72,8 +72,7 @@ async function resolveProfessional(query: string | undefined) {
   if (!query) return { state: "missing" as const };
   const result = await readTool<ReadProfessional[]>("get_professionals", {});
   if (!result.ok) return { state: "error" as const, response: safeToolError(result) };
-  const needle = query.toLocaleLowerCase("es-MX");
-  const matches = result.data.filter((professional) => professional.display_name.toLocaleLowerCase("es-MX").includes(needle));
+  const matches = result.data.filter((professional) => matchesAssistantQuery(professional.display_name, query));
   const resolved = resolveUniqueEntity(matches.map((professional) => ({ id: professional.professional_id, label: professional.display_name })));
   if (resolved.state === "NEEDS_INPUT") return { state: "none" as const, response: { state: "message", message: `No encontré un profesional que coincida con “${query}”.` } satisfies AssistantUiResponse };
   if (resolved.state === "AMBIGUOUS") return { state: "ambiguous" as const, response: { state: "choices", field: "professional", message: "Encontré más de un profesional con ese nombre. ¿Cuál quieres usar?", choices: matches.slice(0, 10).map((professional) => ({ id: professional.professional_id, label: professional.display_name })) } satisfies AssistantUiResponse };
@@ -117,6 +116,7 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     if (professional.state !== "ready") return professional.state === "error" || professional.state === "none" || professional.state === "ambiguous" ? professional.response : { state: "message", message: "¿De qué profesional quieres consultar la disponibilidad?" };
     const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalId: professional.id, date: intent.localDate, durationMinutes: intent.durationMinutes });
     if (!slots.ok) return safeToolError(slots);
+    if (slots.data.length === 0) return { state: "message", message: `No encontré horarios disponibles para ${professional.label} en esa fecha.` };
     return { state: "slots", professional: professional.label, date: intent.localDate, slots: slots.data.map((slot) => ({ start: slot.local_start, end: slot.local_end })) };
   }
 

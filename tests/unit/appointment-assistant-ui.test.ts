@@ -29,3 +29,16 @@ test("UI exposes safe accessibility and loading behavior", () => {
   assert.match(component, /disabled=\{isPending\}/);
   assert.match(component, /focus-visible:ring/);
 });
+
+test("UI gives recognized intents precedence over follow-up state and supports reset", () => {
+  assert.match(component, /resolveConversationInput\(pendingIntent, text, today\)/);
+  assert.match(component, /Empecemos una nueva consulta/);
+  assert.match(component, /setPendingIntent\(null\)/);
+});
+
+test("professional lookup uses the protected internal members projection", () => {
+  const registry = readFileSync("lib/assistant/tools/registry.ts", "utf8");
+  assert.match(registry, /list_clinic_members_for_current_user/);
+  assert.doesNotMatch(registry, /getAppointmentCreationOptions/);
+  assert.match(registry, /is_professional/);
+});
