@@ -1,4 +1,4 @@
-import { QA_CLINICS, QA_USERS, createAdmin, getRuntimeConfig } from "./seed-rbac-demo-users.mjs";
+import { QA_CLINICS, QA_USERS, createAdmin, getDryRunConfig, getRuntimeConfig } from "./seed-rbac-demo-users.mjs";
 import { pathToFileURL } from "node:url";
 
 function fail(message) {
@@ -74,33 +74,41 @@ async function deleteClinicDependencies(admin, clinicId) {
   }
 }
 
-export async function runCleanup({ dryRun }) {
-  const admin = createAdmin(getRuntimeConfig());
+export async function runCleanup({ dryRun, local = false }) {
+  const target = local ? "LOCAL" : "STAGING";
+  if (dryRun) {
+    getDryRunConfig({ local });
+    console.log(`[dry-run] target plan: ${target}; dataset: 2 clinics, 12 users, 12 memberships, 2 subscriptions; NO READS, NO WRITES.`);
+    for (const clinic of QA_CLINICS) console.log(`[dry-run] delete QA clinic ${clinic.name} and scoped dependencies`);
+    for (const definition of QA_USERS) console.log(`[dry-run] delete auth user ${definition.email}`);
+    console.log("[dry-run] QA RBAC cleanup validated; demo seed user is outside the target.");
+    return;
+  }
+  const admin = createAdmin(getRuntimeConfig({ local }));
   const usersByEmail = await listTargetUsers(admin);
   const scope = await verifyScope(admin, usersByEmail);
   for (const clinic of scope.clinics) {
-    console.log(`[${dryRun ? "dry-run" : "apply"}] delete QA clinic ${clinic.name} and scoped dependencies`);
-    if (dryRun) continue;
+    console.log(`[apply] delete QA clinic ${clinic.name} and scoped dependencies`);
     await deleteClinicDependencies(admin, clinic.id);
     const { error } = await admin.from("clinics").delete().eq("id", clinic.id);
     assertNoError(error, "Deleting QA clinic");
   }
   for (const definition of QA_USERS) {
     const user = usersByEmail.get(definition.email);
-    console.log(`[${dryRun ? "dry-run" : "apply"}] ${user ? "delete" : "skip missing"} auth user ${definition.email}`);
-    if (dryRun || !user) continue;
+    console.log(`[apply] ${user ? "delete" : "skip missing"} auth user ${definition.email}`);
+    if (!user) continue;
     const { error } = await admin.auth.admin.deleteUser(user.id, false);
     assertNoError(error, "Deleting QA auth user");
   }
-  console.log(`[${dryRun ? "dry-run" : "apply"}] QA RBAC cleanup ${dryRun ? "validated" : "completed"}.`);
+  console.log("[apply] QA RBAC cleanup completed.");
 }
 
 const isEntrypoint = Boolean(process.argv[1]) && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isEntrypoint) {
   const args = new Set(process.argv.slice(2));
-  if ([...args].some((arg) => arg !== "--dry-run" && arg !== "--apply")) fail("Usage: node scripts/qa/cleanup-rbac-demo-users.mjs [--dry-run|--apply]");
+  if ([...args].some((arg) => !["--dry-run", "--apply", "--local"].includes(arg))) fail("Usage: node scripts/qa/cleanup-rbac-demo-users.mjs [--dry-run|--apply] [--local]");
   if (args.has("--dry-run") && args.has("--apply")) fail("Use either --dry-run or --apply, not both.");
-  runCleanup({ dryRun: !args.has("--apply") }).catch((error) => {
+  runCleanup({ dryRun: !args.has("--apply"), local: args.has("--local") }).catch((error) => {
     console.error(error instanceof Error ? error.message : "QA cleanup failed safely.");
     process.exitCode = 1;
   });

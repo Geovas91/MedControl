@@ -28,6 +28,8 @@ export const QA_USERS = [
   isProfessional
 }));
 
+export const LOCAL_SUPABASE_URLS = new Set(["http://127.0.0.1:54321", "http://localhost:54321"]);
+
 export function parseProjectRef(supabaseUrl) {
   let url;
   try {
@@ -43,28 +45,49 @@ export function parseProjectRef(supabaseUrl) {
   return match[1];
 }
 
-export function getRuntimeConfig() {
+function isLocalUrl(supabaseUrl) {
+  return LOCAL_SUPABASE_URLS.has(supabaseUrl.replace(/\/$/, ""));
+}
+
+export function getRuntimeConfig({ local = false } = {}) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secretKey = process.env.SUPABASE_SECRET_KEY;
   const demoPassword = process.env.QA_DEMO_PASSWORD;
 
   if (!supabaseUrl) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL.");
-  if (!secretKey) throw new Error("Missing SUPABASE_SECRET_KEY.");
   if (!demoPassword) throw new Error("Missing QA_DEMO_PASSWORD.");
-  if (parseProjectRef(supabaseUrl) !== STAGING_PROJECT_REF) {
+  const normalizedUrl = supabaseUrl.replace(/\/$/, "");
+  if (local) {
+    if (process.env.QA_RBAC_DEMO_ALLOW_LOCAL !== "1" || !isLocalUrl(normalizedUrl)) {
+      throw new Error("Refusing local apply: set QA_RBAC_DEMO_ALLOW_LOCAL=1 and use a loopback Supabase URL.");
+    }
+    if (process.env.SUPABASE_SECRET_KEY) {
+      throw new Error("Refusing local apply: SUPABASE_SECRET_KEY is not accepted; use only the local SUPABASE_SERVICE_ROLE_KEY.");
+    }
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) throw new Error("Missing local SUPABASE_SERVICE_ROLE_KEY.");
+    return { supabaseUrl: normalizedUrl, secretKey: serviceRoleKey, demoPassword, local: true };
+  }
+  if (isLocalUrl(normalizedUrl)) {
+    throw new Error("Refusing loopback URL without --local.");
+  }
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!secretKey) throw new Error("Missing SUPABASE_SECRET_KEY.");
+  if (parseProjectRef(normalizedUrl) !== STAGING_PROJECT_REF) {
     throw new Error("Refusing to run: the configured Supabase project is not the approved staging project.");
   }
 
-  return { supabaseUrl, secretKey, demoPassword };
+  return { supabaseUrl: normalizedUrl, secretKey, demoPassword, local: false };
 }
 
-function getDryRunConfig() {
+export function getDryRunConfig({ local = false } = {}) {
   const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseUrl = configuredUrl ?? `https://${STAGING_PROJECT_REF}.supabase.co`;
-  if (parseProjectRef(supabaseUrl) !== STAGING_PROJECT_REF) {
+  const supabaseUrl = (configuredUrl ?? `https://${STAGING_PROJECT_REF}.supabase.co`).replace(/\/$/, "");
+  if (local && !isLocalUrl(supabaseUrl)) throw new Error("Refusing local dry-run: use a loopback Supabase URL.");
+  if (!local && isLocalUrl(supabaseUrl)) throw new Error("Refusing loopback URL without --local.");
+  if (!local && parseProjectRef(supabaseUrl) !== STAGING_PROJECT_REF) {
     throw new Error("Refusing to plan: the configured Supabase project is not the approved staging project.");
   }
-  return { supabaseUrl };
+  return { supabaseUrl, local };
 }
 
 export function createAdmin(config) {
@@ -305,8 +328,9 @@ async function applyData(admin, state, usersByEmail, clinicsByName, dryRun) {
   }
 }
 
-export async function runSeed({ dryRun }) {
-  const config = dryRun ? getDryRunConfig() : getRuntimeConfig();
+export async function runSeed({ dryRun, local = false }) {
+  const config = dryRun ? getDryRunConfig({ local }) : getRuntimeConfig({ local });
+  if (dryRun) console.log(`[dry-run] target plan: ${local ? "LOCAL" : "STAGING"}; dataset: 2 clinics, 12 users, 12 memberships, 2 plus subscriptions`);
   const admin = dryRun ? null : createAdmin(config);
   const usersByEmail = dryRun ? new Map() : await listTargetUsers(admin);
   const state = dryRun
@@ -324,9 +348,9 @@ export async function runSeed({ dryRun }) {
 
 if (entrypoint()) {
   const args = new Set(process.argv.slice(2));
-  if ([...args].some((arg) => arg !== "--dry-run" && arg !== "--apply")) fail("Usage: node scripts/qa/seed-rbac-demo-users.mjs [--dry-run|--apply]");
+  if ([...args].some((arg) => !["--dry-run", "--apply", "--local"].includes(arg))) fail("Usage: node scripts/qa/seed-rbac-demo-users.mjs [--dry-run|--apply] [--local]");
   if (args.has("--dry-run") && args.has("--apply")) fail("Use either --dry-run or --apply, not both.");
-  runSeed({ dryRun: !args.has("--apply") }).catch((error) => {
+  runSeed({ dryRun: !args.has("--apply"), local: args.has("--local") }).catch((error) => {
     console.error(error instanceof Error ? error.message : "QA seed failed safely.");
     process.exitCode = 1;
   });

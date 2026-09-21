@@ -15,8 +15,8 @@ function isEntrypoint() {
   return Boolean(process.argv[1]) && pathToFileURL(process.argv[1]).href === import.meta.url;
 }
 
-export function printCleanupPlan() {
-  console.log("[dry-run] QA Patient Scope cleanup: exact 20 synthetic patients and their manual assignments; NO READS, NO WRITES.");
+export function printCleanupPlan({ local = false } = {}) {
+  console.log(`[dry-run] target plan: ${local ? "LOCAL" : "STAGING"}; QA Patient Scope cleanup: exact 20 synthetic patients and their manual assignments; NO READS, NO WRITES.`);
   for (const definition of PATIENT_SCOPE_PATIENTS) {
     console.log(`[dry-run] delete only exact patient ${definition.clinicName}: ${definition.fullName}`);
   }
@@ -121,7 +121,7 @@ async function deleteGeneratedClinicalRows(admin, clinicId, patientIds) {
 
 export async function runCleanup({ dryRun, local }) {
   if (dryRun) {
-    printCleanupPlan();
+    printCleanupPlan({ local });
     return;
   }
   const config = getQaPatientScopeRuntimeConfig({ local });
@@ -170,7 +170,6 @@ if (isEntrypoint()) {
     fail("Usage: node scripts/qa/cleanup-patient-scope-demo.mjs [--dry-run|--apply] [--local]");
   }
   if (args.has("--dry-run") && args.has("--apply")) fail("Use either --dry-run or --apply, not both.");
-  if (args.has("--local") && !args.has("--apply")) fail("--local is only accepted with --apply.");
   runCleanup({ dryRun: !args.has("--apply"), local: args.has("--local") }).catch((error) => {
     console.error(error instanceof Error ? error.message : "QA patient scope cleanup failed safely.");
     process.exitCode = 1;
