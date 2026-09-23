@@ -158,23 +158,25 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
       const message = defaultProfessionalId ? "Agendaremos la cita contigo. ¿Con qué paciente quieres agendarla?" : "¿Con qué paciente quieres agendarla?";
       return { state: "message", message, intent: workingIntent };
     }
-    if (!workingIntent.professionalClinicMemberId && !workingIntent.professionalQuery) return { state: "message", message: "¿Con qué profesional quieres agendarla?", intent: workingIntent };
-    if (!workingIntent.localDate) return { state: "message", message: workingIntent.localTime ? "Necesito la fecha exacta, por ejemplo '24 de septiembre de 2026'." : "¿Para qué fecha? Usa hoy, mañana o una fecha explícita.", intent: workingIntent };
-    if (!workingIntent.localTime) return { state: "message", message: "¿A qué hora?", intent: workingIntent };
     const patient = workingIntent.patientId ? { state: "ready" as const, id: workingIntent.patientId, label: "Paciente" } : await resolvePatient(workingIntent.patientQuery);
     if (patient.state !== "ready") return patient.state === "error" || patient.state === "none" || patient.state === "ambiguous" ? patient.response : { state: "message", message: "¿Con qué paciente quieres agendarla?" };
+    if (!workingIntent.professionalClinicMemberId && !workingIntent.professionalQuery) return { state: "message", message: "¿Con qué profesional quieres agendarla?", intent: { ...workingIntent, patientId: patient.id, patientQuery: undefined } };
     const professional = workingIntent.professionalClinicMemberId ? { state: "ready" as const, id: workingIntent.professionalClinicMemberId, label: defaultProfessionalId ? "Tú" : "Profesional" } : await resolveProfessional(workingIntent.professionalQuery);
     if (professional.state !== "ready") return professional.state === "error" || professional.state === "none" || professional.state === "ambiguous" ? professional.response : { state: "message", message: "¿Con qué profesional quieres agendarla?" };
-    const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalClinicMemberId: professional.id, date: workingIntent.localDate, durationMinutes: workingIntent.durationMinutes });
+    const resolvedIntent = { ...workingIntent, patientId: patient.id, patientQuery: undefined, professionalClinicMemberId: professional.id, professionalQuery: undefined };
+    if (!resolvedIntent.localDate) return { state: "message", message: resolvedIntent.localTime ? "Necesito la fecha exacta, por ejemplo '24 de septiembre de 2026'." : "¿Para qué fecha? Usa hoy, mañana o una fecha explícita.", intent: resolvedIntent };
+    if (!resolvedIntent.localTime) return { state: "message", message: "¿A qué hora?", intent: resolvedIntent };
+    const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalClinicMemberId: professional.id, date: resolvedIntent.localDate, durationMinutes: resolvedIntent.durationMinutes });
     if (!slots.ok) {
-      if (slots.error.code === "not_found" || slots.error.code === "forbidden") return { state: "message", message: slots.error.safeMessage, intent: workingIntent };
-      return availabilityRetryResponse(workingIntent, professional.label, "date");
+      if (slots.error.code === "not_found" || slots.error.code === "forbidden") return { state: "message", message: slots.error.safeMessage, intent: resolvedIntent };
+      return availabilityRetryResponse(resolvedIntent, professional.label, "date");
     }
-    if (slots.data.length === 0) return availabilityRetryResponse(workingIntent, professional.label, "date");
-    if (!slots.data.some((slot) => slot.local_start === workingIntent.localTime)) return availabilityRetryResponse(workingIntent, professional.label, "time", slots.data);
-    const proposal = await prepareAssistantMutation("create_appointment", { patientId: patient.id, professionalClinicMemberId: professional.id, date: workingIntent.localDate, startTime: workingIntent.localTime, durationMinutes: workingIntent.durationMinutes });
+    if (slots.data.length === 0) return availabilityRetryResponse(resolvedIntent, professional.label, "date");
+    if (!slots.data.some((slot) => slot.local_start === resolvedIntent.localTime)) return availabilityRetryResponse(resolvedIntent, professional.label, "time", slots.data);
+    if (!resolvedIntent.professionalClinicMemberId) return { state: "error", message: "No fue posible validar el profesional seleccionado." };
+    const proposal = await prepareAssistantMutation("create_appointment", { patientId: resolvedIntent.patientId, professionalClinicMemberId: resolvedIntent.professionalClinicMemberId, date: resolvedIntent.localDate, startTime: resolvedIntent.localTime, durationMinutes: resolvedIntent.durationMinutes });
     if (!proposal.ok) return safeToolError(proposal);
-    return proposalResponse(proposal.data, "Crear cita", { patient: patient.label, professional: professional.label, date: workingIntent.localDate, time: workingIntent.localTime });
+    return proposalResponse(proposal.data, "Crear cita", { patient: patient.label, professional: professional.label, date: resolvedIntent.localDate, time: resolvedIntent.localTime });
   }
 
   if (intent.type !== "confirm_appointment" && intent.type !== "cancel_appointment" && intent.type !== "reschedule_appointment") {

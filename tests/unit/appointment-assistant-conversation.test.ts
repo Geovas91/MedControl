@@ -73,10 +73,24 @@ test("contextual helper commands do not become entity queries", () => {
   const create: AssistantIntent = { type: "create_appointment", localDate: today, localTime: "10:00", durationMinutes: 30 };
   assert.equal(classifyContextualHelper(create, "Dame la lista de pacientes"), "patients");
   assert.equal(classifyContextualHelper({ ...create, patientId: "patient-1" }, "Dame la lista de médicos"), "professionals");
-  for (const command of ["Dame la lista de profesionales", "Qué profesionales hay", "Muéstrame médicos", "Ver médicos", "Cambiar profesional", "Elegir otro médico"]) {
+  for (const command of ["Dame la lista de profesionales", "Dame la lista de doctores", "Muéstrame los doctores", "Lista de profesionales", "Qué profesionales hay", "Muéstrame médicos", "Ver médicos", "Cambiar profesional", "Elegir otro médico", "Con qué doctores puedo agendar"]) {
     assert.equal(classifyContextualHelper({ ...create, patientId: "patient-1", professionalClinicMemberId: "member-1" }, command), "professionals");
   }
   assert.equal(classifyContextualHelper(create, "Juan Pérez"), null);
+});
+
+test("professional remains unresolved until an explicit canonical choice", () => {
+  const pending: AssistantIntent = { type: "create_appointment", patientId: "patient-1", durationMinutes: 30 };
+  assert.equal(classifyContextualHelper(pending, "Dame la lista de doctores"), "professionals");
+  const unresolved = applyFollowUpToIntent({ intent: pending, message: "Doctor Batman", clinicLocalDate: today });
+  assert.equal(unresolved.updatedIntent.type, "create_appointment");
+  if (unresolved.updatedIntent.type === "create_appointment") {
+    assert.equal(unresolved.updatedIntent.professionalQuery, "Doctor Batman");
+    assert.equal(unresolved.updatedIntent.professionalClinicMemberId, undefined);
+  }
+  assert.equal(unresolved.missingFields.includes("professional"), true);
+  const ambiguous = applyFollowUpToIntent({ intent: pending, message: "Doctor", clinicLocalDate: today });
+  assert.equal(ambiguous.missingFields.includes("professional"), true);
 });
 
 test("self scheduling defaults only to an active professional actor", () => {

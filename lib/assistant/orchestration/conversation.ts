@@ -23,7 +23,7 @@ export function classifyContextualHelper(intent: AssistantIntent, value: string)
   const plain = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const missing = getMissingFields(intent);
   if (missing.includes("patient") && /^(?:dame la lista de pacientes|ver pacientes|que pacientes hay|muestrame pacientes)$/.test(plain)) return "patients";
-  const professionalHelper = /^(?:dame la lista de profesionales|dame la lista de medicos|ver profesionales|ver medicos|que profesionales hay|que doctores hay|muestrame profesionales|muestrame medicos|cambiar profesional|elegir otro medico)$/.test(plain);
+  const professionalHelper = /^(?:dame la lista de (?:profesionales|medicos|doctores)|lista de (?:profesionales|medicos|doctores)|(?:ver|mostrar|muestrame) (?:los )?(?:profesionales|medicos|doctores)|que (?:profesionales|medicos|doctores) hay|con que (?:profesionales|medicos|doctores) puedo agendar|cambiar profesional|elegir otro medico)$/.test(plain);
   if (professionalHelper && (missing.includes("professional") || intent.type === "create_appointment" || intent.type === "check_availability")) return "professionals";
   return null;
 }
