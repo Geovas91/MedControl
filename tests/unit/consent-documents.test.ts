@@ -92,7 +92,8 @@ test("Storage upload is server-side, verified and persisted only after SHA-256 c
 
 test("download authorizes the active tenant and blocks altered bytes", () => {
   assert.match(documentService, /getActiveTenantContext\(\)/);
-  assert.match(documentService, /canViewClinicalRecord\(context\.tenant\.membership\.role\)/);
+  assert.match(documentService, /canViewClinicalRecord\(context\.tenant\.membership\)/);
+  assert.match(readFileSync(new URL("../../lib/clinical-record/permissions.ts", import.meta.url), "utf8"), /is_professional && membership\.role !== "assistant"/);
   assert.match(documentService, /\.eq\("clinic_id", context\.tenant\.clinic\.id\)/);
   assert.match(documentService, /bytes\.length !== documentData\.size_bytes \|\| !hashesMatch/);
   assert.match(documentService, /state: "integrity_error"/);

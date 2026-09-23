@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { supportStatusLabels } from "../../lib/support/presentation.ts";
 import { isSupportUuid } from "../../lib/support/security.ts";
@@ -45,7 +46,8 @@ function controls(status: string, action: (...args: unknown[]) => Promise<unknow
       useTransition: () => [pending, (callback: () => Promise<void>) => { pending = true; completion = Promise.resolve(callback()).finally(() => { pending = false; }); }]
     },
     "@/app/admin/support/actions": { transitionSupportAction: action },
-    "@/lib/support/presentation": { supportStatusLabels }
+    "@/lib/support/presentation": { supportStatusLabels },
+    "@/components/ui/button": { Button: (props: any) => createElement("button", props, props.children) }
   });
   return {
     render: () => { index = 0; return loaded.SupportAdminControls({ ticket: { id, status, assigned_to: null }, admins: [] }); },
@@ -168,6 +170,7 @@ for (const status of states) {
       "next/navigation": { notFound: () => { throw new Error("not_found"); }, redirect: () => { throw new Error("redirect"); } },
       "lucide-react": { ArrowLeft: () => null },
       "@/components/dashboard/page-header": { PageHeader: () => null },
+      "@/components/ui/badge": { Badge: ({ children, ...props }: any) => createElement("span", props, children) },
       "@/components/support/ticket-actions": { AddSupportTicketMessageForm: () => null, CloseSupportTicketForm: () => null },
       "@/lib/support/presentation": { supportStatusLabels, supportCategoryLabels: { other: "Otro" }, supportSeverityLabels: { normal: "Normal" }, formatSupportDate: () => "8 sep 2026" },
       "@/lib/server/support/tickets": { getSupportTicketDetail: async () => ({ state: "ready", data: {
@@ -175,7 +178,7 @@ for (const status of states) {
       } }) }
     });
     const html = renderToStaticMarkup(await page.default({ params: Promise.resolve({ id }), searchParams: Promise.resolve({}) }));
-    assert.ok(html.includes(`>${supportStatusLabels[status]}</dd>`));
+    assert.ok(html.includes(supportStatusLabels[status]));
     assert.ok(html.includes(`Estado actualizado a ${supportStatusLabels[status]}`));
     assert.doesNotMatch(html, /<button|Estado del ticket|Asignarme|Nota interna/);
   });

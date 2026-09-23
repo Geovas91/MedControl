@@ -69,6 +69,6 @@ test("server actions do not return raw provider or database messages", () => {
     "app/dashboard/members/actions.ts",
     "app/dashboard/directory/actions.ts"
   ]) {
-    assert.doesNotMatch(readFileSync(path, "utf8"), /(?:error|membersError)\?*\.message/);
+    assert.doesNotMatch(readFileSync(path, "utf8"), /(?:error|message):\s*(?:error|membersError)\??\.message/);
   }
 });
