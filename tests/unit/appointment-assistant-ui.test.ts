@@ -21,6 +21,19 @@ test("proposal controls use durable actionId-only server boundaries", () => {
   assert.match(actions, /executeConfirmedAssistantAction\(actionId\)/);
   assert.match(actions, /cancelAssistantPendingAction\(actionId\)/);
   assert.match(actions, /revalidatePath\("\/dashboard\/appointments"\)/);
+  assert.match(actions, /getCreateAppointmentProposalPresentation\(proposalInput\)/);
+  assert.match(component, /response\.state === "success" \|\| response\.state === "proposal_terminal"/);
+  assert.match(component, /if \(response\.state === "proposal_terminal"\) return response\.message/);
+});
+
+test("proposal labels are server-rehydrated and terminal proposals are not confirmable", () => {
+  const registry = readFileSync("lib/assistant/tools/registry.ts", "utf8");
+  assert.match(registry, /getCreateAppointmentProposalPresentation/);
+  assert.match(registry, /eq\("clinic_id", context\.data\.clinicId\)/);
+  assert.match(registry, /professional_clinic_member_id === input\.professionalClinicMemberId/);
+  assert.doesNotMatch(registry, /validated_arguments[^\n]*full_name/);
+  assert.match(actions, /state: "proposal_terminal"/);
+  assert.match(component, /setProposal\(null\)/);
 });
 
 test("UI exposes safe accessibility and loading behavior", () => {

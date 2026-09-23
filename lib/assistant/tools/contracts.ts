@@ -37,6 +37,22 @@ export type AssistantToolDefinition<I, O> = {
   execute(context: AssistantToolContext, input: I): Promise<AssistantToolResult<O>>;
 };
 
+export type CreateAppointmentToolInput = {
+  patientId: string;
+  professionalClinicMemberId: string;
+  date: string;
+  startTime: string;
+  durationMinutes: number;
+};
+
+export type PersistedCreateAppointmentArguments = {
+  patient_id: string;
+  professional_clinic_member_id: string;
+  local_date: string;
+  local_time: string;
+  duration_minutes: number;
+};
+
 const record = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 const text = (value: unknown, max = 120) => typeof value === "string" && value.trim().length <= max ? value.trim() : null;
@@ -58,6 +74,30 @@ export const toolSchemas = {
   reschedule: { parse(value: unknown) { const input = record(value); const appointmentId = uuid(input?.appointmentId); const expectedStatus = status(input?.expectedStatus); const date = localDate(input?.date); const startTime = localTime(input?.startTime); const minutes = duration(input?.durationMinutes); return appointmentId && expectedStatus && date && startTime && minutes ? { appointmentId, expectedStatus, date, startTime, durationMinutes: minutes } : null; } },
   output: { parse(value: unknown) { return value as never; } }
 } satisfies Record<string, AssistantToolSchema<never> | AssistantToolSchema<unknown>>;
+
+// A pending action stores only stable execution identifiers and clinic-local time.
+// Both proposal creation and confirmation must cross this same boundary so that a
+// durable proposal cannot be accepted with a shape that confirmation rejects.
+export function serializeCreateAppointmentPendingArguments(input: CreateAppointmentToolInput): PersistedCreateAppointmentArguments {
+  return {
+    patient_id: input.patientId,
+    professional_clinic_member_id: input.professionalClinicMemberId,
+    local_date: input.date,
+    local_time: input.startTime,
+    duration_minutes: input.durationMinutes
+  };
+}
+
+export function parseCreateAppointmentPendingArguments(value: unknown): CreateAppointmentToolInput | null {
+  const input = record(value);
+  return toolSchemas.createAppointment.parse({
+    patientId: input?.patient_id,
+    professionalClinicMemberId: input?.professional_clinic_member_id,
+    date: input?.local_date,
+    startTime: input?.local_time,
+    durationMinutes: input?.duration_minutes
+  });
+}
 
 export const assistantToolError = (code: AssistantToolErrorCode, safeMessage: string): AssistantToolResult<never> => ({ ok: false, error: { code, safeMessage } });
 export const allowedDurations = appointmentDurations;

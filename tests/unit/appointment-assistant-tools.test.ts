@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { assistantToolNames, toolSchemas } from "../../lib/assistant/tools/contracts.ts";
+import { assistantToolNames, parseCreateAppointmentPendingArguments, serializeCreateAppointmentPendingArguments, toolSchemas } from "../../lib/assistant/tools/contracts.ts";
 import { planAppointmentMutation, planAppointmentProposal, resolveUniqueEntity } from "../../lib/assistant/orchestration/intents.ts";
 
 const registry = readFileSync("lib/assistant/tools/registry.ts", "utf8");
@@ -22,13 +22,35 @@ test("untrusted scheduling inputs require canonical identifiers and local clinic
   assert.deepEqual(toolSchemas.lifecycle.parse({ appointmentId: "10000000-0000-4000-8000-000000000001", expectedStatus: "scheduled" }), { appointmentId: "10000000-0000-4000-8000-000000000001", expectedStatus: "scheduled" });
 });
 
+test("create appointment proposals and confirmations share the same durable payload contract", () => {
+  const canonical = {
+    patientId: "10000000-0000-4000-8000-000000000001",
+    professionalClinicMemberId: "20000000-0000-4000-8000-000000000001",
+    date: "2026-09-24",
+    startTime: "15:30",
+    durationMinutes: 30
+  };
+  const persisted = serializeCreateAppointmentPendingArguments(canonical);
+  assert.deepEqual(persisted, {
+    patient_id: canonical.patientId,
+    professional_clinic_member_id: canonical.professionalClinicMemberId,
+    local_date: canonical.date,
+    local_time: canonical.startTime,
+    duration_minutes: canonical.durationMinutes
+  });
+  assert.deepEqual(parseCreateAppointmentPendingArguments(persisted), canonical);
+  assert.equal(parseCreateAppointmentPendingArguments({ ...persisted, patient_id: undefined }), null);
+  assert.equal(parseCreateAppointmentPendingArguments({ ...persisted, professional_clinic_member_id: "not-an-id" }), null);
+});
+
 test("mutation tools remain confirmation-gated and derive context server-side", () => {
   assert.match(registry, /if \(tool\.mutation\) return assistantToolError\("confirmation_required"/);
   assert.match(registry, /getActiveTenantContext\(\)/);
   assert.match(registry, /claim_assistant_pending_action_for_current_user/);
   assert.match(registry, /p_action_id: actionId/);
   assert.match(registry, /finish_assistant_pending_action_for_current_user/);
-  assert.match(registry, /registryArguments\(tool\.name, pending\.validated_arguments\)/);
+  assert.match(registry, /parseCreateAppointmentPendingArguments\(value\)/);
+  assert.match(registry, /const executionInput = registryArguments\(tool\.name, pending\.validated_arguments\)/);
   assert.doesNotMatch(registry, /executeConfirmedAssistantAction\([^)]*,\s*rawInput/);
   assert.match(registry, /finish\.error \|\| finish\.data !== \(result\.ok \? "executed" : "failed"\)/);
   assert.match(registry, /mutateAppointmentLifecycleForActiveTenant/);
@@ -64,10 +86,12 @@ test("confirm, cancel, and reschedule only plan a unique appointment", () => {
 test("pending action storage is minimal and terminal actions are not retried", () => {
   const migration = readFileSync("supabase/migrations/0050_patient_professional_scope.sql", "utf8");
   const lifecycleMigration = readFileSync("supabase/migrations/0049_assistant_pending_actions.sql", "utf8");
-  assert.match(registry, /patient_id.*professional_clinic_member_id.*local_date.*local_time.*duration_minutes/);
+  assert.match(registry, /serializeCreateAppointmentPendingArguments\(input as CreateAppointmentToolInput\)/);
+  assert.match(registry, /parseCreateAppointmentPendingArguments\(value\)/);
   assert.doesNotMatch(registry, /validated_arguments:.*title/);
   assert.match(migration, /key not in \('appointment_id','patient_id','professional_clinic_member_id','local_date','local_time','duration_minutes','expected_status'\)/);
   assert.match(registry, /if \(pending\.status !== "claimed"\) return assistantToolError\("confirmation_required"/);
+  assert.match(registry, /if \(tool\.name === "create_appointment" && !parseCreateAppointmentPendingArguments\(persisted\)\)/);
   assert.match(lifecycleMigration, /v_action\.status <> 'claimed'/);
 });
 
@@ -77,4 +101,6 @@ test("availability uses clinic member identity and resolves user identity only f
   assert.match(registry, /candidate\.id === clinicMemberId/);
   assert.match(registry, /getProfessionalAvailableSlots\(\{ clinicMemberId: member\.id/);
   assert.match(registry, /doctorId: member\.user_id/);
+  assert.match(registry, /validateCreateAppointmentCandidate/);
+  assert.match(registry, /local_start === input\.startTime/);
 });

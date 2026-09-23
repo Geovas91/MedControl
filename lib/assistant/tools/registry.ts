@@ -11,7 +11,7 @@ import { getPatientsForActiveTenant } from "@/lib/server/patients";
 import { getProfessionalAvailableSlots } from "@/lib/server/professional-slots";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
-import { assistantToolError, assistantToolNames, toolSchemas, type AssistantToolContext, type AssistantToolDefinition, type AssistantToolName, type AssistantToolResult } from "./contracts";
+import { assistantToolError, assistantToolNames, parseCreateAppointmentPendingArguments, serializeCreateAppointmentPendingArguments, toolSchemas, type AssistantToolContext, type AssistantToolDefinition, type AssistantToolName, type AssistantToolResult, type CreateAppointmentToolInput } from "./contracts";
 
 type ReadPatient = { patient_id: string; display_name: string; status: string };
 type ReadAppointment = { appointment_id: string; patient_id: string | null; patient_display_name: string; professional_id: string | null; professional_display_name: string | null; starts_at: string; ends_at: string; status: string };
@@ -90,6 +90,29 @@ async function getProfessionalMember(context: AssistantToolContext, clinicMember
   return member ? { state: "ready" as const, data: member } : { state: "not_found" as const };
 }
 
+async function validateCreateAppointmentCandidate(context: AssistantToolContext, input: CreateAppointmentToolInput): Promise<AssistantToolResult<CreateAppointmentToolInput>> {
+  const [patientResult, memberResult] = await Promise.all([
+    (await createClient()).from("patients").select("id").eq("clinic_id", context.clinicId).eq("id", input.patientId).maybeSingle(),
+    getProfessionalMember(context, input.professionalClinicMemberId)
+  ]);
+  if (patientResult.error) return assistantToolError("generic", "No fue posible validar el paciente seleccionado.");
+  const patient = patientResult.data as { id: string } | null;
+  if (!patient) return assistantToolError("not_found", "El paciente no está disponible para esta clínica.");
+  if (memberResult.state === "error") return safeFailure(memberResult.error);
+  if (memberResult.state !== "ready") return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+  if (context.role === "doctor" && memberResult.data.user_id !== context.userId) return assistantToolError("forbidden", "No tienes acceso a la disponibilidad de otro profesional.");
+
+  const slots = await getProfessionalAvailableSlots({
+    clinicMemberId: memberResult.data.id,
+    localDate: input.date,
+    durationMinutes: input.durationMinutes,
+    slotIntervalMinutes: 15
+  });
+  if (slots.state !== "ready" || !slots.data) return safeFailure(slots.state);
+  if (!slots.data.some((slot) => slot.local_start === input.startTime)) return assistantToolError("outside_availability", "El horario ya no está disponible.");
+  return { ok: true, data: input };
+}
+
 const getAvailableSlots: AssistantToolDefinition<{ professionalClinicMemberId: string; date: string; durationMinutes: number }, { start_at: string; end_at: string; local_start: string; local_end: string; time_zone: string }[]> = {
   name: "get_available_slots", description: "Consulta slots mediante el Slot Engine de la clínica activa.", inputSchema: toolSchemas.availableSlots, outputSchema: toolSchemas.output, mutation: false, requiresConfirmation: false,
   async execute(context, input) {
@@ -107,7 +130,9 @@ const getAvailableSlots: AssistantToolDefinition<{ professionalClinicMemberId: s
 const createAppointment: AssistantToolDefinition<ReturnType<typeof toolSchemas.createAppointment.parse> & {}, { appointment_id: string }> = {
   name: "create_appointment", description: "Crea una cita usando el contrato de creación existente.", inputSchema: toolSchemas.createAppointment, outputSchema: toolSchemas.output, mutation: true, requiresConfirmation: true,
   async execute(context, input) {
-    const memberResult = await getProfessionalMember(context, input.professionalClinicMemberId);
+    const candidate = await validateCreateAppointmentCandidate(context, input);
+    if (!candidate.ok) return candidate;
+    const memberResult = await getProfessionalMember(context, candidate.data.professionalClinicMemberId);
     if (memberResult.state === "error") return safeFailure(memberResult.error);
     if (memberResult.state !== "ready") return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
     const member = memberResult.data;
@@ -149,14 +174,32 @@ export async function executeAssistantReadTool(name: string, rawInput: unknown):
   const result = await executable.execute(context.data, input); logTool(result.ok ? "succeeded" : "failed", context.data, tool.name, startedAt, result.ok ? undefined : result.error.code); return result;
 }
 
+export async function getCreateAppointmentProposalPresentation(rawInput: unknown): Promise<AssistantToolResult<{ patient: string; professional: string }>> {
+  const context = await getAssistantToolContext();
+  if (!context.ok) return context;
+  const input = toolSchemas.createAppointment.parse(rawInput);
+  if (!input) return assistantToolError("validation_error", "Los datos de la acción no son válidos.");
+  const [patientResult, professionals] = await Promise.all([
+    (await createClient()).from("patients").select("id, full_name").eq("clinic_id", context.data.clinicId).eq("id", input.patientId).maybeSingle(),
+    getProfessionals.execute(context.data, {})
+  ]);
+  if (patientResult.error) return assistantToolError("generic", "No fue posible preparar la propuesta.");
+  const patient = patientResult.data as { id: string; full_name: string } | null;
+  if (!patient) return assistantToolError("not_found", "El paciente no está disponible para esta clínica.");
+  if (!professionals.ok) return professionals;
+  const professional = professionals.data.find((member) => member.professional_clinic_member_id === input.professionalClinicMemberId);
+  if (!professional) return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
+  return { ok: true, data: { patient: patient.full_name, professional: professional.display_name } };
+}
+
 function persistedArguments(toolName: AssistantToolName, input: Record<string, unknown>) {
-  if (toolName === "create_appointment") return { patient_id: input.patientId, professional_clinic_member_id: input.professionalClinicMemberId, local_date: input.date, local_time: input.startTime, duration_minutes: input.durationMinutes };
+  if (toolName === "create_appointment") return serializeCreateAppointmentPendingArguments(input as CreateAppointmentToolInput);
   if (toolName === "reschedule_appointment") return { appointment_id: input.appointmentId, expected_status: input.expectedStatus, local_date: input.date, local_time: input.startTime, duration_minutes: input.durationMinutes };
   return { appointment_id: input.appointmentId, expected_status: input.expectedStatus };
 }
 
 function registryArguments(toolName: AssistantToolName, value: Record<string, unknown>) {
-  if (toolName === "create_appointment") return { patientId: value.patient_id, professionalClinicMemberId: value.professional_clinic_member_id, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
+  if (toolName === "create_appointment") return parseCreateAppointmentPendingArguments(value);
   if (toolName === "reschedule_appointment") return { appointmentId: value.appointment_id, expectedStatus: value.expected_status, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
   return { appointmentId: value.appointment_id, expectedStatus: value.expected_status };
 }
@@ -165,8 +208,16 @@ export async function prepareAssistantMutation(name: string, rawInput: unknown):
   const tool = getAssistantTool(name); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La herramienta solicitada no admite una acción confirmable.");
   const context = await getAssistantToolContext(); if (!context.ok) return context;
   const input = tool.inputSchema.parse(rawInput); if (!input) return assistantToolError("validation_error", "Los datos de la acción no son válidos.");
+  if (tool.name === "create_appointment") {
+    const candidate = await validateCreateAppointmentCandidate(context.data, input as CreateAppointmentToolInput);
+    if (!candidate.ok) return candidate;
+  }
+  const persisted = persistedArguments(tool.name, input as Record<string, unknown>);
+  if (tool.name === "create_appointment" && !parseCreateAppointmentPendingArguments(persisted)) {
+    return assistantToolError("validation_error", "Los datos de la acción no son válidos.");
+  }
   const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
-  const rpc = await (await createClient()).rpc("create_assistant_pending_action_for_current_user" as never, { p_clinic_id: context.data.clinicId, p_tool_name: tool.name, p_validated_arguments: persistedArguments(tool.name, input as Record<string, unknown>), p_expires_at: expiresAt } as never) as unknown as { data: Array<{ id: string; tool_name: AssistantToolName; expires_at: string }> | null; error: { code?: string } | null };
+  const rpc = await (await createClient()).rpc("create_assistant_pending_action_for_current_user" as never, { p_clinic_id: context.data.clinicId, p_tool_name: tool.name, p_validated_arguments: persisted, p_expires_at: expiresAt } as never) as unknown as { data: Array<{ id: string; tool_name: AssistantToolName; expires_at: string }> | null; error: { code?: string } | null };
   if (rpc.error || !rpc.data?.[0]) return safeFailure(rpc.error?.code === "42501" ? "forbidden" : "error");
   logger.info("assistant_action_proposed", { tool_name: tool.name, clinic_id: context.data.clinicId, actor_user_id: context.data.userId, actor_role: context.data.role });
   return { ok: true, data: { actionId: rpc.data[0].id, toolName: rpc.data[0].tool_name, expiresAt: rpc.data[0].expires_at, summary: `Acción propuesta: ${tool.name}.` } };
@@ -182,7 +233,10 @@ export async function executeConfirmedAssistantAction(actionId: string): Promise
   const tool = getAssistantTool(pending.tool_name); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La acción ya no está disponible.");
   const startedAt = Date.now(); logger.info("assistant_action_confirmed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role });
   const executable = tool as unknown as { execute(context: AssistantToolContext, input: unknown): Promise<AssistantToolResult<unknown>> };
-  const result = await executable.execute(current.data, registryArguments(tool.name, pending.validated_arguments));
+  const executionInput = registryArguments(tool.name, pending.validated_arguments);
+  const result = executionInput
+    ? await executable.execute(current.data, executionInput)
+    : assistantToolError("validation_error", "Los datos de la operación no son válidos.");
   const finish = await (await createClient()).rpc("finish_assistant_pending_action_for_current_user" as never, { p_action_id: actionId, p_outcome: result.ok ? "executed" : "failed", p_error_code: result.ok ? null : result.error.code } as never) as unknown as { data: string | null; error: { code?: string } | null };
   if (finish.error || finish.data !== (result.ok ? "executed" : "failed")) {
     logger.error("assistant_action_failed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role, error_code: "generic" });

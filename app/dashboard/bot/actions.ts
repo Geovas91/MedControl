@@ -13,6 +13,7 @@ import {
   executeAssistantReadTool,
   executeConfirmedAssistantAction,
   getAssistantToolContext,
+  getCreateAppointmentProposalPresentation,
   prepareAssistantMutation,
   type AssistantProposal
 } from "@/lib/assistant/tools/registry";
@@ -40,7 +41,8 @@ export type AssistantUiResponse =
   | { state: "appointments"; appointments: Array<{ id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string }> }
   | { state: "proposal"; proposal: AssistantProposal; action: string; patient?: string; professional?: string | null; date?: string; time?: string; previous?: string }
   | { state: "success"; message: string }
-  | { state: "cancelled"; message: string };
+  | { state: "cancelled"; message: string }
+  | { state: "proposal_terminal"; status: "failed" | "expired" | "cancelled" | "executed" | "unavailable"; message: string };
 
 type ReadPatient = { patient_id: string; display_name: string; status: string };
 type ReadProfessional = { professional_clinic_member_id: string; professional_user_id: string; display_name: string };
@@ -174,9 +176,12 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     if (slots.data.length === 0) return availabilityRetryResponse(resolvedIntent, professional.label, "date");
     if (!slots.data.some((slot) => slot.local_start === resolvedIntent.localTime)) return availabilityRetryResponse(resolvedIntent, professional.label, "time", slots.data);
     if (!resolvedIntent.professionalClinicMemberId) return { state: "error", message: "No fue posible validar el profesional seleccionado." };
-    const proposal = await prepareAssistantMutation("create_appointment", { patientId: resolvedIntent.patientId, professionalClinicMemberId: resolvedIntent.professionalClinicMemberId, date: resolvedIntent.localDate, startTime: resolvedIntent.localTime, durationMinutes: resolvedIntent.durationMinutes });
+    const proposalInput = { patientId: resolvedIntent.patientId, professionalClinicMemberId: resolvedIntent.professionalClinicMemberId, date: resolvedIntent.localDate, startTime: resolvedIntent.localTime, durationMinutes: resolvedIntent.durationMinutes };
+    const presentation = await getCreateAppointmentProposalPresentation(proposalInput);
+    if (!presentation.ok) return safeToolError(presentation);
+    const proposal = await prepareAssistantMutation("create_appointment", proposalInput);
     if (!proposal.ok) return safeToolError(proposal);
-    return proposalResponse(proposal.data, "Crear cita", { patient: patient.label, professional: professional.label, date: resolvedIntent.localDate, time: resolvedIntent.localTime });
+    return proposalResponse(proposal.data, "Crear cita", { patient: presentation.data.patient, professional: presentation.data.professional, date: resolvedIntent.localDate, time: resolvedIntent.localTime });
   }
 
   if (intent.type !== "confirm_appointment" && intent.type !== "cancel_appointment" && intent.type !== "reschedule_appointment") {
@@ -227,7 +232,12 @@ export async function submitAssistantContextualHelperAction(input: unknown, help
 export async function confirmAssistantProposalAction(actionId: unknown): Promise<AssistantUiResponse> {
   if (typeof actionId !== "string" || !isCanonicalAppointmentUuid(actionId)) return { state: "error", message: "La propuesta no es válida." };
   const result = await executeConfirmedAssistantAction(actionId);
-  if (!result.ok) return { state: "error", message: result.error.safeMessage };
+  if (!result.ok) {
+    const status = result.error.code === "confirmation_required"
+      ? result.error.safeMessage.includes("venció") ? "expired" : "unavailable"
+      : "failed";
+    return { state: "proposal_terminal", status, message: result.error.safeMessage };
+  }
   revalidatePath("/dashboard/bot");
   revalidatePath("/dashboard/appointments");
   return { state: "success", message: "La acción se completó correctamente." };
@@ -236,6 +246,8 @@ export async function confirmAssistantProposalAction(actionId: unknown): Promise
 export async function cancelAssistantProposalAction(actionId: unknown): Promise<AssistantUiResponse> {
   if (typeof actionId !== "string" || !isCanonicalAppointmentUuid(actionId)) return { state: "error", message: "La propuesta no es válida." };
   const result = await cancelAssistantPendingAction(actionId);
-  if (!result.ok) return { state: "error", message: result.error.safeMessage };
-  return { state: "cancelled", message: result.data.status === "expired" ? "Esta propuesta expiró. Vuelve a solicitar la acción." : "Acción cancelada." };
+  if (!result.ok) return { state: "proposal_terminal", status: "unavailable", message: result.error.safeMessage };
+  if (result.data.status === "cancelled") return { state: "cancelled", message: "Acción cancelada." };
+  if (result.data.status === "expired") return { state: "proposal_terminal", status: "expired", message: "Esta propuesta expiró. Vuelve a solicitar la acción." };
+  return { state: "proposal_terminal", status: result.data.status === "executed" ? "executed" : "failed", message: "La propuesta ya no puede ejecutarse." };
 }

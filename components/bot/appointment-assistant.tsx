@@ -33,6 +33,7 @@ function applyChoice(intent: AssistantIntent, id: string, field: "patient" | "pr
 }
 
 function responseText(response: AssistantUiResponse) {
+  if (response.state === "proposal_terminal") return response.message;
   if ("message" in response) return response.message;
   if (response.state === "slots") return `Encontré ${response.slots.length} horarios disponibles.`;
   if (response.state === "appointments") return `Encontré ${response.appointments.length} citas.`;
@@ -101,7 +102,7 @@ export function AppointmentAssistant({ today, timeZone }: Props) {
         ? proposal.action === "Crear cita" ? "Cita creada correctamente." : proposal.action === "Reprogramar cita" ? "Cita reprogramada correctamente." : proposal.action === "Confirmar cita" ? "Cita confirmada correctamente." : "Cita cancelada correctamente."
         : responseText(response);
       append({ id: nextId, author: "assistant", text: message, response });
-      if (response.state === "success") setProposal(null);
+      if (response.state === "success" || response.state === "proposal_terminal") setProposal(null);
     });
   };
 
