@@ -15,6 +15,7 @@ import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
+import { listClinicMembersForClinic } from "@/lib/supabase/clinic-members";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -235,29 +236,22 @@ export async function createAppointmentForActiveTenant(
   const input = validation.data;
   const clinicId = context.tenant.clinic.id;
   const supabase = await createClient();
-  const [patientResult, doctorResult] = await Promise.all([
+  const [patientResult, professionalsResult] = await Promise.all([
     supabase
       .from("patients")
       .select("id")
       .eq("clinic_id", clinicId)
       .eq("id", input.patientId)
       .maybeSingle(),
-    supabase
-      .from("clinic_members")
-      .select("user_id")
-      .eq("clinic_id", clinicId)
-      .eq("user_id", input.doctorId)
-      .eq("status", "active")
-      .eq("is_professional", true)
-      .maybeSingle()
+    listClinicMembersForClinic(clinicId)
   ]);
 
-  if (patientResult.error || doctorResult.error) {
+  if (patientResult.error || professionalsResult.error) {
     logger.error("Appointment creation relation validation failed", {
       component: "create_appointment",
       status: "relation_query_error",
       patientCode: patientResult.error?.code,
-      doctorCode: doctorResult.error?.code
+      doctorCode: professionalsResult.error?.code
     });
     return {
       state: "error",
@@ -272,7 +266,10 @@ export async function createAppointmentForActiveTenant(
     relationErrors.patientId = "El paciente seleccionado no pertenece a la clínica activa.";
   }
 
-  if (!doctorResult.data) {
+  const doctor = (professionalsResult.data ?? []).find((member) =>
+    member.clinic_id === clinicId && member.user_id === input.doctorId && member.status === "active" && member.is_professional
+  );
+  if (!doctor) {
     relationErrors.doctorId = "El médico seleccionado no pertenece a la clínica activa.";
   }
 

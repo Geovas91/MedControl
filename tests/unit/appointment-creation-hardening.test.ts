@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import test from "node:test";
+import ts from "typescript";
 import {
   calculateAppointmentEnd,
+  canCreateAppointments,
   classifyAppointmentPersistenceError,
   combineClinicDateTime,
   validateAppointmentFormValues
 } from "../../lib/appointments/create.ts";
+import { isCanonicalAppointmentUuid } from "../../lib/appointments/query.ts";
+import { parseCreateAppointmentPendingArguments } from "../../lib/assistant/tools/contracts.ts";
 
 const migration = readFileSync("supabase/migrations/0040_appointment_scheduling_hardening.sql", "utf8");
 const server = readFileSync("lib/server/create-appointment.ts", "utf8");
@@ -41,6 +46,74 @@ test("missing appointment data is rejected before persistence", () => {
   });
   assert.equal(result.valid, false);
   assert.deepEqual(Object.keys(result.fieldErrors).sort(), ["doctorId", "patientId", "startTime", "title"]);
+});
+
+test("QA owner can confirm the staging-shaped proposal for another active professional", async () => {
+  const clinicId = "30000000-0000-4000-8000-000000000001";
+  const ownerUserId = "40000000-0000-4000-8000-000000000001";
+  const doctorUserId = "50000000-0000-4000-8000-000000000001";
+  const doctorMemberId = "60000000-0000-4000-8000-000000000001";
+  const patientId = "70000000-0000-4000-8000-000000000001";
+  const durablePayload = {
+    patient_id: patientId,
+    professional_clinic_member_id: doctorMemberId,
+    local_date: "2026-09-24",
+    local_time: "16:00",
+    duration_minutes: 30
+  };
+  const parsed = parseCreateAppointmentPendingArguments(durablePayload);
+  assert.ok(parsed);
+
+  let protectedMemberLookups = 0;
+  let appointmentWrites = 0;
+  const doctor = { id: doctorMemberId, clinic_id: clinicId, user_id: doctorUserId, role: "doctor", status: "active", is_professional: true };
+  const noRows = { data: null, error: null };
+  const client = {
+    from(table: string) {
+      const query = {
+        select: () => query, eq: () => query, neq: () => query, lt: () => query, gt: () => query, limit: () => query,
+        maybeSingle: async () => table === "patients" ? { data: { id: patientId }, error: null } : noRows
+      };
+      return query;
+    },
+    async rpc(name: string, args: Record<string, unknown>) {
+      if (name !== "create_appointment_for_current_user") throw new Error(`Unexpected RPC: ${name}`);
+      appointmentWrites++;
+      assert.equal(args.p_clinic_id, clinicId);
+      assert.equal(args.p_doctor_id, doctorUserId);
+      return { data: [{ appointment_id: "80000000-0000-4000-8000-000000000001", appointment_updated_at: "2026-09-24T22:00:00Z" }], error: null };
+    }
+  };
+  const mocks: Record<string, unknown> = {
+    "server-only": {},
+    "@/lib/appointments/create": { calculateAppointmentEnd, canCreateAppointments, classifyAppointmentPersistenceError, combineClinicDateTime, validateAppointmentFormValues },
+    "@/lib/appointments/query": { isCanonicalAppointmentUuid },
+    "@/lib/calendar/invitation": { buildAppointmentCalendarOperation: () => ({ operationKey: "test-operation", appointmentVersion: "test-version" }) },
+    "@/lib/dashboard/timezone": { getClinicDayRange: () => ({ localDate: "2026-09-24" }) },
+    "@/lib/logger": { logger: { error: () => {} } },
+    "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready", user: { id: ownerUserId }, tenant: { clinic: { id: clinicId, timezone: "America/Mexico_City" }, membership: { role: "owner", is_professional: false } } }) },
+    "@/lib/server/entitlements": { getClinicEntitlements: async () => ({}), canCreateWithEntitlements: () => true },
+    "@/lib/supabase/server": { createClient: async () => client },
+    "@/lib/supabase/clinic-members": { listClinicMembersForClinic: async (requestedClinicId: string) => {
+      protectedMemberLookups++;
+      assert.equal(requestedClinicId, clinicId);
+      return { data: [doctor], error: null };
+    } }
+  };
+  const source = ts.transpileModule(server, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const exports: Record<string, any> = {};
+  runInNewContext(source, { exports, require: (name: string) => {
+    if (Object.hasOwn(mocks, name)) return mocks[name];
+    throw new Error(`Unmocked dependency: ${name}`);
+  } });
+  const result = await exports.createAppointmentForActiveTenant({
+    patientId: parsed.patientId, doctorId: doctorUserId, title: "Cita", appointmentType: "",
+    date: parsed.date, startTime: parsed.startTime, duration: String(parsed.durationMinutes),
+    status: "scheduled", location: "", meetingUrl: ""
+  });
+  assert.equal(result.state, "success");
+  assert.equal(protectedMemberLookups, 1);
+  assert.equal(appointmentWrites, 1);
 });
 
 test("Mexico City wall time is converted once and duration remains exact", () => {

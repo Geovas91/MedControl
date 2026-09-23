@@ -30,7 +30,8 @@ test("0048 enforces professional invariants and keeps tenant-safe scheduling", (
 
 test("appointment and availability selectors use the canonical capability rather than public profiles or roles", () => {
   assert.match(appointmentService, /from\("clinic_members"\)[\s\S]+eq\("is_professional", true\)/);
-  assert.match(appointmentService, /eq\("user_id", input\.doctorId\)[\s\S]+eq\("is_professional", true\)/);
+  assert.match(appointmentService, /listClinicMembersForClinic\(clinicId\)/);
+  assert.match(appointmentService, /member\.clinic_id === clinicId && member\.user_id === input\.doctorId && member\.status === "active" && member\.is_professional/);
   assert.match(availabilityService, /eq\("is_professional", true\)/);
   assert.doesNotMatch(availabilityService, /\.in\("role", \["owner", "doctor"\]\)/);
 });
