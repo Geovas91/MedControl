@@ -9,8 +9,10 @@ import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
 import { resolveUniqueEntity } from "@/lib/assistant/orchestration/intents";
 import { getDefaultSchedulingProfessional, type ContextualHelper } from "@/lib/assistant/orchestration/conversation";
 import { resolveConversationInput, type ConversationInput } from "@/lib/assistant/orchestration/conversation";
+import { isAssistantReadIntent, isValidAssistantReadIntent, orchestrateAssistantReadIntent, shouldOrchestrateAssistantReads, type AssistantReadResponse } from "@/lib/assistant/orchestration/read-tools";
 import { planAssistantConversation } from "@/lib/assistant/llm/planner";
 import { openAiPlannerProvider } from "@/lib/assistant/llm/provider";
+import { logger } from "@/lib/logger";
 import { isAssistantIntent, matchesAssistantQuery } from "@/lib/assistant/parser/deterministic";
 import {
   cancelAssistantPendingAction,
@@ -38,13 +40,8 @@ export async function saveAppointmentAssistantSettingsAction(formData: FormData)
 }
 
 export type AssistantUiResponse =
-  | { state: "message"; message: string; intent?: AssistantIntent }
-  | { state: "error"; message: string }
-  | { state: "choices"; message: string; field: "patient" | "professional" | "appointment"; choices: Array<{ id: string; label: string }> }
+  | AssistantReadResponse
   | { state: "availability_retry"; message: string; intent: Extract<AssistantIntent, { type: "create_appointment" }>; alternatives: Array<{ start: string; end: string }> }
-  | { state: "slots"; professional: string; date: string; slots: Array<{ start: string; end: string }> }
-  | { state: "patients"; patients: Array<{ id: string; name: string }> }
-  | { state: "appointments"; appointments: Array<{ id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string }> }
   | { state: "proposal"; proposal: AssistantProposal; action: string; patient?: string; professional?: string | null; date?: string; time?: string; previous?: string }
   | { state: "success"; message: string }
   | { state: "cancelled"; message: string }
@@ -60,7 +57,7 @@ export async function planAssistantConversationAction(message: unknown, pending:
   const today = getClinicDayRange(context.data.timeZone).localDate;
   const active = pending === null || pending === undefined ? null : isAssistantIntent(pending) ? pending as AssistantIntent : null;
   if (process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED !== "true") return resolveConversationInput(active, text, today);
-  return planAssistantConversation({ message: text, today, pending: active, role: context.data.role, isProfessional: context.data.isProfessional, timeZone: context.data.timeZone, enabled: true, provider: openAiPlannerProvider });
+  return planAssistantConversation({ message: text, today, pending: active, role: context.data.role, isProfessional: context.data.isProfessional, timeZone: context.data.timeZone, enabled: true, readToolsEnabled: process.env.APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED === "true", provider: openAiPlannerProvider });
 }
 
 type ReadPatient = { patient_id: string; display_name: string; status: string };
@@ -136,6 +133,21 @@ function availabilityRetryResponse(intent: Extract<AssistantIntent, { type: "cre
 export async function submitAssistantIntentAction(input: unknown): Promise<AssistantUiResponse> {
   if (!isAssistantIntent(input)) return { state: "error", message: "La solicitud no tiene un formato válido." };
   const intent = input as AssistantIntent;
+
+  if (shouldOrchestrateAssistantReads(process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED === "true", process.env.APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED === "true") && isAssistantReadIntent(intent)) {
+    if (!isValidAssistantReadIntent(intent)) return { state: "error", message: "La consulta no tiene un formato válido." };
+    const context = await getAssistantToolContext();
+    if (!context.ok) return safeToolError(context);
+    if (!planIncludesFeature(await getClinicEntitlements(context.data.clinicId), "appointment_assistant")) return { state: "error", message: "El asistente no está disponible para esta clínica." };
+    return orchestrateAssistantReadIntent(intent, {
+      readTool: executeAssistantReadTool,
+      today: getClinicDayRange(context.data.timeZone).localDate,
+      timeZone: context.data.timeZone,
+      defaultProfessionalClinicMemberId: getDefaultSchedulingProfessional(context.data),
+      observe: (event, details) => logger.info(event, details)
+    });
+  }
+  if (intent.type === "get_appointment" || intent.type === "get_professionals") return { state: "error", message: "Esta consulta no está habilitada." };
 
   if (intent.type === "search_patients") {
     const result = await readTool<ReadPatient[]>("search_patients", { query: intent.query });

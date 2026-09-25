@@ -29,6 +29,7 @@ export function classifyContextualHelper(intent: AssistantIntent, value: string)
 }
 
 export function getMissingFields(intent: AssistantIntent): AssistantMissingField[] {
+  if (intent.type === "get_appointment") return intent.appointmentId || intent.localDate ? [] : ["localDate"];
   if (intent.type === "check_availability") return [...(!intent.professionalClinicMemberId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : [])];
   if (intent.type === "create_appointment") return [...(!intent.patientId ? ["patient" as const] : []), ...(!intent.professionalClinicMemberId ? ["professional" as const] : []), ...(!intent.localDate ? ["localDate" as const] : []), ...(!intent.localTime ? ["localTime" as const] : [])];
   if (intent.type === "reschedule_appointment") return [...(!intent.appointmentId ? ["appointment" as const] : []), ...(!intent.localDate ? ["localDate" as const] : []), ...(!intent.localTime ? ["localTime" as const] : [])];

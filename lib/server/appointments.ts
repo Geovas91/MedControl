@@ -75,13 +75,17 @@ function applyAgendaFilters<T extends FilterBuilder<T>>(
   filters: AppointmentQuery,
   bounds: AppointmentPeriodBounds,
   searchFilter: string | null,
-  includeStatus = true
+  includeStatus = true,
+  exactPatientId?: string,
+  exactProfessionalId?: string
 ) {
   let filteredQuery = query;
   if (bounds.startIso) filteredQuery = filteredQuery.gte("starts_at", bounds.startIso);
   if (bounds.endIso) filteredQuery = filteredQuery.lt("starts_at", bounds.endIso);
   if (includeStatus && filters.status) filteredQuery = filteredQuery.eq("status", filters.status);
   if (filters.doctor) filteredQuery = filteredQuery.eq("doctor_id", filters.doctor);
+  if (exactPatientId) filteredQuery = filteredQuery.eq("patient_id", exactPatientId);
+  if (exactProfessionalId) filteredQuery = filteredQuery.eq("doctor_id", exactProfessionalId);
   if (searchFilter) filteredQuery = filteredQuery.or(searchFilter);
   return filteredQuery;
 }
@@ -111,7 +115,9 @@ function emptyAgendaData(
 }
 
 export async function getAppointmentAgendaForActiveTenant(
-  searchParams: AppointmentSearchParams
+  searchParams: AppointmentSearchParams,
+  exactPatientId?: string,
+  exactProfessionalId?: string
 ): Promise<AppointmentAgendaResult> {
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
@@ -197,7 +203,9 @@ export async function getAppointmentAgendaForActiveTenant(
         query,
         bounds,
         searchFilter,
-        false
+        false,
+        exactPatientId,
+        exactProfessionalId
       );
       return countQuery.eq("status", status);
     })
@@ -230,7 +238,10 @@ export async function getAppointmentAgendaForActiveTenant(
       .eq("patients.clinic_id", clinicId),
     normalizedQuery,
     bounds,
-    searchFilter
+    searchFilter,
+    true,
+    exactPatientId,
+    exactProfessionalId
   );
   const appointmentsResult = await rowsQuery
     .order("starts_at", { ascending })

@@ -7,6 +7,6 @@ export const openAiPlannerProvider: PlannerProvider = async (context) => {
   const apiKey = process.env.OPENAI_API_KEY;
   const model = process.env.APPOINTMENT_ASSISTANT_LLM_MODEL?.trim() || "gpt-6-luna";
   if (!apiKey) throw new PlannerProviderError("not_configured");
-  const result = await requestOpenAiPlanner({ context, apiKey, model });
+  const result = await requestOpenAiPlanner({ context, apiKey, model, readToolsEnabled: process.env.APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED === "true" });
   return result.draft;
 };

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { CalendarClock, Check, Clock3, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { appointmentStatuses, getAppointmentStatusLabel, type AppointmentStatus } from "@/lib/appointments/query";
 import {
   cancelAssistantProposalAction,
   confirmAssistantProposalAction,
@@ -28,17 +29,33 @@ function formatInstant(value: string, timeZone: string) {
 
 function applyChoice(intent: AssistantIntent, id: string, field: "patient" | "professional" | "appointment") {
   if (field === "patient" && intent.type === "create_appointment") return { ...intent, patientId: id, patientQuery: undefined };
+  if (field === "patient" && intent.type === "search_appointments") return { ...intent, patientId: id, patientQuery: undefined };
   if (field === "professional" && (intent.type === "create_appointment" || intent.type === "check_availability")) return { ...intent, professionalClinicMemberId: id, professionalQuery: undefined };
+  if (field === "professional" && (intent.type === "search_appointments" || intent.type === "get_appointment")) return { ...intent, professionalId: id, professionalQuery: undefined };
   if (field === "appointment" && (intent.type === "confirm_appointment" || intent.type === "cancel_appointment" || intent.type === "reschedule_appointment")) return { ...intent, appointmentId: id, appointmentQuery: undefined };
+  if (field === "appointment" && intent.type === "get_appointment") return { ...intent, appointmentId: id, appointmentQuery: undefined };
   return intent;
+}
+
+function statusLabel(value: string) {
+  return appointmentStatuses.includes(value as AppointmentStatus) ? getAppointmentStatusLabel(value as AppointmentStatus) : "Estado no disponible";
+}
+
+function ReadResult({ response, timeZone }: { response?: AssistantUiResponse; timeZone: string }) {
+  if (response?.state === "professionals") return <div className="mt-3 grid gap-2">{response.professionals.map((professional, index) => <span key={`${professional.name}-${index}`} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{professional.name}</span>)}</div>;
+  if (response?.state === "appointment") return <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-slate-700">{response.appointment.patient} · {response.appointment.professional ?? "Profesional"} · {formatInstant(response.appointment.startsAt, timeZone)} · {statusLabel(response.appointment.status)}</div>;
+  return null;
 }
 
 function responseText(response: AssistantUiResponse) {
   if (response.state === "proposal_terminal") return response.message;
   if ("message" in response) return response.message;
-  if (response.state === "slots") return `Encontré ${response.slots.length} horarios disponibles.`;
-  if (response.state === "patients") return `Encontré ${response.patients.length} pacientes.`;
-  if (response.state === "appointments") return `Encontré ${response.appointments.length} citas.`;
+  const more = "hasMore" in response && response.hasMore ? " Hay más resultados; refina la búsqueda." : "";
+  if (response.state === "slots") return `Encontré ${response.slots.length} horarios disponibles.${more}`;
+  if (response.state === "patients") return `Encontré ${response.patients.length} pacientes.${more}`;
+  if (response.state === "professionals") return `Encontré ${response.professionals.length} profesionales para agendar.${more}`;
+  if (response.state === "appointments") return `Encontré ${response.appointments.length} citas.${more}`;
+  if (response.state === "appointment") return "Encontré la cita solicitada.";
   if (response.state === "proposal") return "Preparé una propuesta para que la revises.";
   return "";
 }
@@ -134,7 +151,7 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
         <span className="rounded-full bg-[var(--clinic-soft)] px-3 py-1 text-xs font-bold text-clinic">Sin chat persistente</span>
       </div>
       <div className="mt-4 grid gap-3" aria-live="polite">
-        {messages.map((message) => <div key={message.id} className={`max-w-3xl rounded-2xl p-4 text-sm leading-6 ${message.author === "user" ? "ml-auto bg-[var(--clinic-soft)] text-ink" : "clinical-surface text-slate-700"}`}><p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{message.author === "user" ? "Tú" : "Assistant"}</p><p>{message.text}</p>{message.response?.state === "choices" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.choices.map((choice) => <Button key={choice.id} type="button" variant="secondary" className="justify-start" onClick={() => choose(choice.id, choice.label)} disabled={isPending}>{choice.label}</Button>)}</div> : null}{message.response?.state === "patients" ? <div className="mt-3 grid gap-2">{message.response.patients.map((patient) => <span key={patient.id} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{patient.name}</span>)}</div> : null}{message.response?.state === "availability_retry" && message.response.alternatives.length ? <div className="mt-3 grid gap-2 sm:grid-cols-3" aria-label="Horarios alternativos">{message.response.alternatives.map((slot) => <Button key={slot.start} type="button" variant="secondary" className="justify-start" onClick={() => chooseAlternative((message.response as Extract<AssistantUiResponse, { state: "availability_retry" }>).intent, slot.start)} disabled={isPending}><Clock3 className="h-4 w-4 text-clinic" />{slot.start}–{slot.end}</Button>)}</div> : null}{message.response?.state === "slots" ? <div className="mt-3 grid gap-2 sm:grid-cols-3">{message.response.slots.map((slot) => <span key={slot.start} className="rounded-xl bg-white/80 px-3 py-2 font-semibold text-ink"><Clock3 className="mr-1 inline h-4 w-4 text-clinic" />{slot.start}–{slot.end}</span>)}</div> : null}{message.response?.state === "appointments" ? <div className="mt-3 grid gap-2">{message.response.appointments.map((appointment) => <span key={appointment.id} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{appointment.patient} · {appointment.professional ?? "Profesional"} · {formatInstant(appointment.startsAt, timeZone)}</span>)}</div> : null}</div>)}
+        {messages.map((message) => <div key={message.id} className={`max-w-3xl rounded-2xl p-4 text-sm leading-6 ${message.author === "user" ? "ml-auto bg-[var(--clinic-soft)] text-ink" : "clinical-surface text-slate-700"}`}><p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{message.author === "user" ? "Tú" : "Assistant"}</p><p>{message.text}</p>{message.response?.state === "choices" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.choices.map((choice) => <Button key={choice.id} type="button" variant="secondary" className="justify-start" onClick={() => choose(choice.id, choice.label)} disabled={isPending}>{choice.label}</Button>)}</div> : null}{message.response?.state === "patients" ? <div className="mt-3 grid gap-2">{message.response.patients.map((patient) => <span key={patient.id} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{patient.name}</span>)}</div> : null}{message.response?.state === "availability_retry" && message.response.alternatives.length ? <div className="mt-3 grid gap-2 sm:grid-cols-3" aria-label="Horarios alternativos">{message.response.alternatives.map((slot) => <Button key={slot.start} type="button" variant="secondary" className="justify-start" onClick={() => chooseAlternative((message.response as Extract<AssistantUiResponse, { state: "availability_retry" }>).intent, slot.start)} disabled={isPending}><Clock3 className="h-4 w-4 text-clinic" />{slot.start}–{slot.end}</Button>)}</div> : null}{message.response?.state === "slots" ? <div className="mt-3 grid gap-2 sm:grid-cols-3">{message.response.slots.map((slot) => <span key={slot.start} className="rounded-xl bg-white/80 px-3 py-2 font-semibold text-ink"><Clock3 className="mr-1 inline h-4 w-4 text-clinic" />{slot.start}–{slot.end}</span>)}</div> : null}{message.response?.state === "appointments" ? <div className="mt-3 grid gap-2">{message.response.appointments.map((appointment) => <span key={appointment.id} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{appointment.patient} · {appointment.professional ?? "Profesional"} · {formatInstant(appointment.startsAt, timeZone)} · {statusLabel(appointment.status)}</span>)}</div> : null}<ReadResult response={message.response} timeZone={timeZone} /></div>)}
         {proposal ? <div className="glass-card mt-2 border-2 border-[var(--clinic)] p-4" aria-label="Propuesta pendiente de confirmación"><p className="text-xs font-bold uppercase tracking-wide text-clinic">Propuesta pendiente</p><h3 className="mt-1 text-lg font-bold text-ink">{proposal.action}</h3><dl className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">{proposal.patient ? <div><dt className="font-semibold">Paciente</dt><dd>{proposal.patient}</dd></div> : null}{proposal.professional ? <div><dt className="font-semibold">Profesional</dt><dd>{proposal.professional}</dd></div> : null}{proposal.date ? <div><dt className="font-semibold">Fecha</dt><dd>{formatDate(proposal.date, timeZone)}</dd></div> : null}{proposal.time ? <div><dt className="font-semibold">Horario</dt><dd>{proposal.time}</dd></div> : null}{proposal.previous ? <div><dt className="font-semibold">Cita actual</dt><dd>{isNaN(Date.parse(proposal.previous)) ? proposal.previous : formatInstant(proposal.previous, timeZone)}</dd></div> : null}</dl><p className="mt-3 text-xs text-slate-500">Esta propuesta expira en unos minutos y sólo se ejecutará después de confirmar.</p><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={confirm} disabled={isPending}><Check className="h-4 w-4" />Confirmar</Button><Button type="button" variant="secondary" onClick={cancel} disabled={isPending}><X className="h-4 w-4" />Cancelar</Button></div></div> : null}
       </div>
       <div className="mt-5 flex flex-wrap gap-2">{["Agendar una cita", "Ver disponibilidad", "Reprogramar una cita", "Cancelar una cita", "Ver citas de hoy"].map((prompt) => <Button key={prompt} type="button" variant="ghost" className="min-h-9 text-xs" onClick={() => submit(prompt)} disabled={isPending}>{prompt}</Button>)}</div>

@@ -20,6 +20,8 @@ test("untrusted scheduling inputs require canonical identifiers and local clinic
   assert.equal(toolSchemas.createAppointment.parse({ patientId: "not-an-id", professionalClinicMemberId: "20000000-0000-4000-8000-000000000001", date: "2026-09-15", startTime: "09:00", durationMinutes: 30, title: "Consulta" }), null);
   assert.equal(toolSchemas.availableSlots.parse({ professionalClinicMemberId: "20000000-0000-4000-8000-000000000001", date: "2026-09-15", durationMinutes: 17 }), null);
   assert.deepEqual(toolSchemas.lifecycle.parse({ appointmentId: "10000000-0000-4000-8000-000000000001", expectedStatus: "scheduled" }), { appointmentId: "10000000-0000-4000-8000-000000000001", expectedStatus: "scheduled" });
+  assert.deepEqual(toolSchemas.searchAppointments.parse({ date: "2026-09-15", period: "upcoming", status: "confirmed" }), { patientId: null, professionalId: null, date: "2026-09-15", status: "confirmed", period: "upcoming" });
+  assert.equal(toolSchemas.searchAppointments.parse({ period: "all" }), null);
 });
 
 test("create appointment proposals and confirmations share the same durable payload contract", () => {

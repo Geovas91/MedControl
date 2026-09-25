@@ -11,9 +11,9 @@ function minimizeMessageForProvider(message: string) {
     .replace(/\+?\d(?:[\s().-]*\d){9,14}/g, "[teléfono omitido]");
 }
 
-export async function planAssistantConversation({ message, today, pending, role, isProfessional, timeZone, enabled, provider }: {
+export async function planAssistantConversation({ message, today, pending, role, isProfessional, timeZone, enabled, readToolsEnabled = false, provider }: {
   message: string; today: string; pending: AssistantIntent | null; role: string; isProfessional: boolean; timeZone: string;
-  enabled: boolean; provider: PlannerProvider;
+  enabled: boolean; readToolsEnabled?: boolean; provider: PlannerProvider;
 }): Promise<ConversationInput> {
   const fallback = () => resolveConversationInput(pending, message, today);
   if (!enabled || !message.trim() || message.length > 500) return fallback();
@@ -40,7 +40,7 @@ export async function planAssistantConversation({ message, today, pending, role,
   logger.info("planner_called", { intent_category: intentCategory });
   try {
     const raw = await provider(context);
-    const draft = parseAssistantIntentDraft(raw);
+    const draft = parseAssistantIntentDraft(raw, readToolsEnabled);
     if (!draft) {
       logger.info("planner_invalid_output", { intent_category: intentCategory, latency_ms: Date.now() - startedAt });
       return deterministic;

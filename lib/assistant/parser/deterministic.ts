@@ -137,6 +137,6 @@ export function parseAssistantText(value: string, today: string): ParserResult {
 export function isAssistantIntent(value: unknown): value is AssistantIntent {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const intent = value as Record<string, unknown>;
-  return typeof intent.type === "string" && ["search_patients", "search_appointments", "check_availability", "create_appointment", "confirm_appointment", "cancel_appointment", "reschedule_appointment"].includes(intent.type)
+  return typeof intent.type === "string" && ["search_patients", "search_appointments", "get_appointment", "get_professionals", "check_availability", "create_appointment", "confirm_appointment", "cancel_appointment", "reschedule_appointment"].includes(intent.type)
     && (!("durationMinutes" in intent) || (typeof intent.durationMinutes === "number" && Number.isInteger(intent.durationMinutes) && intent.durationMinutes > 0 && intent.durationMinutes <= 240));
 }
