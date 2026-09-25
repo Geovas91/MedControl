@@ -24,7 +24,7 @@ const offDomainPatterns = [
   /\bchiste\b/i, /\bcapital\s+de\b/i, /\b(?:expl[ií]ca|expl[ií]came|qu[eé]\s+es)\b.{0,50}\b(?:diabetes|enfermedad|medicamento|s[ií]ntoma|diagn[oó]stico)\b/i,
   /\b(?:hazme|dame|escr[ií]beme|rec[eé]tame)\s+(?:una?\s+)?receta\b/i, /\b(?:escribe|redacta|escr[ií]beme)\s+(?:un|una|el|la)?\s*(?:correo|email|mensaje)\b/i,
   /\b(?:resume|res[uú]meme)\s+(?:este|el|la)\s+(?:documento|archivo|texto)\b/i, /\b(?:qui[eé]n|quien)\s+gan[oó]\s+(?:el\s+)?(?:mundial|partido|juego)\b/i,
-  /\b(?:programar|programo|c[oó]mo\s+programo)\b.{0,30}\b(?:python|javascript|c[oó]digo)\b/i
+  /\b(?:programa|programar|programo|programando|c[oó]mo\s+programo)\b.{0,30}\b(?:python|javascript|c[oó]digo|api)\b/i
 ];
 
 function normalize(value: string) { return value.normalize("NFKC").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim(); }
@@ -47,11 +47,22 @@ function parsedIntent(result: ParserResult): AssistantIntent | null {
 }
 function hasNaturalSchedulingSignal(value: string) {
   const plain = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  return /\b(?:citas?|agenda|agendar|agendamiento|reservar|reservaci[oó]n|disponibilidad|horarios?|turnos?|confirmar|cancelar|reprogramar|reprograma|reagendar|cambiar la hora)\b/i.test(value)
-    || /\balgo\s+(?:libre|disponible)\b/i.test(plain) && new RegExp(`\\b(?:${weekday}|hoy|manana|\\d{1,2}[/-]\\d{1,2})\\b`).test(plain)
-    || /\b(?:ver|visitar|atender)\s+a\s+(?:la\s+)?(?:dra?\.?|doctor(?:a)?)\b/i.test(value) && new RegExp(`\\b(?:${weekday}|hoy|manana|\\d{1,2}[/-]\\d{1,2})\\b`).test(plain)
-    || /\b(?:a\s+qu[eé]\s+hora\s+viene|qu[eé]\s+hora\s+tiene)\b/i.test(value)
-    || (parseDateExpression(value, "2026-01-01") !== null || new RegExp(`\\b(?:${weekday})\\b`).test(plain)) && /\b(?:hora|libre|disponible|doctor|doctora|profesional|venir|viene)\b/i.test(plain);
+  const professional = /\b(?:doctores?|doctoras?|medicos?|medicas?|profesionales?|especialistas?)\b/.test(plain);
+  const patient = /\bpacientes?\b/.test(plain);
+  const appointment = /\b(?:citas?|agenda|agendar|agendamiento|reservar|reservacion|turnos?|confirmar|cancelar|reprogramar|reprograma|reagendar)\b/.test(plain);
+  const availability = /\b(?:disponibles?|disponibilidad|libres?|horarios?|horas?)\b/.test(plain);
+  const schedulingAction = /\b(?:atender|atiende|atencion|buscar|busca|busco|encuentra|muestra|muestrame|ver|lista|puede atender|puedo agendar|con quien|hay|estan|tiene|tienen)\b/.test(plain);
+  const directorySearch = /\b(?:buscar|busca|busco|encuentra|muestra|muestrame|lista)\b/.test(plain);
+  const timeContext = parseDateExpression(value, "2026-01-01") !== null || parseTimeExpression(value) !== null || new RegExp(`\\b(?:${weekday}|hoy|manana)\\b`).test(plain);
+
+  return appointment
+    || professional && (schedulingAction || availability)
+    || patient && schedulingAction
+    || availability
+    || directorySearch
+    || schedulingAction && timeContext
+    || /\balgo\s+(?:libre|disponible)\b/.test(plain) && timeContext
+    || /\b(?:a\s+que\s+hora\s+viene|que\s+hora\s+tiene)\b/.test(plain);
 }
 function plausibleSlotFollowUp(value: string) {
   const plain = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
