@@ -74,6 +74,25 @@ test("availability failures expose a recoverable appointment intent and safe alt
   assert.match(actions, /state: "availability_retry"/);
   assert.match(actions, /localTime: undefined/);
   assert.match(actions, /Puedes elegir otro horario/);
-  assert.match(component, /chooseAlternative/);
+  assert.match(component, /onClick=\{\(\) => choose\(slot\.choice\)\}/);
+  assert.match(component, /selectAssistantResultAction\(choice, pendingIntent\)/);
   assert.match(component, /message\.response\.alternatives/);
+});
+
+test("interactive results are native buttons and route every selection through the structured server action", () => {
+  for (const result of ["choices", "patients", "professionals", "appointments", "slots", "availability_retry"]) {
+    assert.ok(component.includes(`state === "${result}"`), `${result} is rendered`);
+  }
+  assert.match(component, /onClick=\{\(\) => choose\(choice\.choice\)\}/);
+  assert.match(component, /onClick=\{\(\) => choose\(patient\.choice\)\}/);
+  assert.match(component, /onClick=\{\(\) => choose\(professional\.choice\)\}/);
+  assert.match(component, /onClick=\{\(\) => choose\(appointment\.choice\)\}/);
+  assert.match(component, /onClick=\{\(\) => choose\(slot\.choice\)\}/);
+  assert.match(component, /min-h-11/);
+  assert.match(component, /disabled=\{isPending\}/);
+  assert.match(actions, /export async function selectAssistantResultAction/);
+  assert.match(actions, /isPatientAvailableForActiveTenant/);
+  assert.match(actions, /executeAssistantReadTool\("get_professionals"/);
+  assert.match(actions, /executeAssistantReadTool\("get_appointment"/);
+  assert.match(actions, /executeAssistantReadTool\("get_available_slots"/);
 });

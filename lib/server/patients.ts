@@ -113,3 +113,16 @@ export async function getPatientsForActiveTenant(filters: PatientListQuery): Pro
     }
   };
 }
+
+/** Revalidates a patient reference with the authenticated tenant and current RLS scope. */
+export async function isPatientAvailableForActiveTenant(patientId: string): Promise<boolean> {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return false;
+  const result = await (await createClient())
+    .from("patients")
+    .select("id")
+    .eq("clinic_id", context.tenant.clinic.id)
+    .eq("id", patientId)
+    .maybeSingle();
+  return !result.error && Boolean(result.data);
+}

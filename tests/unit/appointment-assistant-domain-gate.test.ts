@@ -51,9 +51,13 @@ test("a scheduling phrase recognized by the base parser still keeps the pending 
 
 test("J: structured selection handlers bypass the planner action", async () => {
   const component = await readFile(new URL("../../components/bot/appointment-assistant.tsx", import.meta.url), "utf8");
-  const choose = component.slice(component.indexOf("const choose ="), component.indexOf("const chooseAlternative ="));
-  assert.match(choose, /submitIntent\(intent, label\)/);
+  const actions = await readFile(new URL("../../app/dashboard/bot/actions.ts", import.meta.url), "utf8");
+  const choose = component.slice(component.indexOf("const choose ="), component.indexOf("const confirm ="));
+  assert.match(choose, /selectAssistantResultAction\(choice, pendingIntent\)/);
+  assert.match(actions, /export async function selectAssistantResultAction/);
+  assert.match(actions, /return submitAssistantIntentAction\(result\.intent\)/);
   assert.doesNotMatch(choose, /planAssistantConversationAction|runGatedAssistantPlanner/);
+  assert.doesNotMatch(actions.slice(actions.indexOf("export async function selectAssistantResultAction"), actions.indexOf("export async function confirmAssistantProposalAction")), /planAssistantConversationAction|runGatedAssistantPlanner/);
 });
 
 test("K: over-length text gets a local response and zero provider calls", async () => {

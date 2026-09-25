@@ -9,10 +9,12 @@ import {
   confirmAssistantProposalAction,
   planAssistantConversationAction,
   submitAssistantIntentAction,
+  selectAssistantResultAction,
   submitAssistantContextualHelperAction,
   type AssistantUiResponse
 } from "@/app/dashboard/bot/actions";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
+import type { AssistantStructuredChoice } from "@/lib/assistant/orchestration/structured-selection";
 import { classifyContextualHelper, resolveConversationInput } from "@/lib/assistant/orchestration/conversation";
 
 type Message = { id: number; author: "user" | "assistant"; text: string; response?: AssistantUiResponse };
@@ -29,22 +31,11 @@ function formatInstant(value: string, timeZone: string) {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(value));
 }
 
-function applyChoice(intent: AssistantIntent, id: string, field: "patient" | "professional" | "appointment") {
-  if (field === "patient" && intent.type === "create_appointment") return { ...intent, patientId: id, patientQuery: undefined };
-  if (field === "patient" && intent.type === "search_appointments") return { ...intent, patientId: id, patientQuery: undefined };
-  if (field === "professional" && (intent.type === "create_appointment" || intent.type === "check_availability")) return { ...intent, professionalClinicMemberId: id, professionalQuery: undefined };
-  if (field === "professional" && (intent.type === "search_appointments" || intent.type === "get_appointment")) return { ...intent, professionalId: id, professionalQuery: undefined };
-  if (field === "appointment" && (intent.type === "confirm_appointment" || intent.type === "cancel_appointment" || intent.type === "reschedule_appointment")) return { ...intent, appointmentId: id, appointmentQuery: undefined };
-  if (field === "appointment" && intent.type === "get_appointment") return { ...intent, appointmentId: id, appointmentQuery: undefined };
-  return intent;
-}
-
 function statusLabel(value: string) {
   return appointmentStatuses.includes(value as AppointmentStatus) ? getAppointmentStatusLabel(value as AppointmentStatus) : "Estado no disponible";
 }
 
 function ReadResult({ response, timeZone }: { response?: AssistantUiResponse; timeZone: string }) {
-  if (response?.state === "professionals") return <div className="mt-3 grid gap-2">{response.professionals.map((professional, index) => <span key={`${professional.name}-${index}`} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{professional.name}</span>)}</div>;
   if (response?.state === "appointment") return <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-slate-700">{response.appointment.patient} · {response.appointment.professional ?? "Profesional"} · {formatInstant(response.appointment.startsAt, timeZone)} · {statusLabel(response.appointment.status)}</div>;
   return null;
 }
@@ -66,7 +57,6 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
   const [messages, setMessages] = useState<Message[]>([{ id: 1, author: "assistant", text: "Hola, ¿qué quieres hacer con tu agenda?" }]);
   const [value, setValue] = useState("");
   const [pendingIntent, setPendingIntent] = useState<AssistantIntent | null>(null);
-  const [choiceField, setChoiceField] = useState<"patient" | "professional" | "appointment" | null>(null);
   const [proposal, setProposal] = useState<Extract<AssistantUiResponse, { state: "proposal" }> | null>(null);
   const [isPending, startTransition] = useTransition();
   const nextId = useRef(2);
@@ -77,6 +67,14 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
   const append = (message: Omit<Message, "id">) => {
     const id = nextId.current++;
     setMessages((current) => [...current, { ...message, id }]);
+  };
+
+  const applyResponse = (response: AssistantUiResponse, fallbackIntent: AssistantIntent | null) => {
+    if (response.state === "proposal") { setProposal(response); setPendingIntent(null); }
+    else if (response.state === "choices") setPendingIntent(fallbackIntent);
+    else if (response.state === "availability_retry") setPendingIntent(response.intent);
+    else if (response.state === "message") setPendingIntent(response.intent ?? fallbackIntent);
+    else setPendingIntent(null);
   };
 
   const runPending = (operation: () => Promise<void>) => {
@@ -107,11 +105,7 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     const perform = async () => {
       const response = helper ? await submitAssistantContextualHelperAction(intent, helper) : await submitAssistantIntentAction(intent);
       append({ author: "assistant", text: responseText(response), response });
-      if (response.state === "proposal") { setProposal(response); setPendingIntent(null); setChoiceField(null); }
-      else if (response.state === "choices") { setPendingIntent(intent); setChoiceField(response.field); }
-      else if (response.state === "availability_retry") { setPendingIntent(response.intent); setChoiceField(null); }
-      else if (response.state === "message") setPendingIntent(response.intent ?? intent);
-      else { setPendingIntent(null); setChoiceField(null); }
+      applyResponse(response, intent);
     };
     if (options.withinPending) return perform();
     runPending(perform);
@@ -122,7 +116,6 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     if (resolved.state === "reset") {
       append({ author: "assistant", text: "Empecemos una nueva consulta." });
       setPendingIntent(null);
-      setChoiceField(null);
       return;
     }
     const parsed = resolved.result;
@@ -147,14 +140,14 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     });
   };
 
-  const choose = (id: string, label: string) => {
-    if (!pendingIntent || !choiceField || isPending || pendingRef.current) return;
-    const intent = applyChoice(pendingIntent, id, choiceField);
-    submitIntent(intent, label);
-  };
-
-  const chooseAlternative = (intent: Extract<AssistantIntent, { type: "create_appointment" }>, start: string) => {
-    submitIntent({ ...intent, localTime: start }, start);
+  const choose = (choice: AssistantStructuredChoice) => {
+    if (isPending || pendingRef.current) return;
+    append({ author: "user", text: choice.label });
+    runPending(async () => {
+      const response = await selectAssistantResultAction(choice, pendingIntent);
+      append({ author: "assistant", text: responseText(response), response });
+      applyResponse(response, pendingIntent);
+    });
   };
 
   const confirm = () => {
@@ -185,7 +178,7 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
         <span className="rounded-full bg-[var(--clinic-soft)] px-3 py-1 text-xs font-bold text-clinic">Sin chat persistente</span>
       </div>
       <div className="mt-4 grid gap-3" aria-live="polite">
-        {messages.map((message) => <div key={message.id} className={`max-w-3xl rounded-2xl p-4 text-sm leading-6 ${message.author === "user" ? "ml-auto bg-[var(--clinic-soft)] text-ink" : "clinical-surface text-slate-700"}`}><p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{message.author === "user" ? "Tú" : "Assistant"}</p><p>{message.text}</p>{message.response?.state === "choices" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.choices.map((choice) => <Button key={choice.id} type="button" variant="secondary" className="justify-start" onClick={() => choose(choice.id, choice.label)} disabled={isPending}>{choice.label}</Button>)}</div> : null}{message.response?.state === "patients" ? <div className="mt-3 grid gap-2">{message.response.patients.map((patient) => <span key={patient.id} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{patient.name}</span>)}</div> : null}{message.response?.state === "availability_retry" && message.response.alternatives.length ? <div className="mt-3 grid gap-2 sm:grid-cols-3" aria-label="Horarios alternativos">{message.response.alternatives.map((slot) => <Button key={slot.start} type="button" variant="secondary" className="justify-start" onClick={() => chooseAlternative((message.response as Extract<AssistantUiResponse, { state: "availability_retry" }>).intent, slot.start)} disabled={isPending}><Clock3 className="h-4 w-4 text-clinic" />{slot.start}–{slot.end}</Button>)}</div> : null}{message.response?.state === "slots" ? <div className="mt-3 grid gap-2 sm:grid-cols-3">{message.response.slots.map((slot) => <span key={slot.start} className="rounded-xl bg-white/80 px-3 py-2 font-semibold text-ink"><Clock3 className="mr-1 inline h-4 w-4 text-clinic" />{slot.start}–{slot.end}</span>)}</div> : null}{message.response?.state === "appointments" ? <div className="mt-3 grid gap-2">{message.response.appointments.map((appointment) => <span key={appointment.id} className="rounded-xl bg-white/80 px-3 py-2 text-slate-700">{appointment.patient} · {appointment.professional ?? "Profesional"} · {formatInstant(appointment.startsAt, timeZone)} · {statusLabel(appointment.status)}</span>)}</div> : null}<ReadResult response={message.response} timeZone={timeZone} /></div>)}
+        {messages.map((message) => <div key={message.id} className={`max-w-3xl rounded-2xl p-4 text-sm leading-6 ${message.author === "user" ? "ml-auto bg-[var(--clinic-soft)] text-ink" : "clinical-surface text-slate-700"}`}><p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{message.author === "user" ? "Tú" : "Assistant"}</p><p>{message.text}</p>{message.response?.state === "choices" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.choices.map((choice) => <Button key={choice.id} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(choice.choice)} disabled={isPending}>{choice.label}</Button>)}</div> : null}{message.response?.state === "patients" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.patients.map((patient) => <Button key={patient.id} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(patient.choice)} disabled={isPending}>{patient.name}</Button>)}</div> : null}{message.response?.state === "professionals" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.professionals.map((professional) => <Button key={professional.id} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(professional.choice)} disabled={isPending}>{professional.name}</Button>)}</div> : null}{message.response?.state === "availability_retry" && message.response.alternatives.length ? <div className="mt-3 grid gap-2 sm:grid-cols-3" aria-label="Horarios alternativos">{message.response.alternatives.map((slot) => <Button key={slot.start} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(slot.choice)} disabled={isPending}><Clock3 className="h-4 w-4 text-clinic" />{slot.start}–{slot.end}</Button>)}</div> : null}{message.response?.state === "slots" ? <div className="mt-3 grid gap-2 sm:grid-cols-3">{message.response.slots.map((slot) => <Button key={slot.start} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(slot.choice)} disabled={isPending}><Clock3 className="mr-1 h-4 w-4 text-clinic" />{slot.start}–{slot.end}</Button>)}</div> : null}{message.response?.state === "appointments" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.appointments.map((appointment) => <Button key={appointment.id} type="button" variant="secondary" className="min-h-11 justify-start text-left" onClick={() => choose(appointment.choice)} disabled={isPending}>{appointment.patient} · {appointment.professional ?? "Profesional"} · {formatInstant(appointment.startsAt, timeZone)} · {statusLabel(appointment.status)}</Button>)}</div> : null}<ReadResult response={message.response} timeZone={timeZone} /></div>)}
         {isPending ? <div className="clinical-surface max-w-3xl rounded-2xl p-4 text-sm leading-6 text-slate-700" role="status" aria-live="polite" aria-label={ASSISTANT_PENDING_LABEL}><p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Assistant</p><p className="inline-flex items-center gap-2"><span>Procesando</span><span className="inline-flex gap-1" aria-hidden="true"><span className="assistant-typing-dot">•</span><span className="assistant-typing-dot assistant-typing-dot-delay-1">•</span><span className="assistant-typing-dot assistant-typing-dot-delay-2">•</span></span></p></div> : null}
         {proposal ? <div className="glass-card mt-2 border-2 border-[var(--clinic)] p-4" aria-label="Propuesta pendiente de confirmación"><p className="text-xs font-bold uppercase tracking-wide text-clinic">Propuesta pendiente</p><h3 className="mt-1 text-lg font-bold text-ink">{proposal.action}</h3><dl className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">{proposal.patient ? <div><dt className="font-semibold">Paciente</dt><dd>{proposal.patient}</dd></div> : null}{proposal.professional ? <div><dt className="font-semibold">Profesional</dt><dd>{proposal.professional}</dd></div> : null}{proposal.date ? <div><dt className="font-semibold">Fecha</dt><dd>{formatDate(proposal.date, timeZone)}</dd></div> : null}{proposal.time ? <div><dt className="font-semibold">Horario</dt><dd>{proposal.time}</dd></div> : null}{proposal.previous ? <div><dt className="font-semibold">Cita actual</dt><dd>{isNaN(Date.parse(proposal.previous)) ? proposal.previous : formatInstant(proposal.previous, timeZone)}</dd></div> : null}</dl><p className="mt-3 text-xs text-slate-500">Esta propuesta expira en unos minutos y sólo se ejecutará después de confirmar.</p><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={confirm} disabled={isPending}><Check className="h-4 w-4" />Confirmar</Button><Button type="button" variant="secondary" onClick={cancel} disabled={isPending}><X className="h-4 w-4" />Cancelar</Button></div></div> : null}
       </div>

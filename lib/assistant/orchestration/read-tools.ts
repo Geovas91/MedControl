@@ -2,6 +2,7 @@ import { matchesAssistantQuery } from "@/lib/assistant/parser/deterministic";
 import { isAllowedAppointmentDuration } from "@/lib/appointments/create";
 import { appointmentStatuses, isCanonicalAppointmentDate, isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import type { AssistantIntent } from "./intents";
+import type { AssistantStructuredChoice } from "./structured-selection";
 
 export type AssistantReadToolName = "search_patients" | "search_appointments" | "get_appointment" | "get_available_slots" | "get_professionals";
 export type AssistantReadIntent = Extract<AssistantIntent, { type: "search_patients" | "search_appointments" | "get_appointment" | "check_availability" | "get_professionals" }>;
@@ -13,12 +14,12 @@ type Observe = (event: ToolEvent, context: { tool_category: AssistantReadToolNam
 export type AssistantReadResponse =
   | { state: "message"; message: string; intent?: AssistantIntent }
   | { state: "error"; message: string }
-  | { state: "choices"; message: string; field: "patient" | "professional" | "appointment"; choices: Array<{ id: string; label: string }> }
-  | { state: "patients"; patients: Array<{ id: string; name: string }>; hasMore?: boolean }
-  | { state: "professionals"; professionals: Array<{ name: string }>; hasMore?: boolean }
-  | { state: "appointments"; appointments: Array<{ id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string }>; hasMore?: boolean }
+  | { state: "choices"; message: string; field: "patient" | "professional" | "appointment"; choices: Array<{ id: string; label: string; choice: AssistantStructuredChoice }> }
+  | { state: "patients"; patients: Array<{ id: string; name: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
+  | { state: "professionals"; professionals: Array<{ id: string; name: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
+  | { state: "appointments"; appointments: Array<{ id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
   | { state: "appointment"; appointment: { id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string } }
-  | { state: "slots"; professional: string; date: string; slots: Array<{ start: string; end: string }>; hasMore?: boolean };
+  | { state: "slots"; professional: string; professionalClinicMemberId: string; date: string; durationMinutes: number; slots: Array<{ start: string; end: string; choice: AssistantStructuredChoice }>; hasMore?: boolean };
 
 type Patient = { patient_id: string; display_name: string };
 type Professional = { professional_clinic_member_id: string; professional_user_id: string; display_name: string };
@@ -52,7 +53,8 @@ export function isValidAssistantReadIntent(intent: AssistantReadIntent) {
 function limited<T>(rows: T[]) { return { rows: rows.slice(0, MAX_RESULTS), hasMore: rows.length > MAX_RESULTS }; }
 function arrayData<T>(result: ToolResult): T[] | null { return result.ok && Array.isArray(result.data) ? result.data as T[] : null; }
 function appointmentView(row: Appointment) {
-  return { id: row.appointment_id, patient: row.patient_display_name, professional: row.professional_display_name, startsAt: row.starts_at, endsAt: row.ends_at, status: row.status };
+  const label = `${row.patient_display_name} · ${row.professional_display_name ?? "Profesional"} · ${row.starts_at}`;
+  return { id: row.appointment_id, patient: row.patient_display_name, professional: row.professional_display_name, startsAt: row.starts_at, endsAt: row.ends_at, status: row.status, choice: { kind: "appointment", label, reference: row.appointment_id } satisfies AssistantStructuredChoice };
 }
 
 export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent, {
@@ -88,7 +90,7 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
       : rows.filter((row) => query && matchesAssistantQuery(row.display_name, query));
     if (!matches.length) return { state: "none" as const, response: { state: "message", message: "No encontré ese profesional en la clínica activa." } satisfies AssistantReadResponse };
     if (rows.length >= 25 && matches.length === 1 && !selectedId) return { state: "ambiguous" as const, response: { state: "message", message: "Hay más profesionales; refina la búsqueda para elegir uno sin confusiones." } satisfies AssistantReadResponse };
-    if (matches.length > 1) return { state: "ambiguous" as const, response: { state: "choices", field: "professional", message: "Encontré varios profesionales. Elige uno o refina la búsqueda.", choices: limited(matches).rows.map((row) => ({ id: kind === "member" ? row.professional_clinic_member_id : row.professional_user_id, label: row.display_name })) } satisfies AssistantReadResponse };
+    if (matches.length > 1) return { state: "ambiguous" as const, response: { state: "choices", field: "professional", message: "Encontré varios profesionales. Elige uno o refina la búsqueda.", choices: limited(matches).rows.map((row) => { const reference = kind === "member" ? row.professional_clinic_member_id : row.professional_user_id; return { id: reference, label: row.display_name, choice: { kind: "professional" as const, label: row.display_name, reference } }; }) } satisfies AssistantReadResponse };
     return { state: "ready" as const, professional: matches[0] };
   }
 
@@ -97,7 +99,7 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
     const rows = arrayData<Patient>(result);
     if (!rows) return { state: "error" as const, response: failed };
     if (!rows.length) return { state: "none" as const, response: { state: "message", message: "No encontré ese paciente en la clínica activa." } satisfies AssistantReadResponse };
-    if (rows.length > 1) return { state: "ambiguous" as const, response: { state: "choices", field: "patient", message: "Encontré varios pacientes. Elige uno o refina la búsqueda.", choices: limited(rows).rows.map((row) => ({ id: row.patient_id, label: row.display_name })) } satisfies AssistantReadResponse };
+    if (rows.length > 1) return { state: "ambiguous" as const, response: { state: "choices", field: "patient", message: "Encontré varios pacientes. Elige uno o refina la búsqueda.", choices: limited(rows).rows.map((row) => ({ id: row.patient_id, label: row.display_name, choice: { kind: "patient" as const, label: row.display_name, reference: row.patient_id } })) } satisfies AssistantReadResponse };
     return { state: "ready" as const, patientId: rows[0].patient_id };
   }
 
@@ -106,7 +108,7 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
     const rows = arrayData<Patient>(result);
     if (!rows) return failed;
     const list = limited(rows);
-    return { state: "patients", patients: list.rows.map((row) => ({ id: row.patient_id, name: row.display_name })), hasMore: list.hasMore };
+    return { state: "patients", patients: list.rows.map((row) => ({ id: row.patient_id, name: row.display_name, choice: { kind: "patient" as const, label: row.display_name, reference: row.patient_id } })), hasMore: list.hasMore };
   }
 
   if (intent.type === "get_professionals") {
@@ -114,7 +116,7 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
     if (!rows) return failed;
     const matches = intent.professionalQuery ? rows.filter((row) => matchesAssistantQuery(row.display_name, intent.professionalQuery!)) : rows;
     const list = limited(matches);
-    return { state: "professionals", professionals: list.rows.map((row) => ({ name: row.display_name })), hasMore: list.hasMore };
+    return { state: "professionals", professionals: list.rows.map((row) => ({ id: row.professional_clinic_member_id, name: row.display_name, choice: { kind: "professional" as const, label: row.display_name, reference: row.professional_clinic_member_id } })), hasMore: list.hasMore };
   }
 
   if (intent.type === "check_availability") {
@@ -128,7 +130,8 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
     if (!rows) return failed;
     if (!rows.length) return { state: "message", message: "No encontré horarios disponibles para esa fecha.", intent };
     const list = limited(rows);
-    return { state: "slots", professional: resolved.professional.display_name, date: intent.localDate, slots: list.rows.map((row) => ({ start: row.local_start, end: row.local_end })), hasMore: list.hasMore };
+    const localDate = intent.localDate;
+    return { state: "slots", professional: resolved.professional.display_name, professionalClinicMemberId: resolved.professional.professional_clinic_member_id, date: localDate, durationMinutes: intent.durationMinutes, slots: list.rows.map((row) => ({ start: row.local_start, end: row.local_end, choice: { kind: "available_slot" as const, label: `${row.local_start}–${row.local_end}`, professionalReference: resolved.professional.professional_clinic_member_id, localDate, startTime: row.local_start, endTime: row.local_end, durationMinutes: intent.durationMinutes } })), hasMore: list.hasMore };
   }
 
   if (intent.type === "search_appointments" || intent.type === "get_appointment") {
@@ -165,7 +168,7 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
     }
     if (!matches.length) return { state: "message", message: "No encontré una cita que coincida en la clínica activa." };
     if (rows.length >= 25 && matches.length === 1) return { state: "message", message: "Hay más citas; refina la búsqueda para identificar una sola." };
-    if (matches.length > 1) return { state: "choices", field: "appointment", message: "Encontré varias citas. Elige una o refina la búsqueda.", choices: limited(matches).rows.map((row) => ({ id: row.appointment_id, label: `${row.patient_display_name} · ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(row.starts_at))}` })) };
+    if (matches.length > 1) return { state: "choices", field: "appointment", message: "Encontré varias citas. Elige una o refina la búsqueda.", choices: limited(matches).rows.map((row) => { const label = `${row.patient_display_name} · ${new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(row.starts_at))}`; return { id: row.appointment_id, label, choice: { kind: "appointment" as const, label, reference: row.appointment_id } }; }) };
     const detail = await call("get_appointment", { appointmentId: matches[0].appointment_id });
     return detail.ok && detail.data && !Array.isArray(detail.data) ? { state: "appointment", appointment: appointmentView(detail.data as Appointment) } : failed;
   }
