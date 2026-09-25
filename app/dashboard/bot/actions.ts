@@ -10,7 +10,9 @@ import { resolveUniqueEntity } from "@/lib/assistant/orchestration/intents";
 import { getDefaultSchedulingProfessional, type ContextualHelper } from "@/lib/assistant/orchestration/conversation";
 import { resolveConversationInput, type ConversationInput } from "@/lib/assistant/orchestration/conversation";
 import { isAssistantReadIntent, isValidAssistantReadIntent, orchestrateAssistantReadIntent, shouldOrchestrateAssistantReads, type AssistantReadResponse } from "@/lib/assistant/orchestration/read-tools";
-import { planAssistantConversation } from "@/lib/assistant/llm/planner";
+import { runGatedAssistantPlanner } from "@/lib/assistant/llm/gated-planner";
+import { getAssistantLlmMaxInputChars } from "@/lib/assistant/llm/domain-gate";
+import { assistantLlmRateLimiter, getAssistantLlmRateLimitConfig } from "@/lib/assistant/llm/rate-limit";
 import { openAiPlannerProvider } from "@/lib/assistant/llm/provider";
 import { logger } from "@/lib/logger";
 import { isAssistantIntent, matchesAssistantQuery } from "@/lib/assistant/parser/deterministic";
@@ -48,7 +50,7 @@ export type AssistantUiResponse =
   | { state: "proposal_terminal"; status: "failed" | "expired" | "cancelled" | "executed" | "unavailable"; message: string };
 
 export async function planAssistantConversationAction(message: unknown, pending: unknown): Promise<ConversationInput> {
-  const text = typeof message === "string" ? message.trim().slice(0, 501) : "";
+  const text = typeof message === "string" ? message : "";
   const context = await getAssistantToolContext();
   if (!context.ok) return { state: "parsed", result: { state: "unsupported", message: context.error.safeMessage } };
   if (!planIncludesFeature(await getClinicEntitlements(context.data.clinicId), "appointment_assistant")) {
@@ -56,8 +58,16 @@ export async function planAssistantConversationAction(message: unknown, pending:
   }
   const today = getClinicDayRange(context.data.timeZone).localDate;
   const active = pending === null || pending === undefined ? null : isAssistantIntent(pending) ? pending as AssistantIntent : null;
-  if (process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED !== "true") return resolveConversationInput(active, text, today);
-  return planAssistantConversation({ message: text, today, pending: active, role: context.data.role, isProfessional: context.data.isProfessional, timeZone: context.data.timeZone, enabled: true, readToolsEnabled: process.env.APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED === "true", provider: openAiPlannerProvider });
+  if (process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED !== "true") return resolveConversationInput(active, text.trim().slice(0, 501), today);
+  const rateConfig = getAssistantLlmRateLimitConfig(process.env.APPOINTMENT_ASSISTANT_LLM_RATE_LIMIT_MAX, process.env.APPOINTMENT_ASSISTANT_LLM_RATE_LIMIT_WINDOW_SECONDS);
+  return runGatedAssistantPlanner({
+    message: text, today, pending: active, role: context.data.role, isProfessional: context.data.isProfessional, timeZone: context.data.timeZone,
+    readToolsEnabled: process.env.APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED === "true",
+    maxInputChars: getAssistantLlmMaxInputChars(process.env.APPOINTMENT_ASSISTANT_LLM_MAX_INPUT_CHARS),
+    consumeRateLimit: () => assistantLlmRateLimiter.consume({ clinicId: context.data.clinicId, actorId: context.data.userId, ...rateConfig }),
+    provider: openAiPlannerProvider,
+    observe: (event, details) => logger.info(event, details)
+  });
 }
 
 type ReadPatient = { patient_id: string; display_name: string; status: string };

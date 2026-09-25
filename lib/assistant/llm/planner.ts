@@ -4,6 +4,7 @@ import { normalizeAssistantQuery, parseAssistantText } from "@/lib/assistant/par
 import { logger } from "@/lib/logger";
 import { intentFromDraft, parseAssistantIntentDraft } from "./contracts";
 import { PlannerProviderError, type PlannerContext, type PlannerProvider } from "./types";
+import { ASSISTANT_DOMAIN_REPLY } from "./domain-gate";
 
 function minimizeMessageForProvider(message: string) {
   return message
@@ -11,17 +12,17 @@ function minimizeMessageForProvider(message: string) {
     .replace(/\+?\d(?:[\s().-]*\d){9,14}/g, "[teléfono omitido]");
 }
 
-export async function planAssistantConversation({ message, today, pending, role, isProfessional, timeZone, enabled, readToolsEnabled = false, provider }: {
+export async function planAssistantConversation({ message, today, pending, role, isProfessional, timeZone, enabled, readToolsEnabled = false, maxInputChars = 500, contextualFollowUp = false, provider }: {
   message: string; today: string; pending: AssistantIntent | null; role: string; isProfessional: boolean; timeZone: string;
-  enabled: boolean; readToolsEnabled?: boolean; provider: PlannerProvider;
+  enabled: boolean; readToolsEnabled?: boolean; maxInputChars?: number; contextualFollowUp?: boolean; provider: PlannerProvider;
 }): Promise<ConversationInput> {
   const fallback = () => resolveConversationInput(pending, message, today);
-  if (!enabled || !message.trim() || message.length > 500) return fallback();
+  if (!enabled || !message.trim() || message.length > maxInputChars) return fallback();
   const deterministic = fallback();
   if (deterministic.state === "reset") return deterministic;
   // Explicit intent changes retain the existing deterministic precedence.
   const explicit = parseAssistantText(message, today);
-  const active = pending && (explicit.state !== "intent" || explicit.intent.type === pending.type) ? pending : null;
+  const active = pending && (contextualFollowUp || explicit.state !== "intent" || explicit.intent.type === pending.type) ? pending : null;
   const missing = active ? getMissingFields(active) : [];
   const resolvedSlots = active ? [
     ...(active.type === "create_appointment" && active.patientId ? ["patient"] : []),
@@ -45,12 +46,16 @@ export async function planAssistantConversation({ message, today, pending, role,
       logger.info("planner_invalid_output", { intent_category: intentCategory, latency_ms: Date.now() - startedAt });
       return deterministic;
     }
+    if (draft.intent === "unknown") {
+      logger.info("planner_success", { intent_category: "unknown", reason_code: "non_action", latency_ms: Date.now() - startedAt });
+      return { state: "parsed", result: { state: "unsupported", message: ASSISTANT_DOMAIN_REPLY } };
+    }
     const normalizedMessage = normalizeAssistantQuery(message);
     if ([draft.patientQuery, draft.professionalQuery, draft.appointmentQuery].some((query) => query && !normalizedMessage.includes(normalizeAssistantQuery(query)))) {
       logger.info("planner_invalid_output", { intent_category: intentCategory, reason_code: "ungrounded_query", latency_ms: Date.now() - startedAt });
       return deterministic;
     }
-    if (pending && explicit.state === "intent" && explicit.intent.type !== pending.type && draft.intent !== explicit.intent.type) {
+    if (!contextualFollowUp && pending && explicit.state === "intent" && explicit.intent.type !== pending.type && draft.intent !== explicit.intent.type) {
       logger.info("planner_fallback", { intent_category: intentCategory, reason_code: "explicit_intent_precedence", latency_ms: Date.now() - startedAt });
       return deterministic;
     }
