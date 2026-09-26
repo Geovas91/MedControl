@@ -156,7 +156,8 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     if (!llmEnabled && !contextRef.current) { void handleResolved(resolveConversationInput(pendingIntent, text, today), text, { userMessageAdded: true }); return; }
     runPending(async () => {
       try {
-        const planned = await planAssistantConversationWithContextAction(text, contextRef.current);
+        const planned = await planAssistantConversationWithContextAction(text, contextRef.current, proposal?.proposal.actionId);
+        if (planned.proposalDisposition === "invalidated" || planned.proposalDisposition === "unavailable") setProposal(null);
         keepContext(planned.context);
         setPendingIntent(planned.context ? intentFromAssistantContext(planned.context) : null);
         await handleResolved(planned.resolved, text, { userMessageAdded: true, withinPending: true, context: planned.context });

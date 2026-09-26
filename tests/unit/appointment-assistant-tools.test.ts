@@ -45,6 +45,16 @@ test("create appointment proposals and confirmations share the same durable payl
   assert.equal(parseCreateAppointmentPendingArguments({ ...persisted, professional_clinic_member_id: "not-an-id" }), null);
 });
 
+test("proposal cancellation is scoped to the active clinic and remains one-shot", () => {
+  const registry = readFileSync("lib/assistant/tools/registry.ts", "utf8");
+  assert.match(registry, /executeConfirmedAssistantAction[\s\S]*from\("assistant_pending_actions" as never\)[\s\S]*\.eq\("clinic_id", current\.data\.clinicId\)[\s\S]*claim_assistant_pending_action_for_current_user/);
+  assert.match(registry, /cancelAssistantPendingAction[\s\S]*from\("assistant_pending_actions" as never\)[\s\S]*\.eq\("clinic_id", context\.data\.clinicId\)/);
+  assert.match(registry, /cancel_assistant_pending_action_for_current_user/);
+  const lifecycle = readFileSync("supabase/migrations/0049_assistant_pending_actions.sql", "utf8");
+  assert.match(lifecycle, /if v_action\.status='pending' then update public\.assistant_pending_actions set status='cancelled'/);
+  assert.match(lifecycle, /return v_action\.status/);
+});
+
 test("mutation tools remain confirmation-gated and derive context server-side", () => {
   assert.match(registry, /if \(tool\.mutation\) return assistantToolError\("confirmation_required"/);
   assert.match(registry, /getActiveTenantContext\(\)/);

@@ -225,7 +225,10 @@ export async function prepareAssistantMutation(name: string, rawInput: unknown):
 
 export async function executeConfirmedAssistantAction(actionId: string): Promise<AssistantToolResult<unknown>> {
   const current = await getAssistantToolContext(); if (!current.ok) return current;
-  const claim = await (await createClient()).rpc("claim_assistant_pending_action_for_current_user" as never, { p_action_id: actionId } as never) as unknown as { data: Array<{ tool_name: string; validated_arguments: Record<string, unknown>; status: string }> | null; error: { code?: string } | null };
+  const client = await createClient();
+  const scoped = await client.from("assistant_pending_actions" as never).select("id" as never).eq("id", actionId).eq("clinic_id", current.data.clinicId).maybeSingle() as unknown as { data: { id: string } | null; error: { code?: string } | null };
+  if (scoped.error || !scoped.data) return assistantToolError("forbidden", "La propuesta no está disponible en la clínica activa.");
+  const claim = await client.rpc("claim_assistant_pending_action_for_current_user" as never, { p_action_id: actionId } as never) as unknown as { data: Array<{ tool_name: string; validated_arguments: Record<string, unknown>; status: string }> | null; error: { code?: string } | null };
   if (claim.error || !claim.data?.[0]) return safeFailure(claim.error?.code === "42501" ? "forbidden" : "error");
   const pending = claim.data[0];
   if (pending.status === "expired") { logger.info("assistant_action_expired", { clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role }); return assistantToolError("confirmation_required", "La confirmación venció. Prepara una propuesta nueva."); }
@@ -247,7 +250,10 @@ export async function executeConfirmedAssistantAction(actionId: string): Promise
 
 export async function cancelAssistantPendingAction(actionId: string): Promise<AssistantToolResult<{ status: string }>> {
   const context = await getAssistantToolContext(); if (!context.ok) return context;
-  const result = await (await createClient()).rpc("cancel_assistant_pending_action_for_current_user" as never, { p_action_id: actionId } as never) as unknown as { data: string | null; error: { code?: string } | null };
+  const client = await createClient();
+  const scoped = await client.from("assistant_pending_actions" as never).select("id" as never).eq("id", actionId).eq("clinic_id", context.data.clinicId).maybeSingle() as unknown as { data: { id: string } | null; error: { code?: string } | null };
+  if (scoped.error || !scoped.data) return assistantToolError("forbidden", "La propuesta no está disponible en la clínica activa.");
+  const result = await client.rpc("cancel_assistant_pending_action_for_current_user" as never, { p_action_id: actionId } as never) as unknown as { data: string | null; error: { code?: string } | null };
   if (result.error || !result.data) return safeFailure(result.error?.code === "42501" ? "forbidden" : "error");
   logger.info("assistant_action_cancelled", { clinic_id: context.data.clinicId, actor_user_id: context.data.userId, actor_role: context.data.role }); return { ok: true, data: { status: result.data } };
 }

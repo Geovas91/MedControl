@@ -1,4 +1,4 @@
-import { getMissingFields, applyFollowUpToIntent } from "@/lib/assistant/orchestration/conversation";
+import { amendPendingProposalIntent, getMissingFields, applyFollowUpToIntent } from "@/lib/assistant/orchestration/conversation";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
 import { parseAssistantText, parseDateExpression, parseTimeExpression, type ParserResult } from "@/lib/assistant/parser/deterministic";
 
@@ -91,6 +91,9 @@ export function evaluateAssistantDomainGate({ message, today, pending, maxInputC
     if (!safeMessage) return { state: "rejected", reasonCode: injectionDetected ? "prompt_injection_only" : "no_scheduling_signal", intentCategory: "unknown" };
   }
   const safeCategory = parsed?.type ?? "unknown";
+  if (pending && amendPendingProposalIntent({ intent: pending, message: safeMessage, clinicLocalDate: today })) {
+    return { state: "allowed", message: safeMessage, reasonCode: "contextual_follow_up", intentCategory: pending.type };
+  }
   if (pending && parsed?.type !== pending.type && getMissingFields(pending).length > 0 && plausibleSlotFollowUp(safeMessage)) {
     return { state: "allowed", message: safeMessage, reasonCode: "contextual_follow_up", intentCategory: pending.type };
   }

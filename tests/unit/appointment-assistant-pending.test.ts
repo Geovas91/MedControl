@@ -19,12 +19,14 @@ function deferred<T>() {
 
 function mountAssistant(overrides: {
   llmEnabled?: boolean;
-  plan?: () => Promise<unknown>;
+  plan?: (message?: string, context?: unknown, proposalActionId?: string) => Promise<unknown>;
+  planDisposition?: "retained" | "invalidated" | "unavailable";
   submitIntent?: () => Promise<unknown>;
   select?: () => Promise<unknown>;
   confirm?: (actionId: string) => Promise<unknown>;
   cancel?: () => Promise<unknown>;
   resolve?: () => unknown;
+  returnedContext?: unknown;
 } = {}) {
   const state: unknown[] = [];
   const refs: Array<{ current: unknown }> = [];
@@ -36,10 +38,10 @@ function mountAssistant(overrides: {
   const actions = {
     cancelAssistantProposalAction: overrides.cancel ?? (async () => ({ state: "cancelled", message: "Acción cancelada." })),
     confirmAssistantProposalAction: overrides.confirm ?? (async () => ({ state: "success", message: "Acción completada." })),
-    planAssistantConversationWithContextAction: async () => ({ resolved: await (overrides.plan ?? (async () => ({ state: "parsed", result: { state: "unsupported", message: "Respuesta segura." } })))(), context: null }),
-    submitAssistantIntentWithContextAction: async () => ({ response: await (overrides.submitIntent ?? (async () => response))(), context: null }),
-    submitAssistantContextualHelperWithContextAction: async () => ({ response, context: null }),
-    selectAssistantResultWithContextAction: async () => ({ response: await (overrides.select ?? (async () => response))(), context: null })
+    planAssistantConversationWithContextAction: async (message: string, context: unknown, proposalActionId?: string) => ({ resolved: await (overrides.plan ?? (async () => ({ state: "parsed", result: { state: "unsupported", message: "Respuesta segura." } })))(message, context, proposalActionId), context: null, proposalDisposition: overrides.planDisposition ?? "retained" }),
+    submitAssistantIntentWithContextAction: async () => ({ response: await (overrides.submitIntent ?? (async () => response))(), context: overrides.returnedContext ?? null }),
+    submitAssistantContextualHelperWithContextAction: async () => ({ response, context: overrides.returnedContext ?? null }),
+    selectAssistantResultWithContextAction: async () => ({ response: await (overrides.select ?? (async () => response))(), context: overrides.returnedContext ?? null })
   };
   const output = ts.transpileModule(readFileSync("components/bot/appointment-assistant.tsx", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }
@@ -276,4 +278,34 @@ test("structured slot click reaches the selection action without a planner call"
   assert.equal(plannerCalls, 0);
   assert.equal(selectionCalls, 1);
   assert.ok(textContent(tree).includes("¿Con qué paciente?"));
+});
+
+test("amending a pending proposal passes its durable id and removes the stale confirm card", async () => {
+  const oldProposal = { state: "proposal", action: "Crear cita", patient: "QA Patient N-D1-01", professional: "QA Doctor 2 Norte", date: "2026-09-29", time: "11:45", proposal: { actionId: "old-proposal-id" } };
+  let amendmentActionId: string | undefined;
+  let submitCalls = 0;
+  const ui = mountAssistant({
+    llmEnabled: false,
+    returnedContext: { activeIntent: "create_appointment" },
+    submitIntent: async () => {
+      submitCalls++;
+      return submitCalls === 1 ? oldProposal : { state: "slots", professional: "QA Doctor 3 Norte", professionalClinicMemberId: "33333333-3333-4333-8333-333333333333", date: "2026-09-29", durationMinutes: 30, slots: [] };
+    },
+    plan: async (_message, _context, actionId) => {
+      amendmentActionId = actionId;
+      return { state: "parsed", result: { state: "intent", intent: { type: "create_appointment", patientId: "11111111-1111-4111-8111-111111111111", professionalQuery: "QA Doctor 3 Norte", localDate: "2026-09-29", durationMinutes: 30 } } };
+    },
+    planDisposition: "invalidated"
+  });
+
+  submit(ui, "Agendar una cita");
+  await ui.done();
+  assert.ok(textContent(resolveTree(ui.render())).includes("Propuesta pendiente"));
+
+  submit(ui, "Mejor con QA Doctor 3 Norte");
+  await ui.done();
+  const tree = resolveTree(ui.render());
+  assert.equal(amendmentActionId, "old-proposal-id");
+  assert.equal(textContent(tree).includes("Propuesta pendiente"), false);
+  assert.equal(nodes(tree).some((node) => node.type === "button" && textContent(node).includes("Confirmar")), false);
 });

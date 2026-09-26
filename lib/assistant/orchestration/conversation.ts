@@ -39,6 +39,53 @@ export function getMissingFields(intent: AssistantIntent): AssistantMissingField
 
 export type FollowUpResult = { updatedIntent: AssistantIntent; consumed: boolean; missingFields: AssistantMissingField[] };
 
+export type PendingProposalAmendment = {
+  field: "patient" | "professional" | "localDate" | "localTime";
+  intent: AssistantIntent;
+};
+
+/** Applies an explicit correction to a complete scheduling draft without executing it. */
+export function amendPendingProposalIntent({ intent, message, clinicLocalDate }: { intent: AssistantIntent; message: string; clinicLocalDate: string }): PendingProposalAmendment | null {
+  if (intent.type !== "create_appointment" && intent.type !== "reschedule_appointment") return null;
+  const text = message.normalize("NFKC").replace(/\s+/g, " ").trim();
+  const plain = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const bareTime = /^a\s+las?\s+(?:[1-8]|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(?:\s+en\s+punto)?$/.test(plain);
+  const explicitAmendment = bareTime || /^(?:mejor\b|cambial[oa]\b|ponl[oa]\b|otro\s+(?:doctor|medico|profesional)\b|para\b)/.test(plain);
+  if (!explicitAmendment) return null;
+
+  if (intent.type === "create_appointment") {
+    const patient = /^(?:mejor\s+)?para\s+(.{2,100})$/i.exec(text)?.[1]?.trim();
+    if (patient) return { field: "patient", intent: { ...intent, patientId: undefined, patientQuery: patient } };
+
+    if (/^otro\s+(?:doctor|medico|profesional)$/i.test(plain)) {
+      return { field: "professional", intent: { ...intent, professionalClinicMemberId: undefined, professionalQuery: undefined, localTime: undefined } };
+    }
+    const professional = /^(?:mejor\s+con|c[aá]mbial[oa]\s+(?:al|a\s+la|con)|mejor\s+(?:al|a\s+la))\s+(.{2,100})$/i.exec(text)?.[1]?.trim();
+    if (professional && /\b(?:doctor|doctora|dr\.?|dra\.?|medico|medica|profesional)\b/i.test(professional)) {
+      return { field: "professional", intent: { ...intent, professionalClinicMemberId: undefined, professionalQuery: professional, localTime: undefined } };
+    }
+  }
+
+  const date = parseDateExpression(text, clinicLocalDate);
+  if (date && /^(?:mejor|cambial[oa]|ponl[oa])\b/.test(plain) && !parseTimeExpression(text)) {
+    return { field: "localDate", intent: { ...intent, localDate: date, localTime: undefined } };
+  }
+  let time = parseTimeExpression(text);
+  if (!time) {
+    const spokenHour = /^(?:(?:mejor|c[aá]mbial[oa]|ponl[oa]?)\s+)?a\s+las?\s+(una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(?:\s+en\s+punto)?$/i.exec(plain)?.[1];
+    const hour = spokenHour ? ({ una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12 } as const)[spokenHour as "una" | "dos" | "tres" | "cuatro" | "cinco" | "seis" | "siete" | "ocho" | "nueve" | "diez" | "once" | "doce"] : undefined;
+    if (hour) time = `${String(hour >= 1 && hour <= 8 ? hour + 12 : hour).padStart(2, "0")}:00`;
+  }
+  if (time && !/\b(?:am|pm)\b/i.test(text)) {
+    const shortHour = /\ba\s+las?\s+([1-8])(?:\s|$)/i.exec(text)?.[1];
+    if (shortHour) time = `${String(Number(shortHour) + 12).padStart(2, "0")}:00`;
+  }
+  if (time && (bareTime || /^(?:mejor|cambial[oa]|ponl[oa])\b/.test(plain))) {
+    return { field: "localTime", intent: { ...intent, localTime: time } };
+  }
+  return null;
+}
+
 export function applyFollowUpToIntent({ intent, message, clinicLocalDate }: { intent: AssistantIntent; message: string; clinicLocalDate: string }): FollowUpResult {
   const query = message.normalize("NFKC").replace(/\s+/g, " ").trim();
   const date = parseDateExpression(query, clinicLocalDate);
