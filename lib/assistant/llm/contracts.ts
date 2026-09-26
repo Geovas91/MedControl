@@ -89,9 +89,20 @@ export function intentFromDraft(draft: AssistantIntentDraft, today: string, pend
   const appointmentQuery = draft.appointmentQuery?.trim() || undefined;
   switch (draft.intent) {
     case "search_patients": return { type: "search_patients", query: patientQuery ?? "" };
-    case "search_appointments": return draft.dateRange === undefined
-      ? { type: "search_appointments", query: appointmentQuery, localDate: date ?? undefined }
-      : { type: "search_appointments", query: appointmentQuery, patientQuery, professionalQuery, localDate: date ?? undefined, period: draft.dateRange ?? undefined, status: draft.status ?? undefined };
+    case "search_appointments": {
+      const old = same?.type === "search_appointments" ? same : null;
+      const keptPatientQuery = patientQuery ?? old?.patientQuery;
+      const keptProfessionalQuery = professionalQuery ?? old?.professionalQuery;
+      const keptPatientId = patientQuery ? undefined : old?.patientId;
+      const keptProfessionalId = professionalQuery ? undefined : old?.professionalId;
+      const filters = {
+        ...(keptPatientQuery ? { patientQuery: keptPatientQuery } : {}), ...(keptPatientId ? { patientId: keptPatientId } : {}),
+        ...(keptProfessionalQuery ? { professionalQuery: keptProfessionalQuery } : {}), ...(keptProfessionalId ? { professionalId: keptProfessionalId } : {})
+      };
+      return draft.dateRange === undefined
+        ? { type: "search_appointments", query: appointmentQuery, ...filters, localDate: date ?? old?.localDate }
+        : { type: "search_appointments", query: appointmentQuery, ...filters, localDate: date ?? old?.localDate, period: draft.dateRange ?? undefined, status: draft.status ?? undefined };
+    }
     case "get_appointment": return { type: "get_appointment", appointmentQuery: appointmentQuery ?? (same?.type === "get_appointment" ? same.appointmentQuery : undefined), appointmentId: appointmentQuery ? undefined : (same?.type === "get_appointment" ? same.appointmentId : undefined), professionalQuery: professionalQuery ?? (same?.type === "get_appointment" ? same.professionalQuery : undefined), professionalId: professionalQuery ? undefined : (same?.type === "get_appointment" ? same.professionalId : undefined), localDate: date ?? (same?.type === "get_appointment" ? same.localDate : undefined) };
     case "get_professionals": return { type: "get_professionals", professionalQuery };
     case "check_availability": return { type: "check_availability", professionalQuery: professionalQuery ?? (same?.type === "check_availability" ? same.professionalQuery : undefined), professionalClinicMemberId: professionalQuery ? undefined : (same?.type === "check_availability" ? same.professionalClinicMemberId : undefined), localDate: date ?? (same?.type === "check_availability" ? same.localDate : undefined), durationMinutes };

@@ -9,7 +9,7 @@ import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
 import { resolveUniqueEntity } from "@/lib/assistant/orchestration/intents";
 import { getDefaultSchedulingProfessional, type ContextualHelper } from "@/lib/assistant/orchestration/conversation";
 import { resolveConversationInput, type ConversationInput } from "@/lib/assistant/orchestration/conversation";
-import { resolveAssistantStructuredChoice, type AssistantStructuredChoice, type VerifiedAssistantAppointment } from "@/lib/assistant/orchestration/structured-selection";
+import { parseAssistantStructuredChoice, resolveAssistantStructuredChoice, type AssistantStructuredChoice, type VerifiedAssistantAppointment } from "@/lib/assistant/orchestration/structured-selection";
 import { isAssistantReadIntent, isValidAssistantReadIntent, orchestrateAssistantReadIntent, shouldOrchestrateAssistantReads, type AssistantReadResponse } from "@/lib/assistant/orchestration/read-tools";
 import { runGatedAssistantPlanner } from "@/lib/assistant/llm/gated-planner";
 import { getAssistantLlmMaxInputChars } from "@/lib/assistant/llm/domain-gate";
@@ -29,6 +29,7 @@ import {
 import { saveAppointmentAssistantSettingsForActiveTenant } from "@/lib/server/appointment-assistant";
 import { isPatientAvailableForActiveTenant } from "@/lib/server/patients";
 import { getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
+import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
 export async function saveAppointmentAssistantSettingsAction(formData: FormData) {
   const input = parseAppointmentAssistantSettings(formData);
@@ -46,7 +47,7 @@ export async function saveAppointmentAssistantSettingsAction(formData: FormData)
 export type AssistantUiResponse =
   | AssistantReadResponse
   | { state: "availability_retry"; message: string; intent: Extract<AssistantIntent, { type: "create_appointment" }>; alternatives: Array<{ start: string; end: string; choice: AssistantStructuredChoice }> }
-  | { state: "proposal"; proposal: AssistantProposal; action: string; patient?: string; professional?: string | null; date?: string; time?: string; previous?: string }
+  | { state: "proposal"; proposal: AssistantProposal; action: string; patient?: string; professional?: string | null; date?: string; time?: string; previous?: string; resolvedPatientRef?: string; resolvedProfessionalRef?: string; resolvedAppointmentRef?: string }
   | { state: "success"; message: string }
   | { state: "cancelled"; message: string }
   | { state: "proposal_terminal"; status: "failed" | "expired" | "cancelled" | "executed" | "unavailable"; message: string };
@@ -127,7 +128,7 @@ async function resolveAppointment(query: string | undefined, localDate?: string)
   return { state: "ready" as const, appointment: matches[0] };
 }
 
-function proposalResponse(proposal: AssistantProposal, action: string, values: { patient?: string; professional?: string | null; date?: string; time?: string; previous?: string }): AssistantUiResponse {
+function proposalResponse(proposal: AssistantProposal, action: string, values: { patient?: string; professional?: string | null; date?: string; time?: string; previous?: string; resolvedPatientRef?: string; resolvedProfessionalRef?: string; resolvedAppointmentRef?: string }): AssistantUiResponse {
   return { state: "proposal", proposal, action, ...values };
 }
 
@@ -171,7 +172,7 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     const result = await readTool<ReadAppointment[]>("search_appointments", { date: intent.localDate ?? undefined });
     if (!result.ok) return safeToolError(result);
     const rows = matchingAppointments(result.data, intent.query);
-    return { state: "appointments", appointments: rows.slice(0, 10).map((row) => ({ id: row.appointment_id, patient: row.patient_display_name, professional: row.professional_display_name, startsAt: row.starts_at, endsAt: row.ends_at, status: row.status, choice: { kind: "appointment" as const, label: `${row.patient_display_name} · ${row.starts_at}`, reference: row.appointment_id } })), hasMore: rows.length > 10 };
+    return { state: "appointments", appointments: rows.slice(0, 10).map((row) => ({ id: row.appointment_id, patient: row.patient_display_name, professional: row.professional_display_name, startsAt: row.starts_at, endsAt: row.ends_at, status: row.status, choice: { kind: "appointment" as const, label: `${row.patient_display_name} · ${row.starts_at}`, reference: row.appointment_id } })), uniqueVerified: result.data.length < 25 && rows.length === 1, hasMore: rows.length > 10 };
   }
 
   if (intent.type === "check_availability") {
@@ -230,7 +231,7 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     if (!presentation.ok) return safeToolError(presentation);
     const proposal = await prepareAssistantMutation("create_appointment", proposalInput);
     if (!proposal.ok) return safeToolError(proposal);
-    return proposalResponse(proposal.data, "Crear cita", { patient: presentation.data.patient, professional: presentation.data.professional, date: resolvedIntent.localDate, time: resolvedIntent.localTime });
+    return proposalResponse(proposal.data, "Crear cita", { patient: presentation.data.patient, professional: presentation.data.professional, date: resolvedIntent.localDate, time: resolvedIntent.localTime, resolvedPatientRef: patient.id, resolvedProfessionalRef: professional.id });
   }
 
   if (intent.type !== "confirm_appointment" && intent.type !== "cancel_appointment" && intent.type !== "reschedule_appointment") {
@@ -253,12 +254,12 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     if (!slots.data.some((slot) => slot.local_start === intent.localTime)) return { state: "message", message: "No encontré ese horario disponible para reprogramar la cita." };
     const proposal = await prepareAssistantMutation("reschedule_appointment", { appointmentId: current.appointment_id, expectedStatus: current.status, date: intent.localDate, startTime: intent.localTime, durationMinutes: intent.durationMinutes });
     if (!proposal.ok) return safeToolError(proposal);
-    return proposalResponse(proposal.data, "Reprogramar cita", { patient: current.patient_display_name, professional: current.professional_display_name, date: intent.localDate, time: intent.localTime, previous: current.starts_at });
+    return proposalResponse(proposal.data, "Reprogramar cita", { patient: current.patient_display_name, professional: current.professional_display_name, date: intent.localDate, time: intent.localTime, previous: current.starts_at, resolvedAppointmentRef: current.appointment_id });
   }
   const toolName = intent.type === "confirm_appointment" ? "confirm_appointment" : "cancel_appointment";
   const proposal = await prepareAssistantMutation(toolName, { appointmentId: current.appointment_id, expectedStatus: current.status });
   if (!proposal.ok) return safeToolError(proposal);
-  return proposalResponse(proposal.data, intent.type === "confirm_appointment" ? "Confirmar cita" : "Cancelar cita", { patient: current.patient_display_name, professional: current.professional_display_name, previous: current.starts_at });
+  return proposalResponse(proposal.data, intent.type === "confirm_appointment" ? "Confirmar cita" : "Cancelar cita", { patient: current.patient_display_name, professional: current.professional_display_name, previous: current.starts_at, resolvedAppointmentRef: current.appointment_id });
 }
 
 export async function submitAssistantContextualHelperAction(input: unknown, helper: ContextualHelper): Promise<AssistantUiResponse> {
@@ -352,4 +353,98 @@ export async function cancelAssistantProposalAction(actionId: unknown): Promise<
   if (result.data.status === "cancelled") return { state: "cancelled", message: "Acción cancelada." };
   if (result.data.status === "expired") return { state: "proposal_terminal", status: "expired", message: "Esta propuesta expiró. Vuelve a solicitar la acción." };
   return { state: "proposal_terminal", status: result.data.status === "executed" ? "executed" : "failed", message: "La propuesta ya no puede ejecutarse." };
+}
+
+const CONTEXT_CHANGED_REPLY = "La selección anterior ya no está disponible. Vuelve a elegirla para continuar.";
+
+async function loadAssistantContext(raw: unknown) {
+  const actor = await getAssistantToolContext();
+  if (!actor.ok) return { ok: false as const, message: actor.error.safeMessage, context: null };
+  if (!planIncludesFeature(await getClinicEntitlements(actor.data.clinicId), "appointment_assistant")) return { ok: false as const, message: "El asistente no está disponible para esta clínica.", context: null };
+  const scope = { actorId: actor.data.userId, clinicId: actor.data.clinicId };
+  const validators = {
+    patient: isPatientAvailableForActiveTenant,
+    professional: async (ref: string) => {
+      const result = await executeAssistantReadTool("get_professionals", {});
+      if (!result.ok || !Array.isArray(result.data)) return null;
+      const row = result.data.find((value) => value && typeof value === "object" && (value as Record<string, unknown>).professional_clinic_member_id === ref) as Record<string, unknown> | undefined;
+      return row && typeof row.professional_user_id === "string" ? { userId: row.professional_user_id } : null;
+    },
+    appointment: async (ref: string) => {
+      const result = await executeAssistantReadTool("get_appointment", { appointmentId: ref });
+      if (!result.ok || !result.data || typeof result.data !== "object") return null;
+      const status = (result.data as Record<string, unknown>).status;
+      return typeof status === "string" ? { status } : null;
+    },
+    slot: async (slot: NonNullable<AssistantConversationContext["selectedSlot"]>) => {
+      const result = await executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: slot.professionalRef, date: slot.localDate, durationMinutes: slot.durationMinutes });
+      return result.ok && Array.isArray(result.data) && result.data.some((value) => value && typeof value === "object" && (value as Record<string, unknown>).local_start === slot.startTime);
+    }
+  };
+  const ttl = assistantContextTtlSeconds(process.env.APPOINTMENT_ASSISTANT_CONTEXT_TTL_SECONDS);
+  let checked;
+  try { checked = await revalidateAssistantConversationContext(raw, scope, validators, Date.now(), ttl); }
+  catch { checked = { context: newAssistantConversationContext(scope), reason: "invalidated" as const }; }
+  if (checked.reason !== "continued") logger.info(`assistant_context_${checked.reason === "created" ? "created" : checked.reason === "expired" ? "expired" : "invalidated"}`, { reason_code: checked.reason });
+  return { ok: true as const, context: checked.context, reason: checked.reason, scope, validators, timeZone: actor.data.timeZone, today: getClinicDayRange(actor.data.timeZone).localDate, ttl };
+}
+
+/** The browser carries only bounded, ephemeral UX state. Every canonical reference is re-read under the current actor and tenant. */
+export async function planAssistantConversationWithContextAction(message: unknown, rawContext: unknown) {
+  const loaded = await loadAssistantContext(rawContext);
+  if (!loaded.ok) return { resolved: { state: "parsed", result: { state: "unsupported", message: loaded.message } } as ConversationInput, context: loaded.context };
+  if (loaded.reason === "invalidated") return { resolved: { state: "parsed", result: { state: "unsupported", message: CONTEXT_CHANGED_REPLY } } as ConversationInput, context: loaded.context };
+  const text = typeof message === "string" ? message : "";
+  const ambiguous = ambiguousAppointmentRequest(text, loaded.context);
+  if (ambiguous) {
+    return { resolved: { state: "parsed", result: { state: "needs_input", intent: ambiguous, message: "Hay varias citas. Selecciona la cita específica antes de continuar." } } as ConversationInput, context: { ...loaded.context, activeIntent: ambiguous.type } };
+  }
+  const contextual = contextualAppointmentCommand(text, loaded.context) ?? contextualSchedulingFollowUp(text, loaded.context, loaded.today);
+  let conversationContext = contextual ? updateAssistantConversationContext(loaded.context, contextual, { state: "message" }, loaded.timeZone) : loaded.context;
+  if (contextual?.type === "create_appointment" && loaded.context.activeIntent === "check_availability" && contextual.professionalClinicMemberId && contextual.localDate && contextual.localTime && loaded.context.availableSlotTimes?.includes(contextual.localTime)) {
+    const selectedSlot = { professionalRef: contextual.professionalClinicMemberId, localDate: contextual.localDate, startTime: contextual.localTime, durationMinutes: contextual.durationMinutes };
+    if (!await loaded.validators.slot(selectedSlot)) return { resolved: { state: "parsed", result: { state: "unsupported", message: CONTEXT_CHANGED_REPLY } } as ConversationInput, context: { ...loaded.context, availableSlotTimes: undefined, selectedSlot: undefined, startTime: undefined } };
+    conversationContext = { ...conversationContext, selectedSlot, startTime: selectedSlot.startTime };
+  }
+  const resolved: ConversationInput = contextual
+    ? { state: "parsed", result: { state: "intent", intent: contextual } }
+    : await planAssistantConversationAction(text, intentFromAssistantContext(loaded.context));
+  if (resolved.state === "parsed" && resolved.result.state === "intent") conversationContext = updateAssistantConversationContext(conversationContext, resolved.result.intent, { state: "message" }, loaded.timeZone);
+  return { resolved, context: conversationContext };
+}
+
+export async function submitAssistantIntentWithContextAction(input: unknown, rawContext: unknown) {
+  const loaded = await loadAssistantContext(rawContext);
+  if (!loaded.ok) return { response: { state: "error", message: loaded.message } as AssistantUiResponse, context: loaded.context };
+  if (loaded.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: loaded.context };
+  const response = await submitAssistantIntentAction(input);
+  const intent = isAssistantIntent(input) ? input : null;
+  const next = updateAssistantConversationContext(loaded.context, intent, response, loaded.timeZone);
+  const checked = await revalidateAssistantConversationContext(next, loaded.scope, loaded.validators, Date.now(), loaded.ttl);
+  if (checked.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: checked.context };
+  return { response, context: checked.context };
+}
+
+export async function submitAssistantContextualHelperWithContextAction(input: unknown, helper: ContextualHelper, rawContext: unknown) {
+  const loaded = await loadAssistantContext(rawContext);
+  if (!loaded.ok) return { response: { state: "error", message: loaded.message } as AssistantUiResponse, context: loaded.context };
+  if (loaded.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: loaded.context };
+  const response = await submitAssistantContextualHelperAction(input, helper);
+  const context = updateAssistantConversationContext(loaded.context, isAssistantIntent(input) ? input : null, response, loaded.timeZone);
+  return { response, context };
+}
+
+export async function selectAssistantResultWithContextAction(choice: unknown, rawContext: unknown) {
+  const loaded = await loadAssistantContext(rawContext);
+  if (!loaded.ok) return { response: { state: "error", message: loaded.message } as AssistantUiResponse, context: loaded.context };
+  if (loaded.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: loaded.context };
+  const pending = intentFromAssistantContext(loaded.context);
+  const response = await selectAssistantResultAction(choice, pending);
+  let next = loaded.context;
+  const selected = parseAssistantStructuredChoice(choice);
+  if (selected && response.state !== "error" && response.state !== "proposal_terminal") next = applyVerifiedAssistantChoiceToContext(next, selected);
+  next = updateAssistantConversationContext(next, pending, response, loaded.timeZone);
+  const checked = await revalidateAssistantConversationContext(next, loaded.scope, loaded.validators, Date.now(), loaded.ttl);
+  if (checked.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: checked.context };
+  return { response, context: checked.context };
 }

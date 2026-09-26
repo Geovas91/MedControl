@@ -98,6 +98,8 @@ export function evaluateAssistantDomainGate({ message, today, pending, maxInputC
   if (hasNaturalSchedulingSignal(safeMessage)) return { state: "allowed", message: safeMessage, reasonCode: "scheduling_language", intentCategory: "unknown" };
   if (injectionDetected && !safeMessage) return { state: "rejected", reasonCode: "prompt_injection_only", intentCategory: "unknown" };
   if (pending) {
+    const plain = safeMessage.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    if (/^(?:y\s+)?a\s+las?\s+(?:\d{1,2}(?::[0-5]\d)?|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)(?:\s*(?:am|pm))?$/.test(plain)) return { state: "allowed", message: safeMessage, reasonCode: "contextual_follow_up", intentCategory: pending.type };
     const followUp = applyFollowUpToIntent({ intent: pending, message: safeMessage, clinicLocalDate: today });
     if (followUp.consumed || plausibleSlotFollowUp(safeMessage) && getMissingFields(pending).length > 0) return { state: "allowed", message: safeMessage, reasonCode: "contextual_follow_up", intentCategory: pending.type };
   }

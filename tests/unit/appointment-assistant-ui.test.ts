@@ -45,13 +45,14 @@ test("UI exposes safe accessibility and loading behavior", () => {
 
 test("UI gives recognized intents precedence over follow-up state and supports reset", () => {
   assert.match(component, /resolveConversationInput\(pendingIntent, text, today\)/);
-  assert.match(component, /Empecemos una nueva consulta/);
+  assert.match(component, /Nueva conversación/);
+  assert.match(component, /resetConversation\(\)/);
   assert.match(component, /setPendingIntent\(null\)/);
 });
 
 test("pending entity helper commands use a read action and preserve the pending intent", () => {
   assert.match(component, /classifyContextualHelper\(pendingIntent, text\)/);
-  assert.match(component, /submitAssistantContextualHelperAction\(intent, helper\)/);
+  assert.match(component, /submitAssistantContextualHelperWithContextAction\(intent, helper,/);
   assert.match(actions, /state: "choices", field: "patient"/);
   assert.match(actions, /state: "choices", field: "professional"/);
 });
@@ -75,7 +76,7 @@ test("availability failures expose a recoverable appointment intent and safe alt
   assert.match(actions, /localTime: undefined/);
   assert.match(actions, /Puedes elegir otro horario/);
   assert.match(component, /onClick=\{\(\) => choose\(slot\.choice\)\}/);
-  assert.match(component, /selectAssistantResultAction\(choice, pendingIntent\)/);
+  assert.match(component, /selectAssistantResultWithContextAction\(choice, contextRef\.current\)/);
   assert.match(component, /message\.response\.alternatives/);
 });
 

@@ -16,6 +16,7 @@ import {
 import { buildAppointmentAutomationLiveStatus } from "@/lib/appointment-automation-live-status";
 import { getAppointmentStatusLabel, type AppointmentStatus } from "@/lib/appointments/query";
 import { getAppointmentAssistantForActiveTenant } from "@/lib/server/appointment-assistant";
+import { getActiveTenantContext } from "@/lib/server/active-tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +87,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
   }
 
   const { data } = result;
+  const activeActor = await getActiveTenantContext();
   const olderActivityHref = data.activityNextCursor
     ? `/dashboard/bot?${new URLSearchParams({ activity_before: data.activityNextCursor.occurredAt, activity_before_source: data.activityNextCursor.eventSource, activity_before_id: data.activityNextCursor.eventId }).toString()}`
     : null;
@@ -104,7 +106,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         <a href="#automation" className="rounded-full bg-white/70 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clinic">Automatizaciones y actividad</a>
       </nav>
 
-      <div id="assistant"><AppointmentAssistant today={data.localDate} timeZone={data.tenant.clinic.timezone} llmEnabled={process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED === "true"} /></div>
+      <div id="assistant"><AppointmentAssistant key={`${activeActor.state === "ready" ? activeActor.user.id : "unknown"}:${data.tenant.clinic.id}`} today={data.localDate} timeZone={data.tenant.clinic.timezone} llmEnabled={process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED === "true"} /></div>
 
       {hasAppointmentAssistantSavedMessage(params) ? <p role="status" className="mb-5 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm font-medium text-[var(--success)]">La configuración se guardó para esta clínica.</p> : null}
       {hasAppointmentAssistantSettingsError(params) ? <p role="alert" className="mb-5 rounded-[var(--radius-md)] bg-red-50 p-3 text-sm font-medium text-red-700">No fue posible guardar la configuración. Revisa los valores y tus permisos.</p> : null}

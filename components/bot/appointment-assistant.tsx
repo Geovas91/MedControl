@@ -7,15 +7,16 @@ import { appointmentStatuses, getAppointmentStatusLabel, type AppointmentStatus 
 import {
   cancelAssistantProposalAction,
   confirmAssistantProposalAction,
-  planAssistantConversationAction,
-  submitAssistantIntentAction,
-  selectAssistantResultAction,
-  submitAssistantContextualHelperAction,
+  planAssistantConversationWithContextAction,
+  submitAssistantIntentWithContextAction,
+  selectAssistantResultWithContextAction,
+  submitAssistantContextualHelperWithContextAction,
   type AssistantUiResponse
 } from "@/app/dashboard/bot/actions";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
 import type { AssistantStructuredChoice } from "@/lib/assistant/orchestration/structured-selection";
-import { classifyContextualHelper, resolveConversationInput } from "@/lib/assistant/orchestration/conversation";
+import { classifyContextualHelper, isConversationResetCommand, resolveConversationInput } from "@/lib/assistant/orchestration/conversation";
+import { intentFromAssistantContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
 type Message = { id: number; author: "user" | "assistant"; text: string; response?: AssistantUiResponse };
 type Props = { today: string; timeZone: string; llmEnabled: boolean };
@@ -57,16 +58,34 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
   const [messages, setMessages] = useState<Message[]>([{ id: 1, author: "assistant", text: "Hola, ¿qué quieres hacer con tu agenda?" }]);
   const [value, setValue] = useState("");
   const [pendingIntent, setPendingIntent] = useState<AssistantIntent | null>(null);
+  const [conversationContext, setConversationContext] = useState<AssistantConversationContext | null>(null);
   const [proposal, setProposal] = useState<Extract<AssistantUiResponse, { state: "proposal" }> | null>(null);
   const [isPending, startTransition] = useTransition();
   const nextId = useRef(2);
   const pendingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const restoreInputFocus = useRef(false);
+  const contextRef = useRef<AssistantConversationContext | null>(null);
+
+  const keepContext = (context: AssistantConversationContext | null) => {
+    contextRef.current = context;
+    setConversationContext(context);
+  };
+
+  const resetConversation = () => {
+    if (pendingRef.current || isPending) return;
+    nextId.current = 2;
+    setMessages([{ id: 1, author: "assistant", text: "Hola, ¿qué quieres hacer con tu agenda?" }]);
+    setValue("");
+    setPendingIntent(null);
+    setProposal(null);
+    keepContext(null);
+    inputRef.current?.focus();
+  };
 
   const append = (message: Omit<Message, "id">) => {
     const id = nextId.current++;
-    setMessages((current) => [...current, { ...message, id }]);
+    setMessages((current) => [...current, { ...message, id }].slice(-30));
   };
 
   const applyResponse = (response: AssistantUiResponse, fallbackIntent: AssistantIntent | null) => {
@@ -97,45 +116,52 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     return true;
   };
 
-  const submitIntent = async (intent: AssistantIntent, text: string, helper?: "patients" | "professionals", options: { userMessageAdded?: boolean; withinPending?: boolean } = {}) => {
+  const submitIntent = async (intent: AssistantIntent, text: string, helper?: "patients" | "professionals", options: { userMessageAdded?: boolean; withinPending?: boolean; context?: AssistantConversationContext | null } = {}) => {
     if (!options.withinPending) {
       if (pendingRef.current || isPending) return;
       if (!options.userMessageAdded) append({ author: "user", text });
     }
     const perform = async () => {
-      const response = helper ? await submitAssistantContextualHelperAction(intent, helper) : await submitAssistantIntentAction(intent);
+      const result = helper
+        ? await submitAssistantContextualHelperWithContextAction(intent, helper, options.context ?? contextRef.current)
+        : await submitAssistantIntentWithContextAction(intent, options.context ?? contextRef.current);
+      const { response } = result;
+      keepContext(result.context);
       append({ author: "assistant", text: responseText(response), response });
-      applyResponse(response, intent);
+      applyResponse(response, result.context ? intentFromAssistantContext(result.context) : null);
     };
     if (options.withinPending) return perform();
     runPending(perform);
   };
 
-  const handleResolved = async (resolved: ReturnType<typeof resolveConversationInput>, text: string, options: { userMessageAdded?: boolean; withinPending?: boolean } = {}) => {
+  const handleResolved = async (resolved: ReturnType<typeof resolveConversationInput>, text: string, options: { userMessageAdded?: boolean; withinPending?: boolean; context?: AssistantConversationContext | null } = {}) => {
     if (!options.userMessageAdded) append({ author: "user", text });
     if (resolved.state === "reset") {
-      append({ author: "assistant", text: "Empecemos una nueva consulta." });
-      setPendingIntent(null);
+      resetConversation();
       return;
     }
     const parsed = resolved.result;
     if (parsed.state !== "intent") { append({ author: "assistant", text: parsed.message }); if (parsed.state === "needs_input" && parsed.intent) setPendingIntent(parsed.intent); return; }
-    await submitIntent(parsed.intent, text, undefined, { userMessageAdded: true, withinPending: options.withinPending });
+    await submitIntent(parsed.intent, text, undefined, { userMessageAdded: true, withinPending: options.withinPending, context: options.context });
   };
 
   const submit = (raw: string = value) => {
     const text = raw.trim();
     if (!text || isPending || pendingRef.current) return;
+    if (isConversationResetCommand(text) || /^nueva conversaci[oó]n$/i.test(text)) { resetConversation(); return; }
     setValue("");
     append({ author: "user", text });
     const helper = pendingIntent ? classifyContextualHelper(pendingIntent, text) : null;
     if (helper) { void submitIntent(pendingIntent!, text, helper, { userMessageAdded: true }); return; }
-    if (!llmEnabled) { void handleResolved(resolveConversationInput(pendingIntent, text, today), text, { userMessageAdded: true }); return; }
+    if (!llmEnabled && !contextRef.current) { void handleResolved(resolveConversationInput(pendingIntent, text, today), text, { userMessageAdded: true }); return; }
     runPending(async () => {
       try {
-        await handleResolved(await planAssistantConversationAction(text, pendingIntent), text, { userMessageAdded: true, withinPending: true });
+        const planned = await planAssistantConversationWithContextAction(text, contextRef.current);
+        keepContext(planned.context);
+        setPendingIntent(planned.context ? intentFromAssistantContext(planned.context) : null);
+        await handleResolved(planned.resolved, text, { userMessageAdded: true, withinPending: true, context: planned.context });
       } catch {
-        await handleResolved(resolveConversationInput(pendingIntent, text, today), text, { userMessageAdded: true, withinPending: true });
+        await handleResolved(resolveConversationInput(pendingIntent, text, today), text, { userMessageAdded: true, withinPending: true, context: contextRef.current });
       }
     });
   };
@@ -144,9 +170,11 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     if (isPending || pendingRef.current) return;
     append({ author: "user", text: choice.label });
     runPending(async () => {
-      const response = await selectAssistantResultAction(choice, pendingIntent);
+      const result = await selectAssistantResultWithContextAction(choice, contextRef.current);
+      const { response } = result;
+      keepContext(result.context);
       append({ author: "assistant", text: responseText(response), response });
-      applyResponse(response, pendingIntent);
+      applyResponse(response, result.context ? intentFromAssistantContext(result.context) : null);
     });
   };
 
@@ -175,7 +203,7 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     <section className="glass-card-strong mb-5 p-5" aria-labelledby="appointment-assistant-title">
       <div className="flex flex-col gap-3 border-b border-[var(--glass-border)] pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div><h2 id="appointment-assistant-title" className="flex items-center gap-2 text-lg font-bold text-ink"><CalendarClock className="h-5 w-5 text-clinic" />Appointment Assistant</h2><p className="mt-1 text-sm text-slate-500">Consulta tu agenda y revisa cada acción antes de ejecutarla.</p></div>
-        <span className="rounded-full bg-[var(--clinic-soft)] px-3 py-1 text-xs font-bold text-clinic">Sin chat persistente</span>
+        <div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[var(--clinic-soft)] px-3 py-1 text-xs font-bold text-clinic">Sin chat persistente</span><Button type="button" variant="ghost" className="min-h-9 text-xs" onClick={resetConversation} disabled={isPending || (!conversationContext && messages.length === 1)}>Nueva conversación</Button></div>
       </div>
       <div className="mt-4 grid gap-3" aria-live="polite">
         {messages.map((message) => <div key={message.id} className={`max-w-3xl rounded-2xl p-4 text-sm leading-6 ${message.author === "user" ? "ml-auto bg-[var(--clinic-soft)] text-ink" : "clinical-surface text-slate-700"}`}><p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{message.author === "user" ? "Tú" : "Assistant"}</p><p>{message.text}</p>{message.response?.state === "choices" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.choices.map((choice) => <Button key={choice.id} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(choice.choice)} disabled={isPending}>{choice.label}</Button>)}</div> : null}{message.response?.state === "patients" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.patients.map((patient) => <Button key={patient.id} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(patient.choice)} disabled={isPending}>{patient.name}</Button>)}</div> : null}{message.response?.state === "professionals" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.professionals.map((professional) => <Button key={professional.id} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(professional.choice)} disabled={isPending}>{professional.name}</Button>)}</div> : null}{message.response?.state === "availability_retry" && message.response.alternatives.length ? <div className="mt-3 grid gap-2 sm:grid-cols-3" aria-label="Horarios alternativos">{message.response.alternatives.map((slot) => <Button key={slot.start} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(slot.choice)} disabled={isPending}><Clock3 className="h-4 w-4 text-clinic" />{slot.start}–{slot.end}</Button>)}</div> : null}{message.response?.state === "slots" ? <div className="mt-3 grid gap-2 sm:grid-cols-3">{message.response.slots.map((slot) => <Button key={slot.start} type="button" variant="secondary" className="min-h-11 justify-start" onClick={() => choose(slot.choice)} disabled={isPending}><Clock3 className="mr-1 h-4 w-4 text-clinic" />{slot.start}–{slot.end}</Button>)}</div> : null}{message.response?.state === "appointments" ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{message.response.appointments.map((appointment) => <Button key={appointment.id} type="button" variant="secondary" className="min-h-11 justify-start text-left" onClick={() => choose(appointment.choice)} disabled={isPending}>{appointment.patient} · {appointment.professional ?? "Profesional"} · {formatInstant(appointment.startsAt, timeZone)} · {statusLabel(appointment.status)}</Button>)}</div> : null}<ReadResult response={message.response} timeZone={timeZone} /></div>)}

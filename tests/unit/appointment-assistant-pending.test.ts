@@ -21,6 +21,7 @@ function mountAssistant(overrides: {
   llmEnabled?: boolean;
   plan?: () => Promise<unknown>;
   submitIntent?: () => Promise<unknown>;
+  select?: () => Promise<unknown>;
   confirm?: (actionId: string) => Promise<unknown>;
   cancel?: () => Promise<unknown>;
   resolve?: () => unknown;
@@ -35,9 +36,10 @@ function mountAssistant(overrides: {
   const actions = {
     cancelAssistantProposalAction: overrides.cancel ?? (async () => ({ state: "cancelled", message: "Acción cancelada." })),
     confirmAssistantProposalAction: overrides.confirm ?? (async () => ({ state: "success", message: "Acción completada." })),
-    planAssistantConversationAction: overrides.plan ?? (async () => ({ state: "parsed", result: { state: "unsupported", message: "Respuesta segura." } })),
-    submitAssistantIntentAction: overrides.submitIntent ?? (async () => response),
-    submitAssistantContextualHelperAction: async () => response
+    planAssistantConversationWithContextAction: async () => ({ resolved: await (overrides.plan ?? (async () => ({ state: "parsed", result: { state: "unsupported", message: "Respuesta segura." } })))(), context: null }),
+    submitAssistantIntentWithContextAction: async () => ({ response: await (overrides.submitIntent ?? (async () => response))(), context: null }),
+    submitAssistantContextualHelperWithContextAction: async () => ({ response, context: null }),
+    selectAssistantResultWithContextAction: async () => ({ response: await (overrides.select ?? (async () => response))(), context: null })
   };
   const output = ts.transpileModule(readFileSync("components/bot/appointment-assistant.tsx", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }
@@ -72,8 +74,10 @@ function mountAssistant(overrides: {
       if (name === "@/app/dashboard/bot/actions") return actions;
       if (name === "@/lib/assistant/orchestration/conversation") return {
         classifyContextualHelper: () => null,
+        isConversationResetCommand: () => false,
         resolveConversationInput: overrides.resolve ?? (() => resolvedIntent)
       };
+      if (name === "@/lib/assistant/orchestration/context") return { intentFromAssistantContext: () => null };
       throw new Error(`Unmocked dependency: ${name}`);
     }
   });
@@ -236,4 +240,40 @@ test("pending indicator is visible only during work; proposal still uses the dur
   assert.equal(nodes(tree).some((node) => node.props?.role === "status"), false);
   assert.equal(actionId, "safe-action-id");
   assert.ok(textContent(tree).includes("Cita creada correctamente."));
+});
+
+test("new conversation clears the visible turn without planner, tool or database calls", async () => {
+  let plannerCalls = 0;
+  let toolCalls = 0;
+  const ui = mountAssistant({ plan: async () => { plannerCalls++; return { state: "parsed", result: { state: "unsupported", message: "Respuesta segura." } }; }, submitIntent: async () => { toolCalls++; return { state: "message", message: "No usado" }; } });
+  submit(ui, "Qué citas tengo");
+  await ui.done();
+  let tree = resolveTree(ui.render());
+  assert.ok(textContent(tree).includes("Qué citas tengo"));
+  const reset = nodes(tree).find((node) => node.type === "button" && textContent(node).includes("Nueva conversación"));
+  assert.ok(reset);
+  reset.props.onClick();
+  tree = resolveTree(ui.render());
+  assert.ok(textContent(tree).includes("Hola, ¿qué quieres hacer con tu agenda?"));
+  assert.equal(textContent(tree).includes("Qué citas tengo"), false);
+  assert.equal(plannerCalls, 1);
+  assert.equal(toolCalls, 0);
+});
+
+test("structured slot click reaches the selection action without a planner call", async () => {
+  let plannerCalls = 0;
+  let selectionCalls = 0;
+  const slot = { kind: "available_slot", label: "10:30–11:00", professionalReference: "66666666-6666-4666-8666-666666666666", localDate: "2026-09-28", startTime: "10:30", endTime: "11:00", durationMinutes: 30 };
+  const ui = mountAssistant({ llmEnabled: false, plan: async () => { plannerCalls++; return { state: "parsed", result: { state: "unsupported", message: "No usado" } }; }, submitIntent: async () => ({ state: "slots", professional: "QA Doctor", professionalClinicMemberId: slot.professionalReference, date: slot.localDate, durationMinutes: 30, slots: [{ start: "10:30", end: "11:00", choice: slot }] }), select: async () => { selectionCalls++; return { state: "message", message: "¿Con qué paciente?" }; } });
+  submit(ui, "Ver disponibilidad");
+  await ui.done();
+  let tree = resolveTree(ui.render());
+  const choice = nodes(tree).find((node) => node.type === "button" && textContent(node).includes("10:30–11:00"));
+  assert.ok(choice);
+  choice.props.onClick();
+  await ui.done();
+  tree = resolveTree(ui.render());
+  assert.equal(plannerCalls, 0);
+  assert.equal(selectionCalls, 1);
+  assert.ok(textContent(tree).includes("¿Con qué paciente?"));
 });

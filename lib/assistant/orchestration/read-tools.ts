@@ -17,7 +17,7 @@ export type AssistantReadResponse =
   | { state: "choices"; message: string; field: "patient" | "professional" | "appointment"; choices: Array<{ id: string; label: string; choice: AssistantStructuredChoice }> }
   | { state: "patients"; patients: Array<{ id: string; name: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
   | { state: "professionals"; professionals: Array<{ id: string; name: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
-  | { state: "appointments"; appointments: Array<{ id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
+  | { state: "appointments"; appointments: Array<{ id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string; choice: AssistantStructuredChoice }>; resolvedPatientRef?: string; uniqueVerified?: boolean; hasMore?: boolean }
   | { state: "appointment"; appointment: { id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string } }
   | { state: "slots"; professional: string; professionalClinicMemberId: string; date: string; durationMinutes: number; slots: Array<{ start: string; end: string; choice: AssistantStructuredChoice }>; hasMore?: boolean };
 
@@ -164,7 +164,7 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
     const matches = query ? rows.filter((row) => matchesAssistantQuery(`${row.patient_display_name} ${row.professional_display_name ?? ""}`, query)) : rows;
     if (intent.type === "search_appointments") {
       const list = limited(matches);
-      return { state: "appointments", appointments: list.rows.map(appointmentView), hasMore: list.hasMore };
+      return { state: "appointments", appointments: list.rows.map(appointmentView), resolvedPatientRef: patientId, uniqueVerified: rows.length < 25 && matches.length === 1, hasMore: list.hasMore };
     }
     if (!matches.length) return { state: "message", message: "No encontré una cita que coincida en la clínica activa." };
     if (rows.length >= 25 && matches.length === 1) return { state: "message", message: "Hay más citas; refina la búsqueda para identificar una sola." };

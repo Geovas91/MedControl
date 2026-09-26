@@ -25,9 +25,9 @@ export async function planAssistantConversation({ message, today, pending, role,
   const active = pending && (contextualFollowUp || explicit.state !== "intent" || explicit.intent.type === pending.type) ? pending : null;
   const missing = active ? getMissingFields(active) : [];
   const resolvedSlots = active ? [
-    ...(active.type === "create_appointment" && active.patientId ? ["patient"] : []),
-    ...((active.type === "create_appointment" || active.type === "check_availability") && active.professionalClinicMemberId ? ["professional"] : []),
-    ...((active.type === "confirm_appointment" || active.type === "cancel_appointment" || active.type === "reschedule_appointment") && active.appointmentId ? ["appointment"] : []),
+    ...((active.type === "create_appointment" || active.type === "search_appointments") && active.patientId ? ["patient"] : []),
+    ...((active.type === "create_appointment" || active.type === "check_availability") && active.professionalClinicMemberId || (active.type === "search_appointments" || active.type === "get_appointment") && active.professionalId ? ["professional"] : []),
+    ...((active.type === "confirm_appointment" || active.type === "cancel_appointment" || active.type === "reschedule_appointment" || active.type === "get_appointment") && active.appointmentId ? ["appointment"] : []),
     ...("localDate" in active && active.localDate ? ["localDate"] : []),
     ...("localTime" in active && active.localTime ? ["localTime"] : [])
   ] : [];
