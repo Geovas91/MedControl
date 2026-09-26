@@ -12,14 +12,14 @@ type ToolEvent = "read_tool_selected" | "read_tool_success" | "read_tool_failed"
 type Observe = (event: ToolEvent, context: { tool_category: AssistantReadToolName; result_count?: number; latency_ms?: number; error_code?: string }) => void;
 
 export type AssistantReadResponse =
-  | { state: "message"; message: string; intent?: AssistantIntent }
+  | { state: "message"; message: string; intent?: AssistantIntent; resolvedPatientRef?: string; resolvedProfessionalRef?: string }
   | { state: "error"; message: string }
-  | { state: "choices"; message: string; field: "patient" | "professional" | "appointment"; choices: Array<{ id: string; label: string; choice: AssistantStructuredChoice }> }
+  | { state: "choices"; message: string; field: "patient" | "professional" | "appointment"; choices: Array<{ id: string; label: string; choice: AssistantStructuredChoice }>; resolvedPatientRef?: string; resolvedProfessionalRef?: string }
   | { state: "patients"; patients: Array<{ id: string; name: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
   | { state: "professionals"; professionals: Array<{ id: string; name: string; choice: AssistantStructuredChoice }>; hasMore?: boolean }
   | { state: "appointments"; appointments: Array<{ id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string; choice: AssistantStructuredChoice }>; resolvedPatientRef?: string; uniqueVerified?: boolean; hasMore?: boolean }
   | { state: "appointment"; appointment: { id: string; patient: string; professional: string | null; startsAt: string; endsAt: string; status: string } }
-  | { state: "slots"; professional: string; professionalClinicMemberId: string; date: string; durationMinutes: number; slots: Array<{ start: string; end: string; choice: AssistantStructuredChoice }>; hasMore?: boolean };
+  | { state: "slots"; professional: string; professionalClinicMemberId: string; date: string; durationMinutes: number; slots: Array<{ start: string; end: string; choice: AssistantStructuredChoice }>; hasMore?: boolean; resolvedPatientRef?: string };
 
 type Patient = { patient_id: string; display_name: string };
 type Professional = { professional_clinic_member_id: string; professional_user_id: string; display_name: string };

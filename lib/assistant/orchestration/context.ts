@@ -1,6 +1,6 @@
 import { isAllowedAppointmentDuration, isValidAppointmentTime } from "@/lib/appointments/create";
 import { isCanonicalAppointmentDate, isCanonicalAppointmentUuid } from "@/lib/appointments/query";
-import { parseDateExpression, parseTimeExpression } from "@/lib/assistant/parser/deterministic";
+import { parseAssistantText, parseDateExpression, parseTimeExpression, resolveSchedulingDateExpression } from "@/lib/assistant/parser/deterministic";
 import type { AssistantIntent } from "./intents";
 import type { AssistantStructuredChoice } from "./structured-selection";
 
@@ -138,42 +138,94 @@ export function contextualAppointmentCommand(message: string, context: Assistant
   return null;
 }
 
-function contextualDate(message: string, today: string) {
-  const normalized = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[?¿]/g, "").replace(/\s+/g, " ").trim();
-  if (!/^(?:y\s+)?(?:(?:el|la de|para el)\s+)?(?:hoy|manana|lunes|martes|miercoles|jueves|viernes|sabado|domingo|\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{4})?)$/.test(normalized)) return null;
-  const relative = parseDateExpression(normalized, today);
-  if (relative) return relative;
-  const weekdays = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
-  const wanted = weekdays.findIndex((day) => normalized.endsWith(day));
-  if (wanted < 0) return null;
-  const date = new Date(`${today}T12:00:00Z`);
-  if (Number.isNaN(date.getTime())) return null;
-  date.setUTCDate(date.getUTCDate() + (wanted - date.getUTCDay() + 7) % 7);
-  return date.toISOString().slice(0, 10);
+export type SchedulingTurnIntent = "provide_date" | "provide_time" | "select_patient" | "select_professional" | "request_availability" | "change_date" | "change_time" | "change_patient" | "change_professional";
+export type SchedulingContextPatch = {
+  turnIntent: SchedulingTurnIntent;
+  patientQuery?: string;
+  professionalQuery?: string | null;
+  dateCandidate?: string;
+  timeCandidate?: string;
+};
+export type SchedulingPatchParse = { state: "patch"; patch: SchedulingContextPatch } | { state: "ambiguous" | "none" };
+
+function stripSchedulingSuffix(value: string) {
+  return value.replace(/\s+(?:(?:(?:el|este|pr[oó]ximo)\s+)?(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)|(?:hoy|ma[ñn]ana|pasado\s+ma[ñn]ana)|\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{4})?|a\s+las?\s+\d{1,2}(?::[0-5]\d)?).*$/i, "").trim();
+}
+
+/** Interpret one turn as a small change to the structured goal; no provider IDs are accepted here. */
+export function parseSchedulingContextPatch(message: string, context: AssistantConversationContext, today: string): SchedulingPatchParse {
+  const text = message.normalize("NFKC").replace(/\s+/g, " ").trim();
+  const plain = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[?¿]/g, "").trim();
+  const explicit = parseAssistantText(text, today);
+  if (explicit.state === "needs_input" || (explicit.state === "intent" && explicit.intent.type !== "check_availability")) return { state: "none" };
+  const date = resolveSchedulingDateExpression(text, today);
+  if (date.state === "ambiguous") return { state: "ambiguous" };
+  const dateCandidate = date.state === "resolved" ? date.date : undefined;
+  const availability = /\b(?:horarios?|disponibilidad|disponibles?|libres?)\b/.test(plain);
+  const professionalText = /^(?:(?:mejor|ahora)\s+)?(?:con|(?:cambial[oa]|ponl[oa])\s+(?:al|a la|con))\s+(.{2,100})$/.exec(plain)?.[1]
+    ?? /^(?:(?:qa\s+)?(?:doctor(?:a)?|dra?\.?|medic[oa]|profesional)\b.{0,90})$/.exec(plain)?.[0];
+  const anotherProfessional = /^(?:con\s+)?otro\s+(?:doctor|medico|profesional)$/.test(plain);
+  const professionalQuery = !anotherProfessional && professionalText && /\b(?:doctor|doctora|dra?\.?|medic[oa]|profesional)\b/.test(professionalText)
+    ? stripSchedulingSuffix(professionalText.replace(/^(?:el|la)\s+/, ""))
+    : undefined;
+  const patientText = /^(?:mejor\s+)?para\s+(.{2,100})$/i.exec(text)?.[1]?.trim()
+    ?? /^(?:agenda|agendar)\s+(?:una\s+cita\s+)?a\s+(.{2,100})$/i.exec(text)?.[1]?.trim();
+  const patientCandidate = patientText && !/^(?:ese|esa)\s+paciente$/i.test(patientText) ? stripSchedulingSuffix(patientText) : undefined;
+  const patientQuery = patientCandidate && !/^(?:el|este|pr[oó]ximo)$/i.test(patientCandidate) && !parseDateExpression(patientCandidate, today) ? patientCandidate : undefined;
+  let timeCandidate = parseTimeExpression(text) ?? undefined;
+  if (!timeCandidate) {
+    const names: Record<string, number> = { una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12 };
+    const word = /\ba\s+las?\s+(una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez|once|doce)\b/.exec(plain)?.[1];
+    if (word) { const hour = names[word]; timeCandidate = `${String(hour <= 8 ? hour + 12 : hour).padStart(2, "0")}:00`; }
+  }
+  if (timeCandidate && !/\b(?:am|pm)\b/.test(plain)) {
+    const shortHour = /\ba\s+las?\s+([1-8])(?:\s|$)/.exec(plain)?.[1];
+    if (shortHour) timeCandidate = `${String(Number(shortHour) + 12).padStart(2, "0")}:00`;
+  }
+  if (availability) return { state: "patch", patch: { turnIntent: "request_availability", ...(dateCandidate ? { dateCandidate } : {}), ...(professionalQuery ? { professionalQuery } : {}) } };
+  if (professionalQuery || anotherProfessional) return { state: "patch", patch: { turnIntent: context.focusedProfessionalRef ? "change_professional" : "select_professional", professionalQuery: professionalQuery ?? null, ...(dateCandidate ? { dateCandidate } : {}), ...(timeCandidate ? { timeCandidate } : {}) } };
+  if (patientQuery) return { state: "patch", patch: { turnIntent: context.focusedPatientRef ? "change_patient" : "select_patient", patientQuery, ...(dateCandidate ? { dateCandidate } : {}), ...(timeCandidate ? { timeCandidate } : {}) } };
+  if (dateCandidate) return { state: "patch", patch: { turnIntent: context.localDate ? "change_date" : "provide_date", dateCandidate } };
+  if (timeCandidate && (context.activeIntent === "create_appointment" || context.activeIntent === "reschedule_appointment")) return { state: "patch", patch: { turnIntent: context.startTime ? "change_time" : "provide_time", timeCandidate } };
+  return { state: "none" };
+}
+
+/** The long-lived goal stays in activeIntent while each turn changes only its named fields. */
+export function reconcileSchedulingContext(context: AssistantConversationContext, patch: SchedulingContextPatch, timeZone: string): { context: AssistantConversationContext; intent: AssistantIntent } | null {
+  const active = intentFromAssistantContext(context);
+  let intent: AssistantIntent = active ?? (patch.turnIntent === "request_availability"
+    ? { type: "check_availability", durationMinutes: 30 }
+    : { type: "create_appointment", durationMinutes: 30 });
+  let applied = !active || patch.turnIntent === "request_availability";
+  if (patch.turnIntent === "request_availability" && intent.type !== "create_appointment" && intent.type !== "check_availability") intent = { type: "check_availability", durationMinutes: context.durationMinutes ?? 30 };
+  if (patch.patientQuery && intent.type === "check_availability") intent = { type: "create_appointment", patientQuery: patch.patientQuery, professionalClinicMemberId: intent.professionalClinicMemberId, localDate: intent.localDate, durationMinutes: intent.durationMinutes };
+  else if (patch.patientQuery && intent.type === "create_appointment") intent = { ...intent, patientId: undefined, patientQuery: patch.patientQuery };
+  else if (patch.patientQuery && intent.type === "search_appointments") intent = { ...intent, patientId: undefined, patientQuery: patch.patientQuery };
+  if (patch.patientQuery && (intent.type === "create_appointment" || intent.type === "search_appointments")) applied = true;
+  if (patch.professionalQuery !== undefined && intent.type === "create_appointment") { intent = { ...intent, professionalClinicMemberId: undefined, professionalQuery: patch.professionalQuery ?? undefined, localTime: undefined }; applied = true; }
+  if (patch.professionalQuery !== undefined && intent.type === "check_availability") { intent = { ...intent, professionalClinicMemberId: undefined, professionalQuery: patch.professionalQuery ?? undefined }; applied = true; }
+  if (patch.professionalQuery && (intent.type === "search_appointments" || intent.type === "get_appointment")) { intent = { ...intent, professionalId: undefined, professionalQuery: patch.professionalQuery }; applied = true; }
+  if (patch.dateCandidate && "localDate" in intent) { intent = { ...intent, localDate: patch.dateCandidate, ...((intent.type === "create_appointment" || intent.type === "reschedule_appointment") && patch.dateCandidate !== context.localDate ? { localTime: undefined } : {}) } as AssistantIntent; applied = true; }
+  if (patch.timeCandidate && (intent.type === "create_appointment" || intent.type === "reschedule_appointment")) { intent = { ...intent, localTime: patch.timeCandidate }; applied = true; }
+  if (!applied) return null;
+  if (patch.turnIntent === "request_availability" && intent.type === "create_appointment") intent = { ...intent, localTime: undefined };
+  const next = updateAssistantConversationContext(context, intent, { state: "message" }, timeZone);
+  const clearedProfessional = patch.professionalQuery === null ? { ...next, focusedProfessionalRef: undefined, focusedProfessionalUserRef: undefined, selectedSlot: undefined, availableSlotTimes: undefined, startTime: undefined } : next;
+  return { intent, context: patch.turnIntent === "request_availability" ? { ...clearedProfessional, selectedSlot: undefined, availableSlotTimes: undefined, startTime: undefined } : clearedProfessional };
 }
 
 export function contextualSchedulingFollowUp(message: string, context: AssistantConversationContext, today: string): AssistantIntent | null {
   const active = intentFromAssistantContext(context);
-  if (!active) return null;
-  const date = contextualDate(message, today);
-  if (date && "localDate" in active) return { ...active, localDate: date, ...(active.type === "create_appointment" || active.type === "reschedule_appointment" ? { localTime: undefined } : {}) } as AssistantIntent;
   const plain = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  if ((active.type === "create_appointment" || active.type === "reschedule_appointment") && /^(?:y\s+)?a\s+las?\s+\d{1,2}(?::[0-5]\d)?(?:\s*(?:am|pm))?$/.test(plain)) {
-    const time = parseTimeExpression(message);
-    if (time) return { ...active, localTime: time };
-  }
-  if (active.type === "create_appointment" && !active.patientId) {
-    const patient = /^(?:para|con)\s+(.{2,100})$/i.exec(message.trim());
-    if (patient && !/^(?:ese|esa)\s+paciente$/i.test(patient[1])) return { ...active, patientQuery: patient[1].trim() };
-  }
-  if (active.type === "check_availability" && context.focusedProfessionalRef && context.localDate && context.availableSlotTimes?.length) {
+  if (active?.type === "check_availability" && context.focusedProfessionalRef && context.localDate && context.availableSlotTimes?.length) {
     const match = /^(?:el|la)\s+de\s+las?\s+(\d{1,2}(?::[0-5]\d)?)$/.exec(plain);
     const time = match ? parseTimeExpression(`a las ${match[1]}`) : null;
     if (time && context.availableSlotTimes.filter((available) => available === time).length === 1) return { type: "create_appointment", professionalClinicMemberId: context.focusedProfessionalRef, localDate: context.localDate, localTime: time, durationMinutes: context.durationMinutes ?? 30 };
   }
-  if (active.type === "create_appointment" && context.focusedPatientRef && /^(?:para|con)\s+ese\s+paciente$/.test(plain)) return active;
-  if ((active.type === "create_appointment" || active.type === "check_availability") && context.focusedProfessionalRef && /^(?:ese|con ese)\s+doctor$/.test(plain)) return active;
-  return null;
+  if (active?.type === "create_appointment" && context.focusedPatientRef && /^(?:para|con)\s+ese\s+paciente$/.test(plain)) return active;
+  if ((active?.type === "create_appointment" || active?.type === "check_availability") && context.focusedProfessionalRef && /^(?:ese|con ese)\s+doctor$/.test(plain)) return active;
+  const parsed = parseSchedulingContextPatch(message, context, today);
+  return parsed.state === "patch" ? reconcileSchedulingContext(context, parsed.patch, "UTC")?.intent ?? null : null;
 }
 
 export function ambiguousAppointmentRequest(message: string, context: AssistantConversationContext): AssistantIntent | null {

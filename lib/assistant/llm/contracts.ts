@@ -44,20 +44,6 @@ export const readPlannerSchema = {
 } as const;
 
 const keys = Object.keys(plannerSchema.properties);
-const weekdays = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
-function parseReadDate(value: string, today: string) {
-  const parsed = parseDateExpression(value, today);
-  if (parsed) return parsed;
-  const normalized = value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  const match = /^(?:(el|este|proximo)\s+)?(domingo|lunes|martes|miercoles|jueves|viernes|sabado)$/.exec(normalized);
-  if (!match) return null;
-  const day = new Date(`${today}T12:00:00Z`);
-  if (Number.isNaN(day.getTime())) return null;
-  let offset = (weekdays.indexOf(match[2]) - day.getUTCDay() + 7) % 7;
-  if (match[1] === "proximo" && offset === 0) offset = 7;
-  day.setUTCDate(day.getUTCDate() + offset);
-  return day.toISOString().slice(0, 10);
-}
 function safeQuery(value: unknown): value is string | null {
   return value === null || (typeof value === "string" && value.trim().length > 0 && value.length <= 100 && !/[\u0000-\u001f\u007f]/.test(value) && !isCanonicalAppointmentUuid(value.trim()));
 }
@@ -80,7 +66,7 @@ export function parseAssistantIntentDraft(value: unknown, readToolsEnabled = fal
 export function intentFromDraft(draft: AssistantIntentDraft, today: string, pending: AssistantIntent | null): AssistantIntent | null {
   if (draft.intent === "unknown") return null;
   const same = pending?.type === draft.intent ? pending : null;
-  const date = draft.date ? (draft.dateRange === undefined ? parseDateExpression(draft.date, today) : parseReadDate(draft.date, today)) : undefined;
+  const date = draft.date ? parseDateExpression(draft.date, today) : undefined;
   const time = draft.time ? parseTimeExpression(`a las ${draft.time}`) : undefined;
   if ((draft.date && !date) || (draft.time && !time)) return null;
   const durationMinutes = draft.duration ?? (same && "durationMinutes" in same ? same.durationMinutes : 30);

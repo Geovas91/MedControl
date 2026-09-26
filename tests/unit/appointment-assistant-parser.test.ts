@@ -48,9 +48,10 @@ test("date and time normalization uses the supplied clinic date", () => {
   assert.equal(parseTimeExpression("15:00"), "15:00");
 });
 
-test("unsupported vague date/time remains a request for input", () => {
-  const vagueDate = parseAssistantText("¿Qué horarios tiene la Dra. López el próximo jueves?", today);
-  assert.equal(vagueDate.state, "needs_input");
+test("named weekdays resolve, while vague time still needs input", () => {
+  const namedDate = parseAssistantText("¿Qué horarios tiene la Dra. López el próximo jueves?", today);
+  assert.equal(namedDate.state, "intent");
+  if (namedDate.state === "intent" && namedDate.intent.type === "check_availability") assert.equal(namedDate.intent.localDate, "2026-09-17");
   const vagueTime = parseAssistantText("Agenda una cita con Juan con la Dra. López mañana por la tarde", today);
   assert.equal(vagueTime.state, "needs_input");
   if (vagueTime.state === "needs_input") assert.equal(vagueTime.intent?.type, "create_appointment");

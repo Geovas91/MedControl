@@ -53,11 +53,12 @@ test("generic slot filling consumes date formats after professional resolution",
   if (todayResult.updatedIntent.type === "check_availability") assert.equal(todayResult.updatedIntent.localDate, today);
 });
 
-test("weekday-only input remains unconsumed when relative weekdays are unsupported", () => {
+test("weekday-only input resolves the next clinic-local occurrence", () => {
   const intent: AssistantIntent = { type: "check_availability", professionalClinicMemberId: "member-1", durationMinutes: 30 };
   const result = applyFollowUpToIntent({ intent, message: "Miércoles", clinicLocalDate: today });
-  assert.equal(result.consumed, false);
-  assert.deepEqual(result.missingFields, ["localDate"]);
+  assert.equal(result.consumed, true);
+  assert.deepEqual(result.missingFields, []);
+  if (result.updatedIntent.type === "check_availability") assert.equal(result.updatedIntent.localDate, "2026-09-16");
 });
 
 test("generic slot filling consumes local time and entity queries", () => {

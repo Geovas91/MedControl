@@ -98,6 +98,11 @@ export function evaluateAssistantDomainGate({ message, today, pending, maxInputC
     return { state: "allowed", message: safeMessage, reasonCode: "contextual_follow_up", intentCategory: pending.type };
   }
   if (parsed) return { state: "allowed", message: safeMessage, reasonCode: "recognized_intent", intentCategory: safeCategory };
+  const plain = safeMessage.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[?¿]/g, "").trim();
+  const standaloneDate = /^(?:y\s+)?(?:(?:el|este|proximo)\s+)?(?:lunes|martes|miercoles|jueves|viernes|sabado|domingo|hoy|manana|pasado\s+manana|\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}(?:[/-]\d{4})?)$/.test(plain);
+  const entitySelection = /^(?:con\s+(?:(?:el|la)\s+)?(?:qa\s+)?(?:doctor(?:a)?|dra?\.?|medic[oa]|profesional)\b.{0,80}|para\s+[\p{L}\p{M}\d][\p{L}\p{M}\d .'-]{1,98})$/u.test(plain);
+  if ((standaloneDate && parseDateExpression(safeMessage, today)) || entitySelection) return { state: "allowed", message: safeMessage, reasonCode: "scheduling_language", intentCategory: pending?.type ?? "unknown" };
+  if (pending && /^(?:y\s+)?(?:mas\s+tarde|mas\s+temprano|con\s+otro\s+(?:doctor|medico|profesional))$/.test(plain)) return { state: "allowed", message: safeMessage, reasonCode: "contextual_follow_up", intentCategory: pending.type };
   if (hasNaturalSchedulingSignal(safeMessage)) return { state: "allowed", message: safeMessage, reasonCode: "scheduling_language", intentCategory: "unknown" };
   if (injectionDetected && !safeMessage) return { state: "rejected", reasonCode: "prompt_injection_only", intentCategory: "unknown" };
   if (pending) {

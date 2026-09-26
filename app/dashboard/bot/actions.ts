@@ -12,7 +12,7 @@ import { resolveConversationInput, type ConversationInput } from "@/lib/assistan
 import { parseAssistantStructuredChoice, resolveAssistantStructuredChoice, type AssistantStructuredChoice, type VerifiedAssistantAppointment } from "@/lib/assistant/orchestration/structured-selection";
 import { isAssistantReadIntent, isValidAssistantReadIntent, orchestrateAssistantReadIntent, shouldOrchestrateAssistantReads, type AssistantReadResponse } from "@/lib/assistant/orchestration/read-tools";
 import { runGatedAssistantPlanner } from "@/lib/assistant/llm/gated-planner";
-import { getAssistantLlmMaxInputChars } from "@/lib/assistant/llm/domain-gate";
+import { evaluateAssistantDomainGate, getAssistantLlmMaxInputChars } from "@/lib/assistant/llm/domain-gate";
 import { assistantLlmRateLimiter, getAssistantLlmRateLimitConfig } from "@/lib/assistant/llm/rate-limit";
 import { openAiPlannerProvider } from "@/lib/assistant/llm/provider";
 import { logger } from "@/lib/logger";
@@ -29,7 +29,7 @@ import {
 import { saveAppointmentAssistantSettingsForActiveTenant } from "@/lib/server/appointment-assistant";
 import { isPatientAvailableForActiveTenant } from "@/lib/server/patients";
 import { getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
-import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
+import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, parseSchedulingContextPatch, reconcileSchedulingContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
 export async function saveAppointmentAssistantSettingsAction(formData: FormData) {
   const input = parseAppointmentAssistantSettings(formData);
@@ -206,25 +206,37 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     const workingIntent = defaultProfessionalId
       ? { ...intent, professionalClinicMemberId: defaultProfessionalId }
       : intent;
-    if (!workingIntent.patientId && !workingIntent.patientQuery) {
-      const message = defaultProfessionalId ? "Agendaremos la cita contigo. ¿Con qué paciente quieres agendarla?" : "¿Con qué paciente quieres agendarla?";
-      return { state: "message", message, intent: workingIntent };
+    const patient = workingIntent.patientId
+      ? { state: "ready" as const, id: workingIntent.patientId, label: "Paciente" }
+      : workingIntent.patientQuery ? await resolvePatient(workingIntent.patientQuery) : null;
+    if (patient && patient.state !== "ready") return patient.state === "missing" ? { state: "message", message: "¿Con qué paciente quieres agendarla?" } : patient.response;
+    const professional = workingIntent.professionalClinicMemberId
+      ? { state: "ready" as const, id: workingIntent.professionalClinicMemberId, label: defaultProfessionalId ? "Tú" : "Profesional" }
+      : workingIntent.professionalQuery ? await resolveProfessional(workingIntent.professionalQuery) : null;
+    if (professional && professional.state !== "ready") return professional.state === "missing"
+      ? { state: "message", message: "¿Con qué profesional quieres agendarla?" }
+      : { ...professional.response, ...(patient?.state === "ready" ? { resolvedPatientRef: patient.id } : {}) };
+    const resolvedIntent = {
+      ...workingIntent,
+      patientId: patient?.state === "ready" ? patient.id : undefined,
+      patientQuery: undefined,
+      professionalClinicMemberId: professional?.state === "ready" ? professional.id : undefined,
+      professionalQuery: undefined
+    };
+    if (!professional) {
+      const message = patient ? "¿Con qué profesional quieres agendarla?" : "¿Con qué paciente quieres agendarla?";
+      return { state: "message", message, intent: resolvedIntent, ...(patient?.state === "ready" ? { resolvedPatientRef: patient.id } : {}) };
     }
-    const patient = workingIntent.patientId ? { state: "ready" as const, id: workingIntent.patientId, label: "Paciente" } : await resolvePatient(workingIntent.patientQuery);
-    if (patient.state !== "ready") return patient.state === "error" || patient.state === "none" || patient.state === "ambiguous" ? patient.response : { state: "message", message: "¿Con qué paciente quieres agendarla?" };
-    if (!workingIntent.professionalClinicMemberId && !workingIntent.professionalQuery) return { state: "message", message: "¿Con qué profesional quieres agendarla?", intent: { ...workingIntent, patientId: patient.id, patientQuery: undefined } };
-    const professional = workingIntent.professionalClinicMemberId ? { state: "ready" as const, id: workingIntent.professionalClinicMemberId, label: defaultProfessionalId ? "Tú" : "Profesional" } : await resolveProfessional(workingIntent.professionalQuery);
-    if (professional.state !== "ready") return professional.state === "error" || professional.state === "none" || professional.state === "ambiguous" ? professional.response : { state: "message", message: "¿Con qué profesional quieres agendarla?" };
-    const resolvedIntent = { ...workingIntent, patientId: patient.id, patientQuery: undefined, professionalClinicMemberId: professional.id, professionalQuery: undefined };
-    if (!resolvedIntent.localDate) return { state: "message", message: resolvedIntent.localTime ? "Necesito la fecha exacta, por ejemplo '24 de septiembre de 2026'." : "¿Para qué fecha? Usa hoy, mañana o una fecha explícita.", intent: resolvedIntent };
+    if (!resolvedIntent.localDate) return { state: "message", message: !patient && defaultProfessionalId ? "Agendaremos la cita contigo. Puedes indicar el paciente o la fecha." : resolvedIntent.localTime ? "Necesito la fecha exacta, por ejemplo '24 de septiembre de 2026'." : "¿Para qué fecha? Usa hoy, mañana o una fecha explícita.", intent: resolvedIntent };
     const slots = await readTool<ReadSlot[]>("get_available_slots", { professionalClinicMemberId: professional.id, date: resolvedIntent.localDate, durationMinutes: resolvedIntent.durationMinutes });
     if (!slots.ok) {
       if (slots.error.code === "not_found" || slots.error.code === "forbidden") return { state: "message", message: slots.error.safeMessage, intent: resolvedIntent };
       return availabilityRetryResponse(resolvedIntent, professional.label, "date");
     }
     if (slots.data.length === 0) return availabilityRetryResponse(resolvedIntent, professional.label, "date");
-    if (!resolvedIntent.localTime) return { state: "slots", professional: professional.label, professionalClinicMemberId: professional.id, date: resolvedIntent.localDate, durationMinutes: resolvedIntent.durationMinutes, slots: slots.data.map((slot) => ({ start: slot.local_start, end: slot.local_end, choice: { kind: "available_slot" as const, label: `${slot.local_start}–${slot.local_end}`, professionalReference: professional.id, localDate: resolvedIntent.localDate!, startTime: slot.local_start, endTime: slot.local_end, durationMinutes: resolvedIntent.durationMinutes } })) };
+    if (!resolvedIntent.localTime) return { state: "slots", professional: professional.label, professionalClinicMemberId: professional.id, date: resolvedIntent.localDate, durationMinutes: resolvedIntent.durationMinutes, resolvedPatientRef: resolvedIntent.patientId, slots: slots.data.map((slot) => ({ start: slot.local_start, end: slot.local_end, choice: { kind: "available_slot" as const, label: `${slot.local_start}–${slot.local_end}`, professionalReference: professional.id, localDate: resolvedIntent.localDate!, startTime: slot.local_start, endTime: slot.local_end, durationMinutes: resolvedIntent.durationMinutes } })) };
     if (!slots.data.some((slot) => slot.local_start === resolvedIntent.localTime)) return availabilityRetryResponse(resolvedIntent, professional.label, "time", slots.data);
+    if (!patient) return { state: "message", message: "¿Con qué paciente quieres agendarla?", intent: resolvedIntent };
     if (!resolvedIntent.professionalClinicMemberId) return { state: "error", message: "No fue posible validar el profesional seleccionado." };
     const proposalInput = { patientId: resolvedIntent.patientId, professionalClinicMemberId: resolvedIntent.professionalClinicMemberId, date: resolvedIntent.localDate, startTime: resolvedIntent.localTime, durationMinutes: resolvedIntent.durationMinutes };
     const presentation = await getCreateAppointmentProposalPresentation(proposalInput);
@@ -395,7 +407,8 @@ export async function planAssistantConversationWithContextAction(message: unknow
   if (!loaded.ok) return { resolved: { state: "parsed", result: { state: "unsupported", message: loaded.message } } as ConversationInput, context: loaded.context };
   const text = typeof message === "string" ? message : "";
   const pending = intentFromAssistantContext(loaded.context);
-  const amendment = pending ? amendPendingProposalIntent({ intent: pending, message: text, clinicLocalDate: loaded.today }) : null;
+  const gate = evaluateAssistantDomainGate({ message: text, today: loaded.today, pending, maxInputChars: getAssistantLlmMaxInputChars(process.env.APPOINTMENT_ASSISTANT_LLM_MAX_INPUT_CHARS) });
+  const amendment = pending && gate.state === "allowed" ? amendPendingProposalIntent({ intent: pending, message: gate.message, clinicLocalDate: loaded.today }) : null;
   let proposalDisposition = "retained" as "retained" | "invalidated" | "unavailable";
   const invalidateProposal = async () => {
     if (typeof pendingProposalActionId !== "string" || !isCanonicalAppointmentUuid(pendingProposalActionId)) {
@@ -421,8 +434,11 @@ export async function planAssistantConversationWithContextAction(message: unknow
   if (ambiguous) {
     return { resolved: { state: "parsed", result: { state: "needs_input", intent: ambiguous, message: "Hay varias citas. Selecciona la cita específica antes de continuar." } } as ConversationInput, context: { ...loaded.context, activeIntent: ambiguous.type } };
   }
-  const contextual = amendment?.intent ?? contextualAppointmentCommand(text, loaded.context) ?? contextualSchedulingFollowUp(text, loaded.context, loaded.today);
-  let conversationContext = contextual ? updateAssistantConversationContext(loaded.context, contextual, { state: "message" }, loaded.timeZone) : loaded.context;
+  const parsedPatch = gate.state === "allowed" ? parseSchedulingContextPatch(gate.message, loaded.context, loaded.today) : { state: "none" as const };
+  if (parsedPatch.state === "ambiguous") return { resolved: { state: "parsed", result: { state: "needs_input", message: "Hay más de una fecha posible. Indica una fecha específica para continuar." } } as ConversationInput, context: loaded.context, proposalDisposition };
+  const reconciled = parsedPatch.state === "patch" ? reconcileSchedulingContext(loaded.context, parsedPatch.patch, loaded.timeZone) : null;
+  const contextual = amendment?.intent ?? contextualAppointmentCommand(text, loaded.context) ?? (gate.state === "allowed" ? reconciled?.intent ?? contextualSchedulingFollowUp(gate.message, loaded.context, loaded.today) : null);
+  let conversationContext = contextual === reconciled?.intent ? reconciled.context : contextual ? updateAssistantConversationContext(loaded.context, contextual, { state: "message" }, loaded.timeZone) : loaded.context;
   if (contextual?.type === "create_appointment" && loaded.context.activeIntent === "check_availability" && contextual.professionalClinicMemberId && contextual.localDate && contextual.localTime && loaded.context.availableSlotTimes?.includes(contextual.localTime)) {
     const selectedSlot = { professionalRef: contextual.professionalClinicMemberId, localDate: contextual.localDate, startTime: contextual.localTime, durationMinutes: contextual.durationMinutes };
     if (!await loaded.validators.slot(selectedSlot)) return { resolved: { state: "parsed", result: { state: "unsupported", message: CONTEXT_CHANGED_REPLY } } as ConversationInput, context: { ...loaded.context, availableSlotTimes: undefined, selectedSlot: undefined, startTime: undefined } };
@@ -431,6 +447,11 @@ export async function planAssistantConversationWithContextAction(message: unknow
   let resolved: ConversationInput = contextual
     ? { state: "parsed", result: { state: "intent", intent: contextual } }
     : await planAssistantConversationAction(text, intentFromAssistantContext(loaded.context));
+  if (!contextual && loaded.context.activeIntent === "create_appointment" && resolved.state === "parsed" && resolved.result.state === "intent" && resolved.result.intent.type === "check_availability") {
+    const read = resolved.result.intent;
+    const converted = reconcileSchedulingContext(loaded.context, { turnIntent: "request_availability", ...(read.localDate ? { dateCandidate: read.localDate } : {}), ...(read.professionalQuery ? { professionalQuery: read.professionalQuery } : {}) }, loaded.timeZone);
+    if (converted) { resolved = { state: "parsed", result: { state: "intent", intent: converted.intent } }; conversationContext = converted.context; }
+  }
   if (!amendment && pendingProposalActionId !== undefined && resolved.state === "parsed" && resolved.result.state === "intent") {
     const proposed = resolved.result.intent;
     const mutationTypes = ["create_appointment", "confirm_appointment", "cancel_appointment", "reschedule_appointment"];

@@ -34,24 +34,54 @@ function canonicalDate(year: number, month: number, day: number) {
   return isCanonicalAppointmentDate(value) ? value : null;
 }
 
-export function parseDateExpression(value: string, today: string) {
+const weekdayNames = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+
+/** Dates are calculated from the clinic-local calendar day supplied by the caller. */
+export function resolveSchedulingDateExpression(value: string, today: string): { state: "resolved"; date: string } | { state: "ambiguous" | "none" } {
+  if (!isCanonicalAppointmentDate(today)) return { state: "none" };
   const text = unaccent(value);
-  if (text.includes("manana")) {
+  const candidates: string[] = [];
+  const shift = (days: number) => {
     const date = new Date(`${today}T12:00:00Z`);
-    date.setUTCDate(date.getUTCDate() + 1);
-    return canonicalDate(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
-  }
-  if (text.includes("hoy")) return isCanonicalAppointmentDate(today) ? today : null;
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+  if (/\bpasado\s+manana\b/.test(text)) candidates.push(shift(2));
+  else if (/\bmanana\b/.test(text)) candidates.push(shift(1));
+  if (/\bhoy\b/.test(text)) candidates.push(today);
   const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/.exec(text);
-  if (iso) return canonicalDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+  if (iso) {
+    const date = canonicalDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+    if (!date) return { state: "none" };
+    candidates.push(date);
+  }
   const numeric = /\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{4}))?\b/.exec(text);
-  if (numeric) {
+  if (numeric && !iso) {
     const year = numeric[3] ? Number(numeric[3]) : Number(today.slice(0, 4));
-    return canonicalDate(year, Number(numeric[2]), Number(numeric[1]));
+    const date = canonicalDate(year, Number(numeric[2]), Number(numeric[1]));
+    if (!date) return { state: "none" };
+    candidates.push(date);
   }
   const named = /\b(\d{1,2})\s+de\s+([a-záéíóú]+)(?:\s+de\s+(\d{4}))?\b/i.exec(value);
-  if (named) return canonicalDate(Number(named[3] ?? today.slice(0, 4)), monthNames[unaccent(named[2])] ?? 0, Number(named[1]));
-  return null;
+  if (named) {
+    const date = canonicalDate(Number(named[3] ?? today.slice(0, 4)), monthNames[unaccent(named[2])] ?? 0, Number(named[1]));
+    if (!date) return { state: "none" };
+    candidates.push(date);
+  }
+  const weekdays = [...text.matchAll(/\b(?:(este|proximo)\s+)?(domingo|lunes|martes|miercoles|jueves|viernes|sabado)\b/g)];
+  for (const weekday of weekdays) {
+    const date = new Date(`${today}T12:00:00Z`);
+    let offset = (weekdayNames.indexOf(weekday[2]) - date.getUTCDay() + 7) % 7;
+    if (offset === 0 && weekday[1] !== "este") offset = 7;
+    candidates.push(shift(offset));
+  }
+  if (new Set(candidates).size > 1) return { state: "ambiguous" };
+  return candidates.length ? { state: "resolved", date: candidates[0] } : { state: "none" };
+}
+
+export function parseDateExpression(value: string, today: string) {
+  const result = resolveSchedulingDateExpression(value, today);
+  return result.state === "resolved" ? result.date : null;
 }
 
 export function parseTimeExpression(value: string) {
@@ -109,7 +139,7 @@ function baseIntent(value: string, today: string): ParserResult {
     return { state: "intent", intent };
   }
   if (/\b(?:horarios?|disponibilidad)\b/i.test(plain)) {
-    if (plain.includes("proximo") || plain.includes("por la tarde") || plain.includes("jueves")) return { state: "needs_input", intentType: "check_availability", message: "Necesito una fecha y hora más específicas." };
+    if (plain.includes("por la tarde") || resolveSchedulingDateExpression(normalized, today).state === "ambiguous") return { state: "needs_input", intentType: "check_availability", message: "¿Qué fecha específica quieres consultar?" };
     const professionalQuery = extractProfessional(normalized) ?? (/(?:disponibilidad|horarios?).*(?:de|para)\s+/i.test(plain) ? cleanName(normalized.replace(/.*(?:de|para)\s+/i, "")) : undefined);
     return { state: "intent", intent: { type: "check_availability", professionalQuery, localDate, durationMinutes } };
   }
@@ -122,7 +152,7 @@ function baseIntent(value: string, today: string): ParserResult {
   if (/\b(?:confirma|confirmar)\b.*\bcita\b/i.test(plain)) {
     return { state: "intent", intent: { type: "confirm_appointment", appointmentQuery: extractAppointmentQuery(normalized) } };
   }
-  if (/\b(?:ver|qué|que|muestra|muéstrame|mostrar)\b.*\bcitas?\b/i.test(plain)) {
+  if (/\b(?:ver|dame|qué|que|muestra|muéstrame|mostrar)\b.*\bcitas?\b/i.test(plain)) {
     return { state: "intent", intent: { type: "search_appointments", query: undefined, localDate } };
   }
   return { state: "unsupported", message: "Puedo ayudarte con citas, disponibilidad, confirmaciones, cancelaciones y reprogramaciones." };
