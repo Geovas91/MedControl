@@ -425,6 +425,35 @@ export async function searchAssistantPatientSuggestionsAction(query: unknown, ra
   };
 }
 
+/** A bounded professional lookup only during the professional-selection step. */
+export async function searchAssistantProfessionalSuggestionsAction(query: unknown, rawContext: unknown) {
+  const loaded = await loadAssistantContext(rawContext);
+  if (!loaded.ok || loaded.reason !== "continued") return { state: "unavailable" as const, suggestions: [] };
+  const context = loaded.context;
+  const canSelectProfessional = !context.focusedProfessionalRef && (
+    context.activeIntent === "create_appointment" && Boolean(context.focusedPatientRef)
+    || context.activeIntent === "check_availability"
+  );
+  if (!canSelectProfessional) return { state: "unavailable" as const, suggestions: [] };
+
+  const text = typeof query === "string" ? query.trim().replace(/^con\s+/i, "").trim() : "";
+  if (text.length < 2 || text.length > 100 || /[\u0000-\u001f\u007f]/.test(text)) {
+    return { state: "ready" as const, suggestions: [] };
+  }
+  const result = await readTool<ReadProfessional[]>("get_professionals", {});
+  if (!result.ok || !Array.isArray(result.data)) return { state: "unavailable" as const, suggestions: [] };
+  const suggestions = result.data
+    .filter((professional) => professional && typeof professional.professional_clinic_member_id === "string"
+      && typeof professional.display_name === "string" && matchesAssistantQuery(professional.display_name, text))
+    .slice(0, 8)
+    .map((professional) => ({
+      id: professional.professional_clinic_member_id,
+      name: professional.display_name,
+      choice: { kind: "professional" as const, label: professional.display_name, reference: professional.professional_clinic_member_id }
+    }));
+  return { state: "ready" as const, suggestions };
+}
+
 /** The browser carries only bounded, ephemeral UX state. Every canonical reference is re-read under the current actor and tenant. */
 export async function planAssistantConversationWithContextAction(message: unknown, rawContext: unknown, pendingProposalActionId?: unknown) {
   const loaded = await loadAssistantContext(rawContext);

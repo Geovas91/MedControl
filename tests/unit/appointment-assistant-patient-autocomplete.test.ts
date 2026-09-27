@@ -199,6 +199,7 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   let prepared = 0;
   let executed = 0;
   let lookupCalls = 0;
+  let professionalLookupCalls = 0;
   let activeRole: "owner" | "admin" | "assistant" | "doctor" = "assistant";
   const eligibilityCalls: Array<[string, string]> = [];
   const eligible = async (id: string, professional: string) => {
@@ -213,10 +214,16 @@ test("autocomplete and structured patient choice avoid the planner and only prep
     return { state: "ready", data: { patients: fixtures.filter((row) => row.clinic_id === clinicId && !row.archived && row.full_name.toLocaleLowerCase("es-MX").includes(value) && (!professional || row.assignedTo.includes(professional) || row.assignedTo.length === 0)).map((row) => ({ id: row.id, name: row.full_name })), hasMore: false } };
   };
   const readTool = async (name: string) => {
-    if (name === "get_professionals") return { ok: true, data: [
-      { professional_clinic_member_id: doctorId, professional_user_id: actorId, display_name: "QA Doctor 1" },
-      { professional_clinic_member_id: anotherDoctorId, professional_user_id: anotherDoctorId, display_name: "QA Doctor 2" }
-    ] };
+    if (name === "get_professionals") {
+      professionalLookupCalls++;
+      const professionals = [
+        { professional_clinic_member_id: doctorId, professional_user_id: actorId, display_name: "QA Doctor 1 Norte" },
+        { professional_clinic_member_id: anotherDoctorId, professional_user_id: anotherDoctorId, display_name: "QA Doctor 2 Norte" },
+        ...Array.from({ length: 8 }, (_, index) => ({ professional_clinic_member_id: `70000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, professional_user_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, display_name: `QA Doctor ${index + 3} Norte` })),
+        { professional_clinic_member_id: "70000000-0000-4000-8000-000000000011", professional_user_id: "80000000-0000-4000-8000-000000000011", display_name: "José García" }
+      ];
+      return { ok: true, data: activeRole === "doctor" ? professionals.filter((professional) => professional.professional_clinic_member_id === doctorId) : professionals };
+    }
     if (name === "get_available_slots") return { ok: true, data: [{ local_start: "10:30", local_end: "11:00" }] };
     throw new Error(`Unexpected read: ${name}`);
   };
@@ -251,6 +258,55 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   assert.equal(suggestions.suggestions.length, 3);
   assert.equal(providerCalls, 0);
   assert.equal(prepared, 0);
+
+  const createWithoutPatient = { ...context, focusedPatientRef: undefined, focusedProfessionalRef: undefined, localDate: undefined, updatedAt: Date.now() };
+  const lookupsBeforeInvalidContexts = professionalLookupCalls;
+  const blockedProfessionalSuggestions = await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", createWithoutPatient);
+  assert.equal(blockedProfessionalSuggestions.state, "unavailable", "professional typeahead must not replace patient selection");
+  assert.equal(professionalLookupCalls, lookupsBeforeInvalidContexts);
+
+  const createWithPatient = { ...context, focusedPatientRef: patientId, focusedProfessionalRef: undefined, localDate: "2026-09-28", durationMinutes: 45, updatedAt: Date.now() };
+  for (const shortQuery of ["", "Q"]) {
+    const before = professionalLookupCalls;
+    const short = await actions.searchAssistantProfessionalSuggestionsAction(shortQuery, createWithPatient);
+    assert.equal(short.state, "ready");
+    assert.equal(short.suggestions.length, 0);
+    assert.equal(professionalLookupCalls, before, "queries under two characters must not read professionals");
+  }
+  const multipleProfessionals = await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", createWithPatient);
+  assert.equal(multipleProfessionals.state, "ready");
+  assert.equal(multipleProfessionals.suggestions.length, 8, "professional suggestions are bounded to eight");
+  assert.equal(multipleProfessionals.suggestions[0].name, "QA Doctor 1 Norte");
+  assert.equal(multipleProfessionals.suggestions[0].choice.kind, "professional");
+  assert.equal(multipleProfessionals.suggestions[0].choice.reference, doctorId);
+  const jose = await actions.searchAssistantProfessionalSuggestionsAction("Jose", createWithPatient);
+  assert.equal(jose.suggestions.some((item: { name: string }) => item.name === "José García"), true);
+  const garcia = await actions.searchAssistantProfessionalSuggestionsAction("Garcia", createWithPatient);
+  assert.equal(garcia.suggestions.some((item: { name: string }) => item.name === "José García"), true);
+  const availabilityContext = { ...createWithPatient, activeIntent: "check_availability", focusedPatientRef: undefined };
+  assert.equal((await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", availabilityContext)).state, "ready");
+
+  const ownProfessionalOnlyContext = { ...createWithPatient, focusedProfessionalRef: undefined, updatedAt: Date.now() };
+  activeRole = "doctor";
+  const ownProfessional = await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", ownProfessionalOnlyContext);
+  assert.deepEqual(JSON.parse(JSON.stringify(ownProfessional.suggestions.map((item: { id: string }) => item.id))), [doctorId]);
+  activeRole = "assistant";
+
+  const beforeStructuredClickProviders = providerCalls;
+  const selectedProfessional = await actions.selectAssistantResultWithContextAction({ kind: "professional", label: "QA Doctor 1 Norte", reference: doctorId }, createWithPatient);
+  assert.equal(selectedProfessional.response.state, "slots");
+  assert.equal(selectedProfessional.context.focusedPatientRef, patientId);
+  assert.equal(selectedProfessional.context.focusedProfessionalRef, doctorId);
+  assert.equal(selectedProfessional.context.localDate, "2026-09-28");
+  assert.equal(selectedProfessional.context.durationMinutes, 45);
+  assert.equal(providerCalls, beforeStructuredClickProviders, "structured selection must not call planner/provider");
+  const createWithoutDate = { ...createWithPatient, localDate: undefined, updatedAt: Date.now() };
+  const selectedWithoutDate = await actions.selectAssistantResultWithContextAction({ kind: "professional", label: "QA Doctor 1 Norte", reference: doctorId }, createWithoutDate);
+  assert.equal(selectedWithoutDate.response.state, "message");
+  assert.match(selectedWithoutDate.response.message, /fecha/);
+  assert.equal(selectedWithoutDate.context.focusedPatientRef, patientId);
+  assert.equal(selectedWithoutDate.context.focusedProfessionalRef, doctorId);
+  assert.equal(selectedWithoutDate.context.durationMinutes, 45);
   const planned = await actions.planAssistantConversationWithContextAction("QA Patient N-D1-01", completeContext);
   assert.equal(planned.resolved.state, "parsed");
   assert.equal(planned.resolved.result.state, "intent");
@@ -311,4 +367,29 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   assert.ok(prepared > initialPrepared);
   assert.equal(providerCalls, 0);
   assert.equal(executed, 0);
+});
+
+test("professional autocomplete UI is context-gated, debounced, accessible, and separate from patient suggestions", () => {
+  const component = readFileSync("components/bot/appointment-assistant.tsx", "utf8");
+  const actions = readFileSync("app/dashboard/bot/actions.ts", "utf8");
+  assert.match(component, /activeIntent === "create_appointment" && Boolean\(conversationContext\.focusedPatientRef\)/);
+  assert.match(component, /activeIntent === "check_availability"/);
+  assert.match(component, /const canSuggestPatients = conversationContext\?\.activeIntent === "create_appointment" && !conversationContext\.focusedPatientRef/);
+  assert.match(component, /startProfessionalSuggestionTransition\(async \(\)/);
+  assert.match(component, /\}, 300\)/);
+  assert.match(component, /type ProfessionalSuggestion/);
+  assert.match(component, /useState<ProfessionalSuggestion\[]>\(\[\]\)/);
+  assert.match(component, /aria-label="Sugerencias de profesionales"/);
+  assert.match(component, /professionalSuggestionsRef\.current\?\.querySelector\("button"\)\?\.focus\(\)/);
+  assert.match(component, /if \(event\.key === "Escape"\) \{ setPatientSuggestions\(\[\]\); setProfessionalSuggestions\(\[\]\); \}/);
+  assert.match(component, /if \(event\.key === "ArrowDown" && professionalSuggestions\.length\)/);
+  assert.match(component, /if \(current\) setProfessionalSuggestions\(result\.state === "ready" \? result\.suggestions : \[\]\)/);
+  assert.match(component, /return \(\) => \{ current = false; window\.clearTimeout\(timer\); \}/);
+  assert.match(component, /setProfessionalSuggestions\(\[\]\);\s*setPendingIntent\(null\);\s*setProposal\(null\);/);
+  assert.match(component, /chooseProfessionalSuggestion\(professional\.choice\)/);
+  assert.match(component, /selectAssistantResultWithContextAction\(choice, contextRef\.current\)/);
+  assert.match(actions, /export async function searchAssistantProfessionalSuggestionsAction/);
+  assert.match(actions, /matchesAssistantQuery\(professional\.display_name, text\)/);
+  assert.match(actions, /\.slice\(0, 8\)/);
+  assert.match(actions, /loaded\.context\.focusedPatientRef/);
 });
