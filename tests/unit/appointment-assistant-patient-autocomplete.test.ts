@@ -101,8 +101,14 @@ function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "adm
     "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready", tenant: { clinic: { id: clinicId }, membership: { id: doctorId, role } } }) },
     "@/lib/supabase/server": { createClient: async () => ({
       from: (table: string) => { calls.push(["from", table]); return builder; },
-      rpc: async (name: string, args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query: string; p_limit: number }) => {
+      rpc: async (name: string, args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query?: string; p_limit?: number; p_patient_id?: string }) => {
         calls.push(["rpc", name, args]);
+        if (name === "is_patient_eligible_for_scheduling") {
+          const row = rows.find((patient) => patient.id === args.p_patient_id && patient.clinic_id === args.p_clinic_id && !patient.archived);
+          return { data: Boolean(row && (role !== "doctor" || args.p_professional_clinic_member_id === doctorId)
+            && (row.assignedTo.includes(args.p_professional_clinic_member_id) || role !== "doctor" && row.assignedTo.length === 0)), error: null };
+        }
+        if (name !== "search_patient_names_for_scheduling" || !args.p_query || !args.p_limit) throw new Error(`Unexpected RPC: ${name}`);
         const terms = args.p_query.toLocaleLowerCase("es-MX").split(" ");
         const data = rows.filter((row) => row.clinic_id === args.p_clinic_id && !row.archived
           && terms.every((term) => row.full_name.toLocaleLowerCase("es-MX").includes(term))
@@ -118,7 +124,7 @@ function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "adm
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const actions: Record<string, (...args: unknown[]) => Promise<any>> = {};
   runInNewContext(output, { exports: actions, require: (name: string) => mocks[name] ?? {} });
-  return { search: actions.searchAssistantPatientNamesForActiveTenant, calls };
+  return { search: actions.searchAssistantPatientNamesForActiveTenant, eligible: actions.isPatientEligibleForSchedulingWithProfessionalActiveTenant, calls };
 }
 
 const fixtures: PatientFixture[] = [
@@ -169,6 +175,16 @@ test("assistant sees selected professional patients plus unassigned first appoin
   assert.ok(!result.data.patients.some((row: { id: string }) => row.id === otherPatientId || row.id === fixtures[3].id));
 });
 
+test("server helper sends only the active clinic and exact pair to the eligibility RPC", async () => {
+  const { eligible, calls } = loadPatientSearch({ role: "assistant", rows: fixtures });
+  assert.equal(await eligible(patientId, doctorId), true);
+  assert.equal(await eligible(otherPatientId, doctorId), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.filter((call) => call[0] === "rpc"))), [
+    ["rpc", "is_patient_eligible_for_scheduling", { p_clinic_id: clinicId, p_professional_clinic_member_id: doctorId, p_patient_id: patientId }],
+    ["rpc", "is_patient_eligible_for_scheduling", { p_clinic_id: clinicId, p_professional_clinic_member_id: doctorId, p_patient_id: otherPatientId }]
+  ]);
+});
+
 test("lookup is bounded to eight suggestions, with more flag", async () => {
   const rows = Array.from({ length: 12 }, (_, i) => ({ id: `test-${i}`, full_name: `Juan ${i}`, clinic_id: clinicId, assignedTo: [] }));
   const { search, calls } = loadPatientSearch({ role: "owner", rows });
@@ -183,13 +199,24 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   let prepared = 0;
   let executed = 0;
   let lookupCalls = 0;
+  let activeRole: "owner" | "admin" | "assistant" | "doctor" = "assistant";
+  const eligibilityCalls: Array<[string, string]> = [];
+  const eligible = async (id: string, professional: string) => {
+    eligibilityCalls.push([id, professional]);
+    const row = fixtures.find((item) => item.id === id && item.clinic_id === clinicId && !item.archived);
+    return Boolean(row && (activeRole !== "doctor" || professional === doctorId)
+      && (row.assignedTo.includes(professional) || activeRole !== "doctor" && row.assignedTo.length === 0));
+  };
   const search = async (query: unknown, professional?: string) => {
     lookupCalls++;
     const value = String(query).toLocaleLowerCase("es-MX");
     return { state: "ready", data: { patients: fixtures.filter((row) => row.clinic_id === clinicId && !row.archived && row.full_name.toLocaleLowerCase("es-MX").includes(value) && (!professional || row.assignedTo.includes(professional) || row.assignedTo.length === 0)).map((row) => ({ id: row.id, name: row.full_name })), hasMore: false } };
   };
   const readTool = async (name: string) => {
-    if (name === "get_professionals") return { ok: true, data: [{ professional_clinic_member_id: doctorId, professional_user_id: actorId, display_name: "QA Doctor" }] };
+    if (name === "get_professionals") return { ok: true, data: [
+      { professional_clinic_member_id: doctorId, professional_user_id: actorId, display_name: "QA Doctor 1" },
+      { professional_clinic_member_id: anotherDoctorId, professional_user_id: anotherDoctorId, display_name: "QA Doctor 2" }
+    ] };
     if (name === "get_available_slots") return { ok: true, data: [{ local_start: "10:30", local_end: "11:00" }] };
     throw new Error(`Unexpected read: ${name}`);
   };
@@ -203,7 +230,7 @@ test("autocomplete and structured patient choice avoid the planner and only prep
     "@/lib/assistant/llm/gated-planner": { runGatedAssistantPlanner: async () => { providerCalls++; throw new Error("Planner called"); } },
     "@/lib/assistant/orchestration/read-tools": { shouldOrchestrateAssistantReads: () => false },
     "@/lib/assistant/tools/registry": {
-      getAssistantToolContext: async () => ({ ok: true, data: { userId: actorId, clinicId, role: "assistant", isProfessional: false, timeZone: "America/Mexico_City" } }),
+      getAssistantToolContext: async () => ({ ok: true, data: { userId: actorId, clinicId, role: activeRole, isProfessional: activeRole === "doctor", professionalClinicMemberId: activeRole === "doctor" ? doctorId : null, timeZone: "America/Mexico_City" } }),
       executeAssistantReadTool: readTool,
       getCreateAppointmentProposalPresentation: async () => ({ ok: true, data: { patient: "QA Patient", professional: "QA Doctor" } }),
       prepareAssistantMutation: async () => { prepared++; return { ok: true, data: { actionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }; },
@@ -211,7 +238,7 @@ test("autocomplete and structured patient choice avoid the planner and only prep
     },
     "@/lib/appointments/query": { isCanonicalAppointmentUuid },
     "@/lib/dashboard/timezone": { getClinicDayRange: () => ({ localDate: today }) },
-    "@/lib/server/patients": { isPatientAvailableForActiveTenant: async (id: string) => id === patientId || id === otherPatientId, searchAssistantPatientNamesForActiveTenant: search },
+    "@/lib/server/patients": { isPatientAvailableForActiveTenant: async (id: string) => fixtures.some((row) => row.id === id && row.clinic_id === clinicId && !row.archived), isPatientEligibleForSchedulingWithProfessionalActiveTenant: eligible, searchAssistantPatientNamesForActiveTenant: search },
     "@/lib/server/entitlements": { getClinicEntitlements: async () => ({}), planIncludesFeature: () => true },
     "@/lib/logger": { logger: { info: () => {}, error: () => {} } }
   };
@@ -248,4 +275,40 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   assert.equal(unique.state, "proposal");
   assert.equal(prepared, 2);
   assert.ok(lookupCalls >= 3);
+  const tampered = await actions.selectAssistantResultWithContextAction({ kind: "patient", label: "Juana Pérez López", reference: otherPatientId }, completeContext);
+  assert.equal(tampered.response.state, "error", "a patient assigned only to another professional cannot reach Proposal");
+  assert.equal(prepared, 2);
+  assert.ok(eligibilityCalls.some(([id, professional]) => id === otherPatientId && professional === doctorId));
+  assert.equal(tampered.context.focusedPatientRef, undefined);
+
+  const initialPrepared = prepared;
+  const pair = async (role: typeof activeRole, id: string, professional: string, expected: "error" | "proposal") => {
+    activeRole = role;
+    const response = await actions.submitAssistantIntentAction({ type: "create_appointment", patientId: id, professionalClinicMemberId: professional, localDate: "2026-09-28", localTime: "10:30", durationMinutes: 30 });
+    assert.equal(response.state, expected, `${role}: ${id} with ${professional}`);
+  };
+  for (const role of ["owner", "admin", "assistant"] as const) {
+    await pair(role, otherPatientId, doctorId, "error"); // other-professional-only
+    await pair(role, patientId, doctorId, "proposal"); // selected-professional assignment
+    await pair(role, fixtures[2].id, doctorId, "proposal"); // unassigned
+    await pair(role, fixtures[4].id, doctorId, "proposal"); // shared
+  }
+  await pair("doctor", patientId, doctorId, "proposal");
+  await pair("doctor", fixtures[2].id, doctorId, "error");
+  await pair("doctor", patientId, anotherDoctorId, "error");
+  await pair("assistant", fixtures[3].id, doctorId, "error"); // cross-tenant
+  await pair("assistant", fixtures[5].id, doctorId, "error"); // archived
+
+  activeRole = "assistant";
+  const patientFirstContext = { ...context, focusedPatientRef: otherPatientId, localDate: "2026-09-28", startTime: "10:30", updatedAt: Date.now() };
+  const professionalAfterPatient = await actions.selectAssistantResultWithContextAction({ kind: "professional", label: "QA Doctor 1", reference: doctorId }, patientFirstContext);
+  assert.equal(professionalAfterPatient.response.state, "error", "patient-first selection must reject an incompatible professional");
+  assert.equal(professionalAfterPatient.context.focusedProfessionalRef, undefined);
+  const eligiblePatientFirst = await actions.selectAssistantResultWithContextAction({ kind: "professional", label: "QA Doctor 1", reference: doctorId }, { ...patientFirstContext, focusedPatientRef: patientId });
+  assert.equal(eligiblePatientFirst.response.state, "proposal");
+  const unassignedFirst = await actions.selectAssistantResultWithContextAction({ kind: "professional", label: "QA Doctor 1", reference: doctorId }, { ...patientFirstContext, focusedPatientRef: fixtures[2].id });
+  assert.equal(unassignedFirst.response.state, "proposal");
+  assert.ok(prepared > initialPrepared);
+  assert.equal(providerCalls, 0);
+  assert.equal(executed, 0);
 });

@@ -992,6 +992,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      is_patient_eligible_for_scheduling: {
+        Args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_patient_id: string };
+        Returns: boolean;
+      };
       search_patient_names_for_scheduling: {
         Args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query: string; p_limit: number };
         Returns: Array<{ patient_id: string; display_name: string }>;

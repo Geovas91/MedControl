@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(19);
+select extensions.plan(41);
 
 insert into auth.users(id, email) values
   ('52100000-0000-4000-8000-000000000001', 'search-owner@example.test'),
@@ -30,6 +30,8 @@ insert into public.patients(id, clinic_id, full_name, first_names, internal_iden
   ('52400000-0000-4000-8000-000000000004', '52200000-0000-4000-8000-000000000001', 'Juan D', 'Juan D', 'PAC-SEARCHD01', null),
   ('52400000-0000-4000-8000-000000000005', '52200000-0000-4000-8000-000000000002', 'Juan Foreign', 'Juan Foreign', 'PAC-SEARCHF01', null),
   ('52400000-0000-4000-8000-000000000006', '52200000-0000-4000-8000-000000000001', 'Juan Archived', 'Juan Archived', 'PAC-SEARCHX01', now());
+insert into public.patients(id, clinic_id, full_name, first_names, internal_identifier, status)
+values ('52400000-0000-4000-8000-000000000007', '52200000-0000-4000-8000-000000000001', 'Juan Inactive', 'Juan Inactive', 'PAC-SEARCHI01', 'inactive');
 insert into public.patient_professional_assignments(clinic_id, patient_id, clinic_member_id, source) values
   ('52200000-0000-4000-8000-000000000001', '52400000-0000-4000-8000-000000000001', '52300000-0000-4000-8000-000000000005', 'manual'),
   ('52200000-0000-4000-8000-000000000001', '52400000-0000-4000-8000-000000000002', '52300000-0000-4000-8000-000000000004', 'manual'),
@@ -44,6 +46,7 @@ select extensions.is((select count(*)::integer from public.search_patient_names_
 select extensions.is((select count(*)::integer from public.search_patient_names_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','Juan C',9)), 1, 'unassigned patient remains eligible for first appointment');
 select extensions.is((select count(*)::integer from public.search_patient_names_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','Juan Foreign',9)), 0, 'cross-tenant patient never appears');
 select extensions.is((select count(*)::integer from public.search_patient_names_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','Juan Archived',9)), 0, 'archived patient never appears');
+select extensions.is((select count(*)::integer from public.search_patient_names_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','Juan Inactive',9)), 0, 'inactive patient never appears');
 select extensions.throws_ok($$select * from public.search_patient_names_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000008','Juan',9)$$, '42501', null, 'cross-tenant professional is rejected');
 select extensions.throws_ok($$select * from public.search_patient_names_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000007','Juan',9)$$, '42501', null, 'inactive professional is rejected');
 select extensions.throws_ok($$select * from public.search_patient_names_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000001','Juan',9)$$, '42501', null, 'nonprofessional clinic member is rejected');
@@ -70,5 +73,35 @@ select extensions.is((select count(*)::integer from public.search_patient_names_
 reset role;
 select extensions.ok(not has_function_privilege('anon', 'public.search_patient_names_for_scheduling(uuid,uuid,text,integer)', 'execute'), 'anon has no RPC grant');
 select extensions.ok(has_function_privilege('authenticated', 'public.search_patient_names_for_scheduling(uuid,uuid,text,integer)', 'execute'), 'authenticated role has RPC grant');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '52100000-0000-4000-8000-000000000001', true);
+select extensions.ok(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000001'), 'owner can schedule selected-professional assignment');
+select extensions.ok(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000003'), 'owner can schedule unassigned patient');
+select extensions.is(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000002'), false, 'other-professional-only patient is rejected');
+select extensions.ok(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000004'), 'shared assignment is eligible');
+select extensions.is(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000005'), false, 'cross-tenant patient is rejected');
+select extensions.is(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000006'), false, 'archived patient is rejected');
+select extensions.is(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000007'), false, 'inactive patient is rejected');
+select extensions.throws_ok($$select public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000008','52400000-0000-4000-8000-000000000001')$$, '42501', null, 'cross-tenant professional is rejected');
+select extensions.throws_ok($$select public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000007','52400000-0000-4000-8000-000000000001')$$, '42501', null, 'inactive professional is rejected');
+select extensions.throws_ok($$select public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000001','52400000-0000-4000-8000-000000000001')$$, '42501', null, 'nonprofessional clinic member is rejected');
+select extensions.throws_ok($$select public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000002','52300000-0000-4000-8000-000000000008','52400000-0000-4000-8000-000000000005')$$, '42501', null, 'actor cannot use another clinic');
+select set_config('request.jwt.claim.sub', '', true);
+select extensions.throws_ok($$select public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000001')$$, '42501', null, 'missing authenticated actor is rejected');
+select set_config('request.jwt.claim.sub', '52100000-0000-4000-8000-000000000002', true);
+select extensions.ok(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000003'), 'admin can schedule unassigned patient');
+select set_config('request.jwt.claim.sub', '52100000-0000-4000-8000-000000000003', true);
+select extensions.ok(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000003'), 'assistant can schedule unassigned patient');
+select set_config('request.jwt.claim.sub', '52100000-0000-4000-8000-000000000005', true);
+select extensions.ok(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000001'), 'doctor can schedule own assigned patient');
+select extensions.is(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000003'), false, 'doctor cannot schedule unassigned patient');
+select extensions.is(public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000002'), false, 'doctor cannot schedule another doctor only patient');
+select extensions.throws_ok($$select public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000004','52400000-0000-4000-8000-000000000002')$$, '42501', null, 'doctor cannot select another professional');
+select set_config('request.jwt.claim.sub', '52100000-0000-4000-8000-000000000007', true);
+select extensions.throws_ok($$select public.is_patient_eligible_for_scheduling('52200000-0000-4000-8000-000000000001','52300000-0000-4000-8000-000000000005','52400000-0000-4000-8000-000000000001')$$, '42501', null, 'suspended actor cannot check eligibility');
+reset role;
+select extensions.ok(not has_function_privilege('anon', 'public.is_patient_eligible_for_scheduling(uuid,uuid,uuid)', 'execute'), 'anon has no eligibility RPC grant');
+select extensions.ok(has_function_privilege('authenticated', 'public.is_patient_eligible_for_scheduling(uuid,uuid,uuid)', 'execute'), 'authenticated role has eligibility RPC grant');
 select extensions.finish();
 rollback;

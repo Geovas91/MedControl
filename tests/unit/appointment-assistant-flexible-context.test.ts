@@ -201,7 +201,7 @@ test("server action reaches real slot lookup for the staging sentence with zero 
     },
     "@/lib/appointments/query": { isCanonicalAppointmentUuid },
     "@/lib/dashboard/timezone": { getClinicDayRange: () => ({ localDate: clinicToday }) },
-    "@/lib/server/patients": { isPatientAvailableForActiveTenant: async () => true },
+    "@/lib/server/patients": { isPatientAvailableForActiveTenant: async () => true, isPatientEligibleForSchedulingWithProfessionalActiveTenant: async () => true },
     "@/lib/server/entitlements": { getClinicEntitlements: async () => ({}), planIncludesFeature: () => true },
     "@/lib/logger": { logger: { info: () => {} } }
   };

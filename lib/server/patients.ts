@@ -16,6 +16,12 @@ type SchedulingPatientRpcClient = {
     args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query: string; p_limit: number }
   ): Promise<{ data: SchedulingPatient[] | null; error: { code: string } | null }>;
 };
+type SchedulingEligibilityRpcClient = {
+  rpc(
+    fn: "is_patient_eligible_for_scheduling",
+    args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_patient_id: string }
+  ): Promise<{ data: boolean | null; error: { code: string } | null }>;
+};
 
 export type PatientListItem = Pick<
   PatientRow,
@@ -133,6 +139,23 @@ export async function isPatientAvailableForActiveTenant(patientId: string): Prom
     .eq("id", patientId)
     .maybeSingle();
   return !result.error && Boolean(result.data);
+}
+
+/** Revalidates the exact pair in PostgreSQL under the authenticated actor and active clinic. */
+export async function isPatientEligibleForSchedulingWithProfessionalActiveTenant(patientId: string, professionalClinicMemberId: string): Promise<boolean> {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return false;
+  const client = await createClient() as unknown as SchedulingEligibilityRpcClient;
+  const result = await client.rpc("is_patient_eligible_for_scheduling", {
+    p_clinic_id: context.tenant.clinic.id,
+    p_professional_clinic_member_id: professionalClinicMemberId,
+    p_patient_id: patientId
+  });
+  if (result.error) {
+    logger.error("Assistant patient eligibility check failed", { component: "appointment_assistant", code: result.error.code });
+    return false;
+  }
+  return result.data === true;
 }
 
 /** Name-only assistant search under the authenticated actor and active clinic. */

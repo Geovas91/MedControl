@@ -27,7 +27,7 @@ import {
   type AssistantProposal
 } from "@/lib/assistant/tools/registry";
 import { saveAppointmentAssistantSettingsForActiveTenant } from "@/lib/server/appointment-assistant";
-import { isPatientAvailableForActiveTenant, searchAssistantPatientNamesForActiveTenant } from "@/lib/server/patients";
+import { isPatientAvailableForActiveTenant, isPatientEligibleForSchedulingWithProfessionalActiveTenant, searchAssistantPatientNamesForActiveTenant } from "@/lib/server/patients";
 import { getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, parseSchedulingContextPatch, reconcileSchedulingContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
@@ -223,6 +223,10 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
       professionalClinicMemberId: professional?.state === "ready" ? professional.id : undefined,
       professionalQuery: undefined
     };
+    if (resolvedIntent.patientId && resolvedIntent.professionalClinicMemberId
+      && !await isPatientEligibleForSchedulingWithProfessionalActiveTenant(resolvedIntent.patientId, resolvedIntent.professionalClinicMemberId)) {
+      return { state: "error", message: "El paciente no está disponible para agendar con ese profesional. Selecciona otro paciente o profesional." };
+    }
     if (!professional) {
       const message = patient ? "¿Con qué profesional quieres agendarla?" : "¿Con qué paciente quieres agendarla?";
       return { state: "message", message, intent: resolvedIntent, ...(patient?.state === "ready" ? { resolvedPatientRef: patient.id } : {}) };
@@ -305,7 +309,12 @@ export async function selectAssistantResultAction(choice: unknown, pendingValue:
   if (!planIncludesFeature(await getClinicEntitlements(context.data.clinicId), "appointment_assistant")) return { state: "error", message: "El asistente no está disponible para esta clínica." };
 
   const result = await resolveAssistantStructuredChoice(choice, pendingValue, {
-    patient: isPatientAvailableForActiveTenant,
+    patient: (reference) => {
+      const pending = isAssistantIntent(pendingValue) ? pendingValue : null;
+      return pending?.type === "create_appointment" && pending.professionalClinicMemberId
+        ? isPatientEligibleForSchedulingWithProfessionalActiveTenant(reference, pending.professionalClinicMemberId)
+        : isPatientAvailableForActiveTenant(reference);
+    },
     professional: async (reference) => {
       const result = await executeAssistantReadTool("get_professionals", {});
       if (!result.ok || !Array.isArray(result.data)) return null;
