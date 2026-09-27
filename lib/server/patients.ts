@@ -22,6 +22,12 @@ type SchedulingEligibilityRpcClient = {
     args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_patient_id: string }
   ): Promise<{ data: boolean | null; error: { code: string } | null }>;
 };
+type SchedulingProfessionalsRpcClient = {
+  rpc(
+    fn: "list_patient_eligible_professionals_for_scheduling",
+    args: { p_clinic_id: string; p_patient_id: string }
+  ): Promise<{ data: Array<{ professional_clinic_member_id: string }> | null; error: { code: string } | null }>;
+};
 
 export type PatientListItem = Pick<
   PatientRow,
@@ -156,6 +162,22 @@ export async function isPatientEligibleForSchedulingWithProfessionalActiveTenant
     return false;
   }
   return result.data === true;
+}
+
+/** Returns only scheduling-eligible member IDs for one patient in the authenticated clinic. */
+export async function getPatientEligibleProfessionalIdsForSchedulingActiveTenant(patientId: string) {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: "error" as const, ids: [] as string[] };
+  const client = await createClient() as unknown as SchedulingProfessionalsRpcClient;
+  const result = await client.rpc("list_patient_eligible_professionals_for_scheduling", {
+    p_clinic_id: context.tenant.clinic.id,
+    p_patient_id: patientId
+  });
+  if (result.error || !Array.isArray(result.data)) {
+    logger.error("Assistant eligible professional lookup failed", { component: "appointment_assistant", code: result.error?.code });
+    return { state: "error" as const, ids: [] as string[] };
+  }
+  return { state: "ready" as const, ids: result.data.map((row) => row.professional_clinic_member_id) };
 }
 
 /** Name-only assistant search under the authenticated actor and active clinic. */

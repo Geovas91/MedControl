@@ -90,6 +90,19 @@ async function getProfessionalMember(context: AssistantToolContext, clinicMember
   return member ? { state: "ready" as const, data: member } : { state: "not_found" as const };
 }
 
+function isAssistantHalfHourStart(localStart: unknown): localStart is string {
+  if (typeof localStart !== "string") return false;
+  const match = /^(?:[01]\d|2[0-3]):([0-5]\d)$/.exec(localStart);
+  return Boolean(match && Number(match[1]) % 30 === 0);
+}
+
+/** The shared Slot Engine anchors candidates to each availability window; discover at minute precision, then align to wall-clock half hours for the Assistant. */
+async function getAssistantAvailableSlots(input: { clinicMemberId: string; localDate: string; durationMinutes: number }) {
+  const result = await getProfessionalAvailableSlots({ ...input, slotIntervalMinutes: 1 });
+  if (result.state !== "ready" || !result.data) return result;
+  return { ...result, data: result.data.filter((slot) => isAssistantHalfHourStart(slot.local_start)) };
+}
+
 async function validateCreateAppointmentCandidate(context: AssistantToolContext, input: CreateAppointmentToolInput): Promise<AssistantToolResult<CreateAppointmentToolInput>> {
   const [patientResult, memberResult] = await Promise.all([
     (await createClient()).from("patients").select("id").eq("clinic_id", context.clinicId).eq("id", input.patientId).maybeSingle(),
@@ -105,11 +118,10 @@ async function validateCreateAppointmentCandidate(context: AssistantToolContext,
     return assistantToolError("stale", "El paciente ya no está disponible para agendar con ese profesional. Prepara una nueva propuesta.");
   }
 
-  const slots = await getProfessionalAvailableSlots({
+  const slots = await getAssistantAvailableSlots({
     clinicMemberId: memberResult.data.id,
     localDate: input.date,
-    durationMinutes: input.durationMinutes,
-    slotIntervalMinutes: 15
+    durationMinutes: input.durationMinutes
   });
   if (slots.state !== "ready" || !slots.data) return safeFailure(slots.state);
   if (!slots.data.some((slot) => slot.local_start === input.startTime)) return assistantToolError("outside_availability", "El horario ya no está disponible.");
@@ -124,7 +136,7 @@ const getAvailableSlots: AssistantToolDefinition<{ professionalClinicMemberId: s
     if (memberResult.state !== "ready") return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
     const member = memberResult.data;
     if (context.role === "doctor" && member.user_id !== context.userId) return assistantToolError("forbidden", "No tienes acceso a la disponibilidad de otro profesional.");
-    const slots = await getProfessionalAvailableSlots({ clinicMemberId: member.id, localDate: input.date, durationMinutes: input.durationMinutes, slotIntervalMinutes: 15 });
+    const slots = await getAssistantAvailableSlots({ clinicMemberId: member.id, localDate: input.date, durationMinutes: input.durationMinutes });
     if (slots.state !== "ready" || !slots.data) return safeFailure(slots.state);
     return { ok: true, data: slots.data.map((slot) => ({ ...slot, time_zone: context.timeZone })) };
   }

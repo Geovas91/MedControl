@@ -27,7 +27,7 @@ import {
   type AssistantProposal
 } from "@/lib/assistant/tools/registry";
 import { saveAppointmentAssistantSettingsForActiveTenant } from "@/lib/server/appointment-assistant";
-import { isPatientAvailableForActiveTenant, isPatientEligibleForSchedulingWithProfessionalActiveTenant, searchAssistantPatientNamesForActiveTenant } from "@/lib/server/patients";
+import { getPatientEligibleProfessionalIdsForSchedulingActiveTenant, isPatientAvailableForActiveTenant, isPatientEligibleForSchedulingWithProfessionalActiveTenant, searchAssistantPatientNamesForActiveTenant } from "@/lib/server/patients";
 import { getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, parseSchedulingContextPatch, reconcileSchedulingContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
@@ -102,11 +102,14 @@ async function resolvePatient(query: string | undefined, professionalClinicMembe
   return { state: "ready" as const, id: result.data.patients[0].id, label: result.data.patients[0].name };
 }
 
-async function resolveProfessional(query: string | undefined) {
+async function resolveProfessional(query: string | undefined, patientId?: string) {
   if (!query) return { state: "missing" as const };
   const result = await readTool<ReadProfessional[]>("get_professionals", {});
   if (!result.ok) return { state: "error" as const, response: safeToolError(result) };
-  const matches = result.data.filter((professional) => matchesAssistantQuery(professional.display_name, query));
+  const eligible = patientId ? await getPatientEligibleProfessionalIdsForSchedulingActiveTenant(patientId) : null;
+  if (eligible?.state === "error") return { state: "error" as const, response: { state: "error", message: "No fue posible validar profesionales para este paciente. Intenta de nuevo." } satisfies AssistantUiResponse };
+  const eligibleIds = eligible ? new Set(eligible.ids) : null;
+  const matches = result.data.filter((professional) => (!eligibleIds || eligibleIds.has(professional.professional_clinic_member_id)) && matchesAssistantQuery(professional.display_name, query));
   const resolved = resolveUniqueEntity(matches.map((professional) => ({ id: professional.professional_clinic_member_id, label: professional.display_name })));
   if (resolved.state === "NEEDS_INPUT") return { state: "none" as const, response: { state: "message", message: `No encontré un profesional que coincida con “${query}”.` } satisfies AssistantUiResponse };
   if (resolved.state === "AMBIGUOUS") return { state: "ambiguous" as const, response: { state: "choices", field: "professional", message: "Encontré más de un profesional con ese nombre. ¿Cuál quieres usar?", choices: matches.slice(0, 10).map((professional) => ({ id: professional.professional_clinic_member_id, label: professional.display_name, choice: { kind: "professional" as const, label: professional.display_name, reference: professional.professional_clinic_member_id } })) } satisfies AssistantUiResponse };
@@ -212,7 +215,7 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     if (patient && patient.state !== "ready") return patient.state === "missing" ? { state: "message", message: "¿Con qué paciente quieres agendarla?" } : patient.response;
     const professional = workingIntent.professionalClinicMemberId
       ? { state: "ready" as const, id: workingIntent.professionalClinicMemberId, label: defaultProfessionalId ? "Tú" : "Profesional" }
-      : workingIntent.professionalQuery ? await resolveProfessional(workingIntent.professionalQuery) : null;
+      : workingIntent.professionalQuery ? await resolveProfessional(workingIntent.professionalQuery, patient?.state === "ready" ? patient.id : undefined) : null;
     if (professional && professional.state !== "ready") return professional.state === "missing"
       ? { state: "message", message: "¿Con qué profesional quieres agendarla?" }
       : { ...professional.response, ...(patient?.state === "ready" ? { resolvedPatientRef: patient.id } : {}) };
@@ -442,9 +445,15 @@ export async function searchAssistantProfessionalSuggestionsAction(query: unknow
   }
   const result = await readTool<ReadProfessional[]>("get_professionals", {});
   if (!result.ok || !Array.isArray(result.data)) return { state: "unavailable" as const, suggestions: [] };
+  const eligible = context.activeIntent === "create_appointment" && context.focusedPatientRef
+    ? await getPatientEligibleProfessionalIdsForSchedulingActiveTenant(context.focusedPatientRef)
+    : null;
+  if (eligible?.state === "error") return { state: "unavailable" as const, suggestions: [] };
+  const eligibleIds = eligible ? new Set(eligible.ids) : null;
   const suggestions = result.data
     .filter((professional) => professional && typeof professional.professional_clinic_member_id === "string"
-      && typeof professional.display_name === "string" && matchesAssistantQuery(professional.display_name, text))
+      && typeof professional.display_name === "string" && (!eligibleIds || eligibleIds.has(professional.professional_clinic_member_id))
+      && matchesAssistantQuery(professional.display_name, text))
     .slice(0, 8)
     .map((professional) => ({
       id: professional.professional_clinic_member_id,
