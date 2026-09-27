@@ -18,6 +18,8 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
     eligible: true,
     professionalActive: true,
     slotAvailable: true,
+    availabilityStart: "09:00",
+    malformedSlots: false,
     mutationCalls: 0,
     eligibilityCalls: 0,
     slotIntervalCalls: [] as number[],
@@ -74,11 +76,21 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
       assert.equal(professional, professionalId);
       return state.eligible;
     } },
-    "@/lib/server/professional-slots": { getProfessionalAvailableSlots: async ({ slotIntervalMinutes }: { slotIntervalMinutes: number }) => {
+    "@/lib/server/professional-slots": { getProfessionalAvailableSlots: async ({ slotIntervalMinutes, durationMinutes }: { slotIntervalMinutes: number; durationMinutes: number }) => {
       state.slotIntervalCalls.push(slotIntervalMinutes);
-      return { state: "ready", data: state.slotAvailable
-        ? ["09:00", "09:30", "10:00", "10:30", ...(slotIntervalMinutes === 15 ? ["09:15", "09:45"] : [])].map((local_start) => ({ local_start }))
-        : [] };
+      const [startHour, startMinute] = state.availabilityStart.split(":").map(Number);
+      const start = startHour * 60 + startMinute;
+      const data = state.slotAvailable
+        ? Array.from({ length: Math.ceil((12 * 60 - start - durationMinutes) / slotIntervalMinutes) + 1 }, (_, index) => {
+          const minuteOfDay = start + index * slotIntervalMinutes;
+          return `${String(Math.floor(minuteOfDay / 60)).padStart(2, "0")}:${String(minuteOfDay % 60).padStart(2, "0")}`;
+        }).filter((local_start) => {
+          const [hour, minute] = local_start.split(":").map(Number);
+          return hour * 60 + minute + durationMinutes <= 12 * 60;
+        }).map((local_start) => ({ local_start }))
+        : [];
+      if (state.malformedSlots) data.push({ local_start: "09:7" }, { local_start: "09:60" }, { local_start: "9:30" });
+      return { state: "ready", data };
     } },
     "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready", user: { id: actorId }, tenant: { clinic: { id: clinicId, timezone: "America/Mexico_City" }, membership: { id: professionalId, role, is_professional: role === "doctor" } } }) },
     "@/lib/supabase/server": { createClient: async () => client },
@@ -110,32 +122,55 @@ test("Assistant read, Proposal, and Confirm all request the same 30-minute caden
   const { registry, state } = mountRegistry();
   const slots = await registry.executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: professionalId, date: input.date, durationMinutes: input.durationMinutes });
   assert.equal(slots.ok, true);
-  assert.deepEqual(state.slotIntervalCalls, [30]);
+  assert.deepEqual(state.slotIntervalCalls, [1]);
   assert.equal((await registry.prepareAssistantMutation("create_appointment", input)).ok, true);
   assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, true);
-  assert.deepEqual(state.slotIntervalCalls, [30, 30, 30]);
+  assert.deepEqual(state.slotIntervalCalls, [1, 1, 1]);
 });
 
-test("15-minute offset is never proposed by Assistant even when other flows could offer it", async () => {
+test("Assistant aligns discovery candidates to wall-clock half hours and rejects quarter-hour starts", async () => {
   const { registry, state } = mountRegistry();
   const offered = await registry.executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: professionalId, date: input.date, durationMinutes: input.durationMinutes });
-  assert.deepEqual(Array.from(offered.data, (slot: { local_start: string }) => slot.local_start), ["09:00", "09:30", "10:00", "10:30"]);
+  assert.deepEqual(Array.from(offered.data, (slot: { local_start: string }) => slot.local_start), ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30"]);
   for (const startTime of ["09:15", "09:45"]) {
     const proposal = await registry.prepareAssistantMutation("create_appointment", { ...input, startTime });
     assert.equal(proposal.ok, false);
     assert.equal(proposal.error.code, "outside_availability");
   }
-  assert.deepEqual(state.slotIntervalCalls, [30, 30, 30]);
+  assert.deepEqual(state.slotIntervalCalls, [1, 1, 1]);
   assert.equal(state.mutationCalls, 0);
 });
 
-for (const startTime of ["09:00", "09:30", "10:00"]) {
-  test(`${startTime} remains proposal-eligible at 30-minute cadence`, async () => {
-    const { registry, state } = mountRegistry();
-    assert.equal((await registry.prepareAssistantMutation("create_appointment", { ...input, startTime })).ok, true);
-    assert.deepEqual(state.slotIntervalCalls, [30]);
-  });
-}
+test("window beginning at 09:15 offers only 09:30-aligned starts that fit", async () => {
+  const { registry, state } = mountRegistry();
+  state.availabilityStart = "09:15";
+  const slots = await registry.executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: professionalId, date: input.date, durationMinutes: 30 });
+  assert.deepEqual(Array.from(slots.data, (slot: { local_start: string }) => slot.local_start), ["09:30", "10:00", "10:30", "11:00", "11:30"]);
+  assert.deepEqual(state.slotIntervalCalls, [1]);
+});
+
+test("arbitrary-minute window starts still discover the next half-hour boundary", async () => {
+  const { registry, state } = mountRegistry();
+  state.availabilityStart = "09:07";
+  const slots = await registry.executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: professionalId, date: input.date, durationMinutes: 30 });
+  assert.deepEqual(Array.from(slots.data, (slot: { local_start: string }) => slot.local_start), ["09:30", "10:00", "10:30", "11:00", "11:30"]);
+  assert.deepEqual(state.slotIntervalCalls, [1]);
+});
+
+test("09:30 is accepted at Proposal and Confirm for a window beginning at 09:15", async () => {
+  const { registry, state } = mountRegistry();
+  state.availabilityStart = "09:15";
+  assert.equal((await registry.prepareAssistantMutation("create_appointment", { ...input, startTime: "09:30" })).ok, true);
+  assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, true);
+  assert.deepEqual(state.slotIntervalCalls, [1, 1]);
+});
+
+test("malformed engine local_start values are excluded", async () => {
+  const { registry, state } = mountRegistry();
+  state.malformedSlots = true;
+  const slots = await registry.executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: professionalId, date: input.date, durationMinutes: input.durationMinutes });
+  assert.deepEqual(Array.from(slots.data, (slot: { local_start: string }) => slot.local_start), ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30"]);
+});
 
 for (const role of ["owner", "admin", "assistant", "doctor"] as const) {
   test(`${role}: a pair eligible at Proposal and Confirm creates once`, async () => {

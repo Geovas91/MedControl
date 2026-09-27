@@ -111,7 +111,11 @@ test("availability uses clinic member identity and resolves user identity only f
   assert.match(registry, /professional_clinic_member_id/);
   assert.match(registry, /list_clinic_members_for_current_user/);
   assert.match(registry, /candidate\.id === clinicMemberId/);
-  assert.match(registry, /getProfessionalAvailableSlots\(\{ clinicMemberId: member\.id/);
+  assert.match(registry, /async function getAssistantAvailableSlots\(/);
+  assert.match(registry, /getProfessionalAvailableSlots\(\{ \.\.\.input, slotIntervalMinutes: 1 \}\)/);
+  assert.match(registry, /data: result\.data\.filter\(\(slot\) => isAssistantHalfHourStart\(slot\.local_start\)\)/);
+  assert.equal((registry.match(/getAssistantAvailableSlots\(/g) ?? []).length, 3, "read and candidate validation share the aligned slot helper");
+  assert.match(registry, /\^\(\?:\[01\]\\d\|2\[0-3\]\):\(\[0-5\]\\d\)\$/);
   assert.match(registry, /doctorId: member\.user_id/);
   assert.match(registry, /validateCreateAppointmentCandidate/);
   assert.match(registry, /local_start === input\.startTime/);
