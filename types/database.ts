@@ -992,6 +992,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      is_patient_eligible_for_scheduling: {
+        Args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_patient_id: string };
+        Returns: boolean;
+      };
+      search_patient_names_for_scheduling: {
+        Args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query: string; p_limit: number };
+        Returns: Array<{ patient_id: string; display_name: string }>;
+      };
       consume_support_rate_limit: { Args: { p_clinic_id: string; p_operation: string }; Returns: boolean };
       create_support_ticket_for_current_user: { Args: { p_clinic_id: string; p_category: string; p_impact: string; p_subject: string; p_summary: string; p_diagnostic_codes?: string[] }; Returns: Database["public"]["Tables"]["support_tickets"]["Row"][] };
       add_support_ticket_message_for_current_user: { Args: { p_clinic_id: string; p_ticket_id: string; p_body: string }; Returns: Database["public"]["Tables"]["support_ticket_messages"]["Row"][] };

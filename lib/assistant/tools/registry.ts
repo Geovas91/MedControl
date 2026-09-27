@@ -7,7 +7,7 @@ import { getAppointmentAgendaForActiveTenant } from "@/lib/server/appointments";
 import { getAppointmentDetailForActiveTenant } from "@/lib/server/appointment-detail";
 import { mutateAppointmentLifecycleForActiveTenant } from "@/lib/server/appointment-lifecycle";
 import { createAppointmentForActiveTenant } from "@/lib/server/create-appointment";
-import { getPatientsForActiveTenant } from "@/lib/server/patients";
+import { getPatientsForActiveTenant, isPatientEligibleForSchedulingWithProfessionalActiveTenant } from "@/lib/server/patients";
 import { getProfessionalAvailableSlots } from "@/lib/server/professional-slots";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -101,6 +101,9 @@ async function validateCreateAppointmentCandidate(context: AssistantToolContext,
   if (memberResult.state === "error") return safeFailure(memberResult.error);
   if (memberResult.state !== "ready") return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
   if (context.role === "doctor" && memberResult.data.user_id !== context.userId) return assistantToolError("forbidden", "No tienes acceso a la disponibilidad de otro profesional.");
+  if (!await isPatientEligibleForSchedulingWithProfessionalActiveTenant(input.patientId, memberResult.data.id)) {
+    return assistantToolError("stale", "El paciente ya no está disponible para agendar con ese profesional. Prepara una nueva propuesta.");
+  }
 
   const slots = await getProfessionalAvailableSlots({
     clinicMemberId: memberResult.data.id,

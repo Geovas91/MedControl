@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ASSISTANT_PATIENT_SUGGESTION_LIMIT, parseAssistantPatientQuery } from "@/lib/assistant/orchestration/patient-selection";
 import { canCreatePatients } from "@/lib/patients/create";
 import { getPatientPagination, type PatientListQuery } from "@/lib/patients/query";
 import { logger } from "@/lib/logger";
@@ -8,6 +9,19 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
 type PatientRow = Database["public"]["Tables"]["patients"]["Row"];
+type SchedulingPatient = Database["public"]["Functions"]["search_patient_names_for_scheduling"]["Returns"][number];
+type SchedulingPatientRpcClient = {
+  rpc(
+    fn: "search_patient_names_for_scheduling",
+    args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query: string; p_limit: number }
+  ): Promise<{ data: SchedulingPatient[] | null; error: { code: string } | null }>;
+};
+type SchedulingEligibilityRpcClient = {
+  rpc(
+    fn: "is_patient_eligible_for_scheduling",
+    args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_patient_id: string }
+  ): Promise<{ data: boolean | null; error: { code: string } | null }>;
+};
 
 export type PatientListItem = Pick<
   PatientRow,
@@ -125,4 +139,61 @@ export async function isPatientAvailableForActiveTenant(patientId: string): Prom
     .eq("id", patientId)
     .maybeSingle();
   return !result.error && Boolean(result.data);
+}
+
+/** Revalidates the exact pair in PostgreSQL under the authenticated actor and active clinic. */
+export async function isPatientEligibleForSchedulingWithProfessionalActiveTenant(patientId: string, professionalClinicMemberId: string): Promise<boolean> {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return false;
+  const client = await createClient() as unknown as SchedulingEligibilityRpcClient;
+  const result = await client.rpc("is_patient_eligible_for_scheduling", {
+    p_clinic_id: context.tenant.clinic.id,
+    p_professional_clinic_member_id: professionalClinicMemberId,
+    p_patient_id: patientId
+  });
+  if (result.error) {
+    logger.error("Assistant patient eligibility check failed", { component: "appointment_assistant", code: result.error.code });
+    return false;
+  }
+  return result.data === true;
+}
+
+/** Name-only assistant search under the authenticated actor and active clinic. */
+export async function searchAssistantPatientNamesForActiveTenant(rawQuery: unknown, professionalClinicMemberId?: string) {
+  const query = parseAssistantPatientQuery(rawQuery);
+  if (!query) return { state: "invalid_query" as const, data: null };
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: context.state, data: null };
+  if (context.tenant.membership.role === "doctor" && professionalClinicMemberId && professionalClinicMemberId !== context.tenant.membership.id) {
+    return { state: "forbidden" as const, data: null };
+  }
+
+  if (professionalClinicMemberId) {
+    const client = await createClient() as unknown as SchedulingPatientRpcClient;
+    const result = await client.rpc("search_patient_names_for_scheduling", {
+      p_clinic_id: context.tenant.clinic.id,
+      p_professional_clinic_member_id: professionalClinicMemberId,
+      p_query: query,
+      p_limit: ASSISTANT_PATIENT_SUGGESTION_LIMIT + 1
+    });
+    if (result.error) {
+      logger.error("Assistant professional patient lookup failed", { component: "appointment_assistant", code: result.error.code });
+      return { state: "error" as const, data: null };
+    }
+    const patients = (result.data ?? []).map((patient) => ({ id: patient.patient_id, name: patient.display_name }));
+    return { state: "ready" as const, data: { patients: patients.slice(0, ASSISTANT_PATIENT_SUGGESTION_LIMIT), hasMore: patients.length > ASSISTANT_PATIENT_SUGGESTION_LIMIT } };
+  }
+
+  let search = (await createClient())
+    .from("patients")
+    .select("id, full_name")
+    .eq("clinic_id", context.tenant.clinic.id);
+  for (const term of query.split(" ")) search = search.ilike("full_name", `%${term}%`);
+  const result = await search.order("full_name", { ascending: true }).limit(ASSISTANT_PATIENT_SUGGESTION_LIMIT + 1);
+  if (result.error) {
+    logger.error("Assistant patient name lookup failed", { component: "appointment_assistant", code: result.error.code });
+    return { state: "error" as const, data: null };
+  }
+  const patients = ((result.data ?? []) as Pick<PatientRow, "id" | "full_name">[]).map((patient) => ({ id: patient.id, name: patient.full_name }));
+  return { state: "ready" as const, data: { patients: patients.slice(0, ASSISTANT_PATIENT_SUGGESTION_LIMIT), hasMore: patients.length > ASSISTANT_PATIENT_SUGGESTION_LIMIT } };
 }

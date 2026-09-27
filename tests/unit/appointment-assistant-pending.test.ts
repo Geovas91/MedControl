@@ -51,6 +51,7 @@ function mountAssistant(overrides: {
     exports,
     require: (name: string) => {
       if (name === "react") return {
+        useEffect: () => {},
         useState: (initial: unknown) => {
           const slot = cursor++;
           if (!(slot in state)) state[slot] = initial;

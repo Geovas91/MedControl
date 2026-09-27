@@ -1,6 +1,7 @@
 import { isAllowedAppointmentDuration, isValidAppointmentTime } from "@/lib/appointments/create";
 import { isCanonicalAppointmentDate, isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { parseAssistantText, parseDateExpression, parseTimeExpression, resolveSchedulingDateExpression } from "@/lib/assistant/parser/deterministic";
+import { parseAssistantPatientQuery } from "./patient-selection";
 import type { AssistantIntent } from "./intents";
 import type { AssistantStructuredChoice } from "./structured-selection";
 
@@ -169,9 +170,10 @@ export function parseSchedulingContextPatch(message: string, context: AssistantC
     ? stripSchedulingSuffix(professionalText.replace(/^(?:el|la)\s+/, ""))
     : undefined;
   const patientText = /^(?:mejor\s+)?para\s+(.{2,100})$/i.exec(text)?.[1]?.trim()
-    ?? /^(?:agenda|agendar)\s+(?:una\s+cita\s+)?a\s+(.{2,100})$/i.exec(text)?.[1]?.trim();
+    ?? /^(?:agenda|agendar)\s+(?:una\s+cita\s+)?a\s+(.{2,100})$/i.exec(text)?.[1]?.trim()
+    ?? (context.activeIntent === "create_appointment" && !context.focusedPatientRef ? /^con\s+(.{2,100})$/i.exec(text)?.[1]?.trim() : undefined);
   const patientCandidate = patientText && !/^(?:ese|esa)\s+paciente$/i.test(patientText) ? stripSchedulingSuffix(patientText) : undefined;
-  const patientQuery = patientCandidate && !/^(?:el|este|pr[oó]ximo)$/i.test(patientCandidate) && !parseDateExpression(patientCandidate, today) ? patientCandidate : undefined;
+  const patientQuery = patientCandidate && !/^(?:el|este|pr[oó]ximo)$/i.test(patientCandidate) && !parseDateExpression(patientCandidate, today) ? parseAssistantPatientQuery(patientCandidate) ?? undefined : undefined;
   let timeCandidate = parseTimeExpression(text) ?? undefined;
   if (!timeCandidate) {
     const names: Record<string, number> = { una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12 };
@@ -182,9 +184,12 @@ export function parseSchedulingContextPatch(message: string, context: AssistantC
     const shortHour = /\ba\s+las?\s+([1-8])(?:\s|$)/.exec(plain)?.[1];
     if (shortHour) timeCandidate = `${String(Number(shortHour) + 12).padStart(2, "0")}:00`;
   }
+  const standalonePatient = context.activeIntent === "create_appointment" && !context.focusedPatientRef && !availability && !dateCandidate && !timeCandidate && !professionalQuery && !anotherProfessional
+    ? parseAssistantPatientQuery(text) ?? undefined
+    : undefined;
   if (availability) return { state: "patch", patch: { turnIntent: "request_availability", ...(dateCandidate ? { dateCandidate } : {}), ...(professionalQuery ? { professionalQuery } : {}) } };
   if (professionalQuery || anotherProfessional) return { state: "patch", patch: { turnIntent: context.focusedProfessionalRef ? "change_professional" : "select_professional", professionalQuery: professionalQuery ?? null, ...(dateCandidate ? { dateCandidate } : {}), ...(timeCandidate ? { timeCandidate } : {}) } };
-  if (patientQuery) return { state: "patch", patch: { turnIntent: context.focusedPatientRef ? "change_patient" : "select_patient", patientQuery, ...(dateCandidate ? { dateCandidate } : {}), ...(timeCandidate ? { timeCandidate } : {}) } };
+  if (patientQuery || standalonePatient) return { state: "patch", patch: { turnIntent: context.focusedPatientRef ? "change_patient" : "select_patient", patientQuery: patientQuery ?? standalonePatient, ...(dateCandidate ? { dateCandidate } : {}), ...(timeCandidate ? { timeCandidate } : {}) } };
   if (dateCandidate) return { state: "patch", patch: { turnIntent: context.localDate ? "change_date" : "provide_date", dateCandidate } };
   if (timeCandidate && (context.activeIntent === "create_appointment" || context.activeIntent === "reschedule_appointment")) return { state: "patch", patch: { turnIntent: context.startTime ? "change_time" : "provide_time", timeCandidate } };
   return { state: "none" };
