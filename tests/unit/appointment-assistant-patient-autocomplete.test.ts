@@ -74,7 +74,7 @@ test("patient patch preserves professional, date, time and duration", () => {
   }
 });
 
-type PatientFixture = { id: string; full_name: string; clinic_id: string; assignedTo: string[] };
+type PatientFixture = { id: string; full_name: string; clinic_id: string; assignedTo: string[]; archived?: boolean };
 
 function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "admin" | "owner"; rows: PatientFixture[] }) {
   const calls: Array<[string, ...unknown[]]> = [];
@@ -82,13 +82,13 @@ function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "adm
   const terms: string[] = [];
   let limit = 0;
   const builder = {
-    select: (columns: string) => { calls.push(["select", columns]); return builder; },
+    select: (columns: string) => { calls.push(["select", columns]); terms.length = 0; return builder; },
     eq: (column: string, value: string) => { calls.push(["eq", column, value]); if (column === "clinic_id") clinicFilter = value; return builder; },
     ilike: (column: string, pattern: string) => { calls.push(["ilike", column, pattern]); terms.push(pattern.slice(1, -1).toLocaleLowerCase("es-MX")); return builder; },
     order: (column: string) => { calls.push(["order", column]); return builder; },
     limit: (count: number) => {
       calls.push(["limit", count]); limit = count;
-      const data = rows.filter((row) => row.clinic_id === clinicFilter && (role !== "doctor" || row.assignedTo.includes(doctorId))
+      const data = rows.filter((row) => row.clinic_id === clinicFilter && !row.archived && (role !== "doctor" || row.assignedTo.includes(doctorId))
         && terms.every((term) => row.full_name.toLocaleLowerCase("es-MX").includes(term)))
         .sort((a, b) => a.full_name.localeCompare(b.full_name)).slice(0, limit)
         .map(({ id, full_name }) => ({ id, full_name }));
@@ -99,7 +99,19 @@ function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "adm
     "server-only": {},
     "@/lib/assistant/orchestration/patient-selection": { ASSISTANT_PATIENT_SUGGESTION_LIMIT, parseAssistantPatientQuery },
     "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready", tenant: { clinic: { id: clinicId }, membership: { id: doctorId, role } } }) },
-    "@/lib/supabase/server": { createClient: async () => ({ from: (table: string) => { calls.push(["from", table]); return builder; } }) },
+    "@/lib/supabase/server": { createClient: async () => ({
+      from: (table: string) => { calls.push(["from", table]); return builder; },
+      rpc: async (name: string, args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query: string; p_limit: number }) => {
+        calls.push(["rpc", name, args]);
+        const terms = args.p_query.toLocaleLowerCase("es-MX").split(" ");
+        const data = rows.filter((row) => row.clinic_id === args.p_clinic_id && !row.archived
+          && terms.every((term) => row.full_name.toLocaleLowerCase("es-MX").includes(term))
+          && (row.assignedTo.includes(args.p_professional_clinic_member_id) || role !== "doctor" && row.assignedTo.length === 0))
+          .sort((a, b) => a.full_name.localeCompare(b.full_name)).slice(0, Math.min(args.p_limit, 9))
+          .map((row) => ({ patient_id: row.id, display_name: row.full_name }));
+        return { data, error: null };
+      }
+    }) },
     "@/lib/logger": { logger: { error: () => {} } }
   };
   const source = readFileSync("lib/server/patients.ts", "utf8");
@@ -113,36 +125,48 @@ const fixtures: PatientFixture[] = [
   { id: patientId, full_name: "Juan Pérez González", clinic_id: clinicId, assignedTo: [doctorId] },
   { id: otherPatientId, full_name: "Juana Pérez López", clinic_id: clinicId, assignedTo: [anotherDoctorId] },
   { id: "77777777-7777-4777-8777-777777777777", full_name: "Juan Carlos Martínez", clinic_id: clinicId, assignedTo: [] },
-  { id: "88888888-8888-4888-8888-888888888888", full_name: "Juan Cross Tenant", clinic_id: "99999999-9999-4999-8999-999999999999", assignedTo: [doctorId] }
+  { id: "88888888-8888-4888-8888-888888888888", full_name: "Juan Cross Tenant", clinic_id: "99999999-9999-4999-8999-999999999999", assignedTo: [doctorId] },
+  { id: "99999999-9999-4999-8999-999999999998", full_name: "Juan Shared", clinic_id: clinicId, assignedTo: [doctorId, anotherDoctorId] },
+  { id: "99999999-9999-4999-8999-999999999997", full_name: "Juan Archived", clinic_id: clinicId, assignedTo: [], archived: true }
 ];
 
-test("name-only lookup supports partial, case-insensitive and surname terms", async () => {
+test("without a selected professional, name-only lookup retains the existing RLS directory", async () => {
   const { search, calls } = loadPatientSearch({ role: "admin", rows: fixtures });
-  const juan = await search("juan", doctorId);
+  const juan = await search("juan");
   assert.equal(juan.state, "ready");
-  assert.equal(juan.data.patients.length, 3);
+  assert.equal(juan.data.patients.length, 4);
   assert.ok(juan.data.patients.every((row: Record<string, unknown>) => Object.keys(row).sort().join() === "id,name"));
   assert.deepEqual(calls.find((call) => call[0] === "select"), ["select", "id, full_name"]);
   assert.deepEqual(calls.find((call) => call[0] === "eq"), ["eq", "clinic_id", clinicId]);
-  assert.equal((await search("Pérez", doctorId)).data.patients.length, 2);
-  assert.equal((await search("Juan Pérez G", doctorId)).data.patients.length, 1);
-  assert.equal((await search("Nadie", doctorId)).data.patients.length, 0);
+  assert.equal((await search("Pérez")).data.patients.length, 2);
+  assert.equal((await search("Juan Pérez G")).data.patients.length, 1);
+  assert.equal((await search("Nadie")).data.patients.length, 0);
+  assert.equal(calls.some((call) => call[0] === "rpc"), false);
+});
+
+test("selected professional uses the scoped RPC, preserving unassigned and multi-assigned patients", async () => {
+  const { search, calls } = loadPatientSearch({ role: "owner", rows: fixtures });
+  const result = await search("juan", doctorId);
+  assert.deepEqual(result.data.patients.map((row: { id: string }) => row.id).sort(), [patientId, fixtures[2].id, fixtures[4].id].sort());
+  assert.ok(!result.data.patients.some((row: { id: string }) => row.id === otherPatientId || row.id === fixtures[3].id || row.id === fixtures[5].id));
+  assert.equal(calls.filter((call) => call[0] === "rpc").length, 1);
+  assert.equal(calls.some((call) => call[0] === "from"), false);
 });
 
 test("doctor lookup remains in own patient RLS scope and rejects another professional", async () => {
   const { search, calls } = loadPatientSearch({ role: "doctor", rows: fixtures });
   const result = await search("Juan", doctorId);
-  assert.deepEqual(result.data.patients.map((row: { id: string }) => row.id), [patientId]);
+  assert.deepEqual(result.data.patients.map((row: { id: string }) => row.id).sort(), [patientId, fixtures[4].id].sort());
   assert.equal((await search("Juan", anotherDoctorId)).state, "forbidden");
-  assert.equal(calls.some((call) => call[0] === "from" && call[1] !== "patients"), false);
+  assert.equal(calls.filter((call) => call[0] === "rpc").length, 1);
 });
 
-test("assistant keeps clinic-wide scheduling directory including unassigned first appointments", async () => {
+test("assistant sees selected professional patients plus unassigned first appointments", async () => {
   const { search } = loadPatientSearch({ role: "assistant", rows: fixtures });
   const result = await search("Juan", doctorId);
   assert.equal(result.data.patients.length, 3);
   assert.ok(result.data.patients.some((row: { id: string }) => row.id === fixtures[2].id));
-  assert.ok(!result.data.patients.some((row: { id: string }) => row.id === fixtures[3].id));
+  assert.ok(!result.data.patients.some((row: { id: string }) => row.id === otherPatientId || row.id === fixtures[3].id));
 });
 
 test("lookup is bounded to eight suggestions, with more flag", async () => {
@@ -159,10 +183,10 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   let prepared = 0;
   let executed = 0;
   let lookupCalls = 0;
-  const search = async (query: unknown) => {
+  const search = async (query: unknown, professional?: string) => {
     lookupCalls++;
     const value = String(query).toLocaleLowerCase("es-MX");
-    return { state: "ready", data: { patients: fixtures.filter((row) => row.clinic_id === clinicId && row.full_name.toLocaleLowerCase("es-MX").includes(value)).map((row) => ({ id: row.id, name: row.full_name })), hasMore: false } };
+    return { state: "ready", data: { patients: fixtures.filter((row) => row.clinic_id === clinicId && !row.archived && row.full_name.toLocaleLowerCase("es-MX").includes(value) && (!professional || row.assignedTo.includes(professional) || row.assignedTo.length === 0)).map((row) => ({ id: row.id, name: row.full_name })), hasMore: false } };
   };
   const readTool = async (name: string) => {
     if (name === "get_professionals") return { ok: true, data: [{ professional_clinic_member_id: doctorId, professional_user_id: actorId, display_name: "QA Doctor" }] };
