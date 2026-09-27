@@ -27,7 +27,7 @@ import {
   type AssistantProposal
 } from "@/lib/assistant/tools/registry";
 import { saveAppointmentAssistantSettingsForActiveTenant } from "@/lib/server/appointment-assistant";
-import { isPatientAvailableForActiveTenant } from "@/lib/server/patients";
+import { isPatientAvailableForActiveTenant, searchAssistantPatientNamesForActiveTenant } from "@/lib/server/patients";
 import { getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, parseSchedulingContextPatch, reconcileSchedulingContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
@@ -92,14 +92,14 @@ function matchingAppointments(rows: ReadAppointment[], query?: string) {
   return rows.filter((row) => `${row.patient_display_name} ${row.professional_display_name ?? ""}`.toLocaleLowerCase("es-MX").includes(needle));
 }
 
-async function resolvePatient(query: string | undefined) {
+async function resolvePatient(query: string | undefined, professionalClinicMemberId?: string) {
   if (!query) return { state: "missing" as const };
-  const result = await readTool<ReadPatient[]>("search_patients", { query });
-  if (!result.ok) return { state: "error" as const, response: safeToolError(result) };
-  const resolved = resolveUniqueEntity(result.data.map((patient) => ({ id: patient.patient_id, label: patient.display_name })));
-  if (resolved.state === "NEEDS_INPUT") return { state: "none" as const, response: { state: "message", message: `No encontré un paciente que coincida con “${query}”.` } satisfies AssistantUiResponse };
-  if (resolved.state === "AMBIGUOUS") return { state: "ambiguous" as const, response: { state: "choices", field: "patient", message: "Encontré más de un paciente con ese nombre. ¿Cuál quieres usar?", choices: result.data.slice(0, 10).map((patient) => ({ id: patient.patient_id, label: patient.display_name, choice: { kind: "patient" as const, label: patient.display_name, reference: patient.patient_id } })) } satisfies AssistantUiResponse };
-  return { state: "ready" as const, id: resolved.value.id, label: resolved.value.label };
+  const result = await searchAssistantPatientNamesForActiveTenant(query, professionalClinicMemberId);
+  if (result.state === "invalid_query") return { state: "none" as const, response: { state: "message", message: "Indica al menos dos caracteres del nombre del paciente." } satisfies AssistantUiResponse };
+  if (result.state !== "ready") return { state: "error" as const, response: { state: "error", message: "No fue posible buscar pacientes. Intenta de nuevo." } satisfies AssistantUiResponse };
+  if (!result.data.patients.length) return { state: "none" as const, response: { state: "message", message: "No encontré pacientes con ese nombre en tu clínica y ámbito de acceso." } satisfies AssistantUiResponse };
+  if (result.data.patients.length > 1 || result.data.hasMore) return { state: "ambiguous" as const, response: { state: "choices", field: "patient", message: result.data.hasMore ? "Encontré varias coincidencias. Refina el nombre si no aparece el paciente." : "Encontré más de un paciente con ese nombre. ¿Cuál quieres usar?", choices: result.data.patients.map((patient) => ({ id: patient.id, label: patient.name, choice: { kind: "patient" as const, label: patient.name, reference: patient.id } })) } satisfies AssistantUiResponse };
+  return { state: "ready" as const, id: result.data.patients[0].id, label: result.data.patients[0].name };
 }
 
 async function resolveProfessional(query: string | undefined) {
@@ -208,7 +208,7 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
       : intent;
     const patient = workingIntent.patientId
       ? { state: "ready" as const, id: workingIntent.patientId, label: "Paciente" }
-      : workingIntent.patientQuery ? await resolvePatient(workingIntent.patientQuery) : null;
+      : workingIntent.patientQuery ? await resolvePatient(workingIntent.patientQuery, workingIntent.professionalClinicMemberId) : null;
     if (patient && patient.state !== "ready") return patient.state === "missing" ? { state: "message", message: "¿Con qué paciente quieres agendarla?" } : patient.response;
     const professional = workingIntent.professionalClinicMemberId
       ? { state: "ready" as const, id: workingIntent.professionalClinicMemberId, label: defaultProfessionalId ? "Tú" : "Profesional" }
@@ -399,6 +399,21 @@ async function loadAssistantContext(raw: unknown) {
   catch { checked = { context: newAssistantConversationContext(scope), reason: "invalidated" as const }; }
   if (checked.reason !== "continued") logger.info(`assistant_context_${checked.reason === "created" ? "created" : checked.reason === "expired" ? "expired" : "invalidated"}`, { reason_code: checked.reason });
   return { ok: true as const, context: checked.context, reason: checked.reason, scope, validators, timeZone: actor.data.timeZone, today: getClinicDayRange(actor.data.timeZone).localDate, ttl };
+}
+
+/** A read-only, bounded name lookup for the current patient-selection step. */
+export async function searchAssistantPatientSuggestionsAction(query: unknown, rawContext: unknown) {
+  const loaded = await loadAssistantContext(rawContext);
+  if (!loaded.ok || loaded.reason !== "continued" || loaded.context.activeIntent !== "create_appointment" || loaded.context.focusedPatientRef) {
+    return { state: "unavailable" as const, suggestions: [] };
+  }
+  const result = await searchAssistantPatientNamesForActiveTenant(query, loaded.context.focusedProfessionalRef);
+  if (result.state !== "ready") return { state: "unavailable" as const, suggestions: [] };
+  return {
+    state: "ready" as const,
+    suggestions: result.data.patients.map((patient) => ({ id: patient.id, name: patient.name, choice: { kind: "patient" as const, label: patient.name, reference: patient.id } })),
+    hasMore: result.data.hasMore
+  };
 }
 
 /** The browser carries only bounded, ephemeral UX state. Every canonical reference is re-read under the current actor and tenant. */

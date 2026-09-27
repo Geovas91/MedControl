@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ASSISTANT_PATIENT_SUGGESTION_LIMIT, parseAssistantPatientQuery } from "@/lib/assistant/orchestration/patient-selection";
 import { canCreatePatients } from "@/lib/patients/create";
 import { getPatientPagination, type PatientListQuery } from "@/lib/patients/query";
 import { logger } from "@/lib/logger";
@@ -125,4 +126,28 @@ export async function isPatientAvailableForActiveTenant(patientId: string): Prom
     .eq("id", patientId)
     .maybeSingle();
   return !result.error && Boolean(result.data);
+}
+
+/** Name-only assistant search. The authenticated client keeps patient RLS in force. */
+export async function searchAssistantPatientNamesForActiveTenant(rawQuery: unknown, professionalClinicMemberId?: string) {
+  const query = parseAssistantPatientQuery(rawQuery);
+  if (!query) return { state: "invalid_query" as const, data: null };
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: context.state, data: null };
+  if (context.tenant.membership.role === "doctor" && professionalClinicMemberId && professionalClinicMemberId !== context.tenant.membership.id) {
+    return { state: "forbidden" as const, data: null };
+  }
+
+  let search = (await createClient())
+    .from("patients")
+    .select("id, full_name")
+    .eq("clinic_id", context.tenant.clinic.id);
+  for (const term of query.split(" ")) search = search.ilike("full_name", `%${term}%`);
+  const result = await search.order("full_name", { ascending: true }).limit(ASSISTANT_PATIENT_SUGGESTION_LIMIT + 1);
+  if (result.error) {
+    logger.error("Assistant patient name lookup failed", { component: "appointment_assistant", code: result.error.code });
+    return { state: "error" as const, data: null };
+  }
+  const patients = ((result.data ?? []) as Pick<PatientRow, "id" | "full_name">[]).map((patient) => ({ id: patient.id, name: patient.full_name }));
+  return { state: "ready" as const, data: { patients: patients.slice(0, ASSISTANT_PATIENT_SUGGESTION_LIMIT), hasMore: patients.length > ASSISTANT_PATIENT_SUGGESTION_LIMIT } };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { CalendarClock, Check, Clock3, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { appointmentStatuses, getAppointmentStatusLabel, type AppointmentStatus } from "@/lib/appointments/query";
@@ -10,6 +10,7 @@ import {
   planAssistantConversationWithContextAction,
   submitAssistantIntentWithContextAction,
   selectAssistantResultWithContextAction,
+  searchAssistantPatientSuggestionsAction,
   submitAssistantContextualHelperWithContextAction,
   type AssistantUiResponse
 } from "@/app/dashboard/bot/actions";
@@ -20,6 +21,7 @@ import { intentFromAssistantContext, type AssistantConversationContext } from "@
 
 type Message = { id: number; author: "user" | "assistant"; text: string; response?: AssistantUiResponse };
 type Props = { today: string; timeZone: string; llmEnabled: boolean };
+type PatientSuggestion = { id: string; name: string; choice: Extract<AssistantStructuredChoice, { kind: "patient" }> };
 const SAFE_SUBMIT_ERROR = "No fue posible procesar la solicitud. Intenta de nuevo.";
 const ASSISTANT_PENDING_LABEL = "El asistente está procesando la solicitud.";
 
@@ -60,12 +62,35 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
   const [pendingIntent, setPendingIntent] = useState<AssistantIntent | null>(null);
   const [conversationContext, setConversationContext] = useState<AssistantConversationContext | null>(null);
   const [proposal, setProposal] = useState<Extract<AssistantUiResponse, { state: "proposal" }> | null>(null);
+  const [patientSuggestions, setPatientSuggestions] = useState<PatientSuggestion[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [isSuggesting, startSuggestionTransition] = useTransition();
   const nextId = useRef(2);
   const pendingRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
   const restoreInputFocus = useRef(false);
   const contextRef = useRef<AssistantConversationContext | null>(null);
+  const patientSearchQuery = value.replace(/^(?:para|con)\s+/i, "").trim();
+  const canSuggestPatients = conversationContext?.activeIntent === "create_appointment" && !conversationContext.focusedPatientRef && !proposal && !isPending;
+
+  useEffect(() => {
+    if (!canSuggestPatients || patientSearchQuery.length < 2) {
+      return;
+    }
+    let current = true;
+    const timer = window.setTimeout(() => {
+      startSuggestionTransition(async () => {
+        try {
+          const result = await searchAssistantPatientSuggestionsAction(patientSearchQuery, conversationContext);
+          if (current) setPatientSuggestions(result.state === "ready" ? result.suggestions : []);
+        } catch {
+          if (current) setPatientSuggestions([]);
+        }
+      });
+    }, 300);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [canSuggestPatients, conversationContext, patientSearchQuery]);
 
   const keepContext = (context: AssistantConversationContext | null) => {
     contextRef.current = context;
@@ -77,6 +102,7 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     nextId.current = 2;
     setMessages([{ id: 1, author: "assistant", text: "Hola, ¿qué quieres hacer con tu agenda?" }]);
     setValue("");
+    setPatientSuggestions([]);
     setPendingIntent(null);
     setProposal(null);
     keepContext(null);
@@ -150,6 +176,7 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
     if (!text || isPending || pendingRef.current) return;
     if (isConversationResetCommand(text) || /^nueva conversaci[oó]n$/i.test(text)) { resetConversation(); return; }
     setValue("");
+    setPatientSuggestions([]);
     append({ author: "user", text });
     const helper = pendingIntent ? classifyContextualHelper(pendingIntent, text) : null;
     if (helper) { void submitIntent(pendingIntent!, text, helper, { userMessageAdded: true }); return; }
@@ -177,6 +204,12 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
       append({ author: "assistant", text: responseText(response), response });
       applyResponse(response, result.context ? intentFromAssistantContext(result.context) : null);
     });
+  };
+
+  const choosePatientSuggestion = (choice: PatientSuggestion["choice"]) => {
+    setValue("");
+    setPatientSuggestions([]);
+    choose(choice);
   };
 
   const confirm = () => {
@@ -212,7 +245,7 @@ export function AppointmentAssistant({ today, timeZone, llmEnabled }: Props) {
         {proposal ? <div className="glass-card mt-2 border-2 border-[var(--clinic)] p-4" aria-label="Propuesta pendiente de confirmación"><p className="text-xs font-bold uppercase tracking-wide text-clinic">Propuesta pendiente</p><h3 className="mt-1 text-lg font-bold text-ink">{proposal.action}</h3><dl className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">{proposal.patient ? <div><dt className="font-semibold">Paciente</dt><dd>{proposal.patient}</dd></div> : null}{proposal.professional ? <div><dt className="font-semibold">Profesional</dt><dd>{proposal.professional}</dd></div> : null}{proposal.date ? <div><dt className="font-semibold">Fecha</dt><dd>{formatDate(proposal.date, timeZone)}</dd></div> : null}{proposal.time ? <div><dt className="font-semibold">Horario</dt><dd>{proposal.time}</dd></div> : null}{proposal.previous ? <div><dt className="font-semibold">Cita actual</dt><dd>{isNaN(Date.parse(proposal.previous)) ? proposal.previous : formatInstant(proposal.previous, timeZone)}</dd></div> : null}</dl><p className="mt-3 text-xs text-slate-500">Esta propuesta expira en unos minutos y sólo se ejecutará después de confirmar.</p><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={confirm} disabled={isPending}><Check className="h-4 w-4" />Confirmar</Button><Button type="button" variant="secondary" onClick={cancel} disabled={isPending}><X className="h-4 w-4" />Cancelar</Button></div></div> : null}
       </div>
       <div className="mt-5 flex flex-wrap gap-2">{["Agendar una cita", "Ver disponibilidad", "Reprogramar una cita", "Cancelar una cita", "Ver citas de hoy"].map((prompt) => <Button key={prompt} type="button" variant="ghost" className="min-h-9 text-xs" onClick={() => submit(prompt)} disabled={isPending}>{prompt}</Button>)}</div>
-      <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); submit(); }}><label htmlFor="assistant-request" className="sr-only">Escribe una solicitud</label><input ref={inputRef} id="assistant-request" value={value} onChange={(event) => setValue(event.target.value)} placeholder="Escribe una solicitud..." className="glass-input min-h-11 min-w-0 flex-1 rounded-xl px-4 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clinic" disabled={isPending} /><Button type="submit" disabled={isPending || !value.trim()}><Send className="h-4 w-4" />Enviar</Button></form>
+      <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); submit(); }}><div className="relative min-w-0 flex-1"><label htmlFor="assistant-request" className="sr-only">Escribe una solicitud</label><input ref={inputRef} id="assistant-request" value={value} onChange={(event) => { setValue(event.target.value); setPatientSuggestions([]); }} onKeyDown={(event) => { if (event.key === "Escape") setPatientSuggestions([]); if (event.key === "ArrowDown" && patientSuggestions.length) { event.preventDefault(); suggestionsRef.current?.querySelector("button")?.focus(); } }} placeholder="Escribe una solicitud..." className="glass-input min-h-11 w-full min-w-0 rounded-xl px-4 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clinic" disabled={isPending} />{canSuggestPatients && patientSearchQuery.length >= 2 && (patientSuggestions.length > 0 || isSuggesting) ? <div ref={suggestionsRef} role="group" aria-label="Sugerencias de pacientes" className="glass-floating absolute inset-x-0 top-full z-20 mt-2 max-h-72 overflow-y-auto rounded-xl border border-[var(--glass-border)] bg-white/95 p-2 shadow-xl">{isSuggesting ? <p className="px-2 py-1 text-xs text-slate-600" role="status">Buscando pacientes…</p> : null}{patientSuggestions.map((patient) => <button key={patient.id} type="button" className="min-h-11 w-full rounded-lg px-3 py-2 text-left text-sm text-ink hover:bg-[var(--clinic-soft)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clinic" onClick={() => choosePatientSuggestion(patient.choice)} onKeyDown={(event) => { if (event.key === "Escape") { setPatientSuggestions([]); inputRef.current?.focus(); } }} >{patient.name}</button>)}</div> : null}</div><Button type="submit" disabled={isPending || !value.trim()}><Send className="h-4 w-4" />Enviar</Button></form>
     </section>
   );
 }
