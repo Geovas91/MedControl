@@ -108,6 +108,11 @@ function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "adm
           return { data: Boolean(row && (role !== "doctor" || args.p_professional_clinic_member_id === doctorId)
             && (row.assignedTo.includes(args.p_professional_clinic_member_id) || role !== "doctor" && row.assignedTo.length === 0)), error: null };
         }
+        if (name === "list_patient_eligible_professionals_for_scheduling") {
+          const patient = rows.find((row) => row.id === args.p_patient_id && row.clinic_id === args.p_clinic_id && !row.archived);
+          const ids = !patient ? [] : patient.assignedTo.length ? patient.assignedTo : role === "doctor" ? [] : [doctorId, anotherDoctorId];
+          return { data: (role === "doctor" ? ids.filter((id) => id === doctorId) : ids).map((professional_clinic_member_id) => ({ professional_clinic_member_id })), error: null };
+        }
         if (name !== "search_patient_names_for_scheduling" || !args.p_query || !args.p_limit) throw new Error(`Unexpected RPC: ${name}`);
         const terms = args.p_query.toLocaleLowerCase("es-MX").split(" ");
         const data = rows.filter((row) => row.clinic_id === args.p_clinic_id && !row.archived
@@ -124,7 +129,7 @@ function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "adm
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const actions: Record<string, (...args: unknown[]) => Promise<any>> = {};
   runInNewContext(output, { exports: actions, require: (name: string) => mocks[name] ?? {} });
-  return { search: actions.searchAssistantPatientNamesForActiveTenant, eligible: actions.isPatientEligibleForSchedulingWithProfessionalActiveTenant, calls };
+  return { search: actions.searchAssistantPatientNamesForActiveTenant, eligible: actions.isPatientEligibleForSchedulingWithProfessionalActiveTenant, eligibleProfessionals: actions.getPatientEligibleProfessionalIdsForSchedulingActiveTenant, calls };
 }
 
 const fixtures: PatientFixture[] = [
@@ -185,6 +190,19 @@ test("server helper sends only the active clinic and exact pair to the eligibili
   ]);
 });
 
+test("professional suggestion helper uses one authenticated patient-scoped RPC in the active clinic", async () => {
+  const { eligibleProfessionals, calls } = loadPatientSearch({ role: "assistant", rows: fixtures });
+  assert.deepEqual(JSON.parse(JSON.stringify((await eligibleProfessionals(otherPatientId)).ids)), [anotherDoctorId]);
+  assert.deepEqual(JSON.parse(JSON.stringify((await eligibleProfessionals(fixtures[2].id)).ids)), [doctorId, anotherDoctorId]);
+  assert.deepEqual(JSON.parse(JSON.stringify((await eligibleProfessionals(fixtures[3].id)).ids)), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.filter((call) => call[0] === "rpc"))), [
+    ["rpc", "list_patient_eligible_professionals_for_scheduling", { p_clinic_id: clinicId, p_patient_id: otherPatientId }],
+    ["rpc", "list_patient_eligible_professionals_for_scheduling", { p_clinic_id: clinicId, p_patient_id: fixtures[2].id }],
+    ["rpc", "list_patient_eligible_professionals_for_scheduling", { p_clinic_id: clinicId, p_patient_id: fixtures[3].id }]
+  ]);
+  assert.equal(calls.some((call) => call[0] === "from"), false, "helper does not read assignment rows directly");
+});
+
 test("lookup is bounded to eight suggestions, with more flag", async () => {
   const rows = Array.from({ length: 12 }, (_, i) => ({ id: `test-${i}`, full_name: `Juan ${i}`, clinic_id: clinicId, assignedTo: [] }));
   const { search, calls } = loadPatientSearch({ role: "owner", rows });
@@ -201,6 +219,14 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   let lookupCalls = 0;
   let professionalLookupCalls = 0;
   let activeRole: "owner" | "admin" | "assistant" | "doctor" = "assistant";
+  let eligibleLookupFails = false;
+  let eligibleLookupCalls = 0;
+  const professionals = [
+    { professional_clinic_member_id: doctorId, professional_user_id: actorId, display_name: "QA Doctor 1 Norte" },
+    { professional_clinic_member_id: anotherDoctorId, professional_user_id: anotherDoctorId, display_name: "QA Doctor 2 Norte" },
+    ...Array.from({ length: 8 }, (_, index) => ({ professional_clinic_member_id: `70000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, professional_user_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, display_name: `QA Doctor ${index + 3} Norte` })),
+    { professional_clinic_member_id: "70000000-0000-4000-8000-000000000011", professional_user_id: "80000000-0000-4000-8000-000000000011", display_name: "José García" }
+  ];
   const eligibilityCalls: Array<[string, string]> = [];
   const eligible = async (id: string, professional: string) => {
     eligibilityCalls.push([id, professional]);
@@ -216,12 +242,6 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   const readTool = async (name: string) => {
     if (name === "get_professionals") {
       professionalLookupCalls++;
-      const professionals = [
-        { professional_clinic_member_id: doctorId, professional_user_id: actorId, display_name: "QA Doctor 1 Norte" },
-        { professional_clinic_member_id: anotherDoctorId, professional_user_id: anotherDoctorId, display_name: "QA Doctor 2 Norte" },
-        ...Array.from({ length: 8 }, (_, index) => ({ professional_clinic_member_id: `70000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, professional_user_id: `80000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, display_name: `QA Doctor ${index + 3} Norte` })),
-        { professional_clinic_member_id: "70000000-0000-4000-8000-000000000011", professional_user_id: "80000000-0000-4000-8000-000000000011", display_name: "José García" }
-      ];
       return { ok: true, data: activeRole === "doctor" ? professionals.filter((professional) => professional.professional_clinic_member_id === doctorId) : professionals };
     }
     if (name === "get_available_slots") return { ok: true, data: [{ local_start: "10:30", local_end: "11:00" }] };
@@ -245,7 +265,19 @@ test("autocomplete and structured patient choice avoid the planner and only prep
     },
     "@/lib/appointments/query": { isCanonicalAppointmentUuid },
     "@/lib/dashboard/timezone": { getClinicDayRange: () => ({ localDate: today }) },
-    "@/lib/server/patients": { isPatientAvailableForActiveTenant: async (id: string) => fixtures.some((row) => row.id === id && row.clinic_id === clinicId && !row.archived), isPatientEligibleForSchedulingWithProfessionalActiveTenant: eligible, searchAssistantPatientNamesForActiveTenant: search },
+    "@/lib/server/patients": {
+      isPatientAvailableForActiveTenant: async (id: string) => fixtures.some((row) => row.id === id && row.clinic_id === clinicId && !row.archived),
+      isPatientEligibleForSchedulingWithProfessionalActiveTenant: eligible,
+      getPatientEligibleProfessionalIdsForSchedulingActiveTenant: async (id: string) => {
+        eligibleLookupCalls++;
+        if (eligibleLookupFails) return { state: "error", ids: [] };
+        const patient = fixtures.find((row) => row.id === id && row.clinic_id === clinicId && !row.archived);
+        if (!patient) return { state: "ready", ids: [] };
+        const ids = patient.assignedTo.length ? patient.assignedTo : activeRole === "doctor" ? [] : professionals.map((professional) => professional.professional_clinic_member_id);
+        return { state: "ready", ids: activeRole === "doctor" ? ids.filter((professional) => professional === doctorId) : ids };
+      },
+      searchAssistantPatientNamesForActiveTenant: search
+    },
     "@/lib/server/entitlements": { getClinicEntitlements: async () => ({}), planIncludesFeature: () => true },
     "@/lib/logger": { logger: { info: () => {}, error: () => {} } }
   };
@@ -275,16 +307,25 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   }
   const multipleProfessionals = await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", createWithPatient);
   assert.equal(multipleProfessionals.state, "ready");
-  assert.equal(multipleProfessionals.suggestions.length, 8, "professional suggestions are bounded to eight");
+  assert.equal(multipleProfessionals.suggestions.length, 1, "patient-scoped suggestions exclude ineligible professionals");
   assert.equal(multipleProfessionals.suggestions[0].name, "QA Doctor 1 Norte");
   assert.equal(multipleProfessionals.suggestions[0].choice.kind, "professional");
   assert.equal(multipleProfessionals.suggestions[0].choice.reference, doctorId);
-  const jose = await actions.searchAssistantProfessionalSuggestionsAction("Jose", createWithPatient);
+  const unassignedContext = { ...createWithPatient, focusedPatientRef: fixtures[2].id };
+  const allForUnassigned = await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", unassignedContext);
+  assert.equal(allForUnassigned.suggestions.length, 8, "unassigned patient can see all active professionals, bounded to eight");
+  const jose = await actions.searchAssistantProfessionalSuggestionsAction("Jose", unassignedContext);
   assert.equal(jose.suggestions.some((item: { name: string }) => item.name === "José García"), true);
-  const garcia = await actions.searchAssistantProfessionalSuggestionsAction("Garcia", createWithPatient);
+  const garcia = await actions.searchAssistantProfessionalSuggestionsAction("Garcia", unassignedContext);
   assert.equal(garcia.suggestions.some((item: { name: string }) => item.name === "José García"), true);
+  const assignedToOther = await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", { ...createWithPatient, focusedPatientRef: otherPatientId });
+  assert.deepEqual(JSON.parse(JSON.stringify(assignedToOther.suggestions.map((item: { id: string }) => item.id))), [anotherDoctorId]);
   const availabilityContext = { ...createWithPatient, activeIntent: "check_availability", focusedPatientRef: undefined };
-  assert.equal((await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", availabilityContext)).state, "ready");
+  const callsBeforeAvailability = eligibleLookupCalls;
+  const availabilitySuggestions = await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", availabilityContext);
+  assert.equal(availabilitySuggestions.state, "ready");
+  assert.equal(availabilitySuggestions.suggestions.length, 8);
+  assert.equal(eligibleLookupCalls, callsBeforeAvailability, "availability without a patient never invokes patient-scoped RPC");
 
   const ownProfessionalOnlyContext = { ...createWithPatient, focusedProfessionalRef: undefined, updatedAt: Date.now() };
   activeRole = "doctor";
@@ -367,6 +408,14 @@ test("autocomplete and structured patient choice avoid the planner and only prep
   assert.ok(prepared > initialPrepared);
   assert.equal(providerCalls, 0);
   assert.equal(executed, 0);
+  const resolvedFromPatient = await actions.submitAssistantIntentAction({ type: "create_appointment", patientId: otherPatientId, professionalQuery: "QA Doctor", localDate: "2026-09-28", localTime: "10:30", durationMinutes: 30 });
+  assert.equal(resolvedFromPatient.state, "proposal", "free-text resolution intersects with the same eligible IDs");
+  assert.equal(resolvedFromPatient.resolvedProfessionalRef, anotherDoctorId);
+  const wrongProfessional = await actions.submitAssistantIntentAction({ type: "create_appointment", patientId: otherPatientId, professionalQuery: "QA Doctor 1", localDate: "2026-09-28", localTime: "10:30", durationMinutes: 30 });
+  assert.equal(wrongProfessional.state, "message", "free text cannot resolve an ineligible professional");
+  eligibleLookupFails = true;
+  assert.equal((await actions.searchAssistantProfessionalSuggestionsAction("QA Doctor", createWithPatient)).state, "unavailable", "RPC failure fails typeahead closed");
+  assert.equal((await actions.submitAssistantIntentAction({ type: "create_appointment", patientId, professionalQuery: "QA Doctor 1", durationMinutes: 30 })).state, "error", "RPC failure fails free text closed");
 });
 
 test("professional autocomplete UI is context-gated, debounced, accessible, and separate from patient suggestions", () => {

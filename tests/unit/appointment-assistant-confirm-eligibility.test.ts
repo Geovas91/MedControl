@@ -20,6 +20,7 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
     slotAvailable: true,
     mutationCalls: 0,
     eligibilityCalls: 0,
+    slotIntervalCalls: [] as number[],
     finish: null as null | { outcome: string; errorCode: string | null },
     pendingStatus: "none" as "none" | "pending" | "claimed" | "executed" | "failed",
     pendingArguments: null as Record<string, unknown> | null
@@ -73,7 +74,12 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
       assert.equal(professional, professionalId);
       return state.eligible;
     } },
-    "@/lib/server/professional-slots": { getProfessionalAvailableSlots: async () => ({ state: "ready", data: state.slotAvailable ? [{ local_start: input.startTime }] : [] }) },
+    "@/lib/server/professional-slots": { getProfessionalAvailableSlots: async ({ slotIntervalMinutes }: { slotIntervalMinutes: number }) => {
+      state.slotIntervalCalls.push(slotIntervalMinutes);
+      return { state: "ready", data: state.slotAvailable
+        ? ["09:00", "09:30", "10:00", "10:30", ...(slotIntervalMinutes === 15 ? ["09:15", "09:45"] : [])].map((local_start) => ({ local_start }))
+        : [] };
+    } },
     "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready", user: { id: actorId }, tenant: { clinic: { id: clinicId, timezone: "America/Mexico_City" }, membership: { id: professionalId, role, is_professional: role === "doctor" } } }) },
     "@/lib/supabase/server": { createClient: async () => client },
     "./contracts": contracts
@@ -99,6 +105,37 @@ test("eligibility lost between Proposal and Confirm fails the one-shot action be
   assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, false);
   assert.equal(state.mutationCalls, 0);
 });
+
+test("Assistant read, Proposal, and Confirm all request the same 30-minute cadence", async () => {
+  const { registry, state } = mountRegistry();
+  const slots = await registry.executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: professionalId, date: input.date, durationMinutes: input.durationMinutes });
+  assert.equal(slots.ok, true);
+  assert.deepEqual(state.slotIntervalCalls, [30]);
+  assert.equal((await registry.prepareAssistantMutation("create_appointment", input)).ok, true);
+  assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, true);
+  assert.deepEqual(state.slotIntervalCalls, [30, 30, 30]);
+});
+
+test("15-minute offset is never proposed by Assistant even when other flows could offer it", async () => {
+  const { registry, state } = mountRegistry();
+  const offered = await registry.executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: professionalId, date: input.date, durationMinutes: input.durationMinutes });
+  assert.deepEqual(Array.from(offered.data, (slot: { local_start: string }) => slot.local_start), ["09:00", "09:30", "10:00", "10:30"]);
+  for (const startTime of ["09:15", "09:45"]) {
+    const proposal = await registry.prepareAssistantMutation("create_appointment", { ...input, startTime });
+    assert.equal(proposal.ok, false);
+    assert.equal(proposal.error.code, "outside_availability");
+  }
+  assert.deepEqual(state.slotIntervalCalls, [30, 30, 30]);
+  assert.equal(state.mutationCalls, 0);
+});
+
+for (const startTime of ["09:00", "09:30", "10:00"]) {
+  test(`${startTime} remains proposal-eligible at 30-minute cadence`, async () => {
+    const { registry, state } = mountRegistry();
+    assert.equal((await registry.prepareAssistantMutation("create_appointment", { ...input, startTime })).ok, true);
+    assert.deepEqual(state.slotIntervalCalls, [30]);
+  });
+}
 
 for (const role of ["owner", "admin", "assistant", "doctor"] as const) {
   test(`${role}: a pair eligible at Proposal and Confirm creates once`, async () => {

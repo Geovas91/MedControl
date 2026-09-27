@@ -109,7 +109,7 @@ async function validateCreateAppointmentCandidate(context: AssistantToolContext,
     clinicMemberId: memberResult.data.id,
     localDate: input.date,
     durationMinutes: input.durationMinutes,
-    slotIntervalMinutes: 15
+    slotIntervalMinutes: 30
   });
   if (slots.state !== "ready" || !slots.data) return safeFailure(slots.state);
   if (!slots.data.some((slot) => slot.local_start === input.startTime)) return assistantToolError("outside_availability", "El horario ya no está disponible.");
@@ -124,7 +124,7 @@ const getAvailableSlots: AssistantToolDefinition<{ professionalClinicMemberId: s
     if (memberResult.state !== "ready") return assistantToolError("not_found", "El profesional no está disponible para esta clínica.");
     const member = memberResult.data;
     if (context.role === "doctor" && member.user_id !== context.userId) return assistantToolError("forbidden", "No tienes acceso a la disponibilidad de otro profesional.");
-    const slots = await getProfessionalAvailableSlots({ clinicMemberId: member.id, localDate: input.date, durationMinutes: input.durationMinutes, slotIntervalMinutes: 15 });
+    const slots = await getProfessionalAvailableSlots({ clinicMemberId: member.id, localDate: input.date, durationMinutes: input.durationMinutes, slotIntervalMinutes: 30 });
     if (slots.state !== "ready" || !slots.data) return safeFailure(slots.state);
     return { ok: true, data: slots.data.map((slot) => ({ ...slot, time_zone: context.timeZone })) };
   }
