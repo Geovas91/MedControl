@@ -16,6 +16,12 @@ type SchedulingPatientRpcClient = {
     args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query: string; p_limit: number }
   ): Promise<{ data: SchedulingPatient[] | null; error: { code: string } | null }>;
 };
+type AssistantPatientRpcClient = {
+  rpc(
+    fn: "search_patient_names_for_assistant",
+    args: { p_clinic_id: string; p_query: string; p_limit: number }
+  ): Promise<{ data: SchedulingPatient[] | null; error: { code: string } | null }>;
+};
 type SchedulingEligibilityRpcClient = {
   rpc(
     fn: "is_patient_eligible_for_scheduling",
@@ -206,16 +212,16 @@ export async function searchAssistantPatientNamesForActiveTenant(rawQuery: unkno
     return { state: "ready" as const, data: { patients: patients.slice(0, ASSISTANT_PATIENT_SUGGESTION_LIMIT), hasMore: patients.length > ASSISTANT_PATIENT_SUGGESTION_LIMIT } };
   }
 
-  let search = (await createClient())
-    .from("patients")
-    .select("id, full_name")
-    .eq("clinic_id", context.tenant.clinic.id);
-  for (const term of query.split(" ")) search = search.ilike("full_name", `%${term}%`);
-  const result = await search.order("full_name", { ascending: true }).limit(ASSISTANT_PATIENT_SUGGESTION_LIMIT + 1);
+  const client = await createClient() as unknown as AssistantPatientRpcClient;
+  const result = await client.rpc("search_patient_names_for_assistant", {
+    p_clinic_id: context.tenant.clinic.id,
+    p_query: query,
+    p_limit: ASSISTANT_PATIENT_SUGGESTION_LIMIT + 1
+  });
   if (result.error) {
     logger.error("Assistant patient name lookup failed", { component: "appointment_assistant", code: result.error.code });
     return { state: "error" as const, data: null };
   }
-  const patients = ((result.data ?? []) as Pick<PatientRow, "id" | "full_name">[]).map((patient) => ({ id: patient.id, name: patient.full_name }));
+  const patients = (result.data ?? []).map((patient) => ({ id: patient.patient_id, name: patient.display_name }));
   return { state: "ready" as const, data: { patients: patients.slice(0, ASSISTANT_PATIENT_SUGGESTION_LIMIT), hasMore: patients.length > ASSISTANT_PATIENT_SUGGESTION_LIMIT } };
 }
