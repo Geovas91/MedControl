@@ -78,29 +78,13 @@ type PatientFixture = { id: string; full_name: string; clinic_id: string; assign
 
 function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "admin" | "owner"; rows: PatientFixture[] }) {
   const calls: Array<[string, ...unknown[]]> = [];
-  let clinicFilter = "";
-  const terms: string[] = [];
-  let limit = 0;
-  const builder = {
-    select: (columns: string) => { calls.push(["select", columns]); terms.length = 0; return builder; },
-    eq: (column: string, value: string) => { calls.push(["eq", column, value]); if (column === "clinic_id") clinicFilter = value; return builder; },
-    ilike: (column: string, pattern: string) => { calls.push(["ilike", column, pattern]); terms.push(pattern.slice(1, -1).toLocaleLowerCase("es-MX")); return builder; },
-    order: (column: string) => { calls.push(["order", column]); return builder; },
-    limit: (count: number) => {
-      calls.push(["limit", count]); limit = count;
-      const data = rows.filter((row) => row.clinic_id === clinicFilter && !row.archived && (role !== "doctor" || row.assignedTo.includes(doctorId))
-        && terms.every((term) => row.full_name.toLocaleLowerCase("es-MX").includes(term)))
-        .sort((a, b) => a.full_name.localeCompare(b.full_name)).slice(0, limit)
-        .map(({ id, full_name }) => ({ id, full_name }));
-      return Promise.resolve({ data, error: null });
-    }
-  };
+  const fold = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const mocks: Record<string, unknown> = {
     "server-only": {},
     "@/lib/assistant/orchestration/patient-selection": { ASSISTANT_PATIENT_SUGGESTION_LIMIT, parseAssistantPatientQuery },
     "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready", tenant: { clinic: { id: clinicId }, membership: { id: doctorId, role } } }) },
     "@/lib/supabase/server": { createClient: async () => ({
-      from: (table: string) => { calls.push(["from", table]); return builder; },
+      from: (table: string) => { calls.push(["from", table]); throw new Error("Assistant search must use an RPC"); },
       rpc: async (name: string, args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_query?: string; p_limit?: number; p_patient_id?: string }) => {
         calls.push(["rpc", name, args]);
         if (name === "is_patient_eligible_for_scheduling") {
@@ -113,11 +97,13 @@ function loadPatientSearch({ role, rows }: { role: "doctor" | "assistant" | "adm
           const ids = !patient ? [] : patient.assignedTo.length ? patient.assignedTo : role === "doctor" ? [] : [doctorId, anotherDoctorId];
           return { data: (role === "doctor" ? ids.filter((id) => id === doctorId) : ids).map((professional_clinic_member_id) => ({ professional_clinic_member_id })), error: null };
         }
-        if (name !== "search_patient_names_for_scheduling" || !args.p_query || !args.p_limit) throw new Error(`Unexpected RPC: ${name}`);
-        const terms = args.p_query.toLocaleLowerCase("es-MX").split(" ");
+        if (!(["search_patient_names_for_scheduling", "search_patient_names_for_assistant"].includes(name)) || !args.p_query || !args.p_limit) throw new Error(`Unexpected RPC: ${name}`);
+        const terms = fold(args.p_query).split(" ");
         const data = rows.filter((row) => row.clinic_id === args.p_clinic_id && !row.archived
-          && terms.every((term) => row.full_name.toLocaleLowerCase("es-MX").includes(term))
-          && (row.assignedTo.includes(args.p_professional_clinic_member_id) || role !== "doctor" && row.assignedTo.length === 0))
+          && terms.every((term) => fold(row.full_name).includes(term))
+          && (name === "search_patient_names_for_assistant"
+            ? role !== "doctor" || row.assignedTo.includes(doctorId)
+            : row.assignedTo.includes(args.p_professional_clinic_member_id) || role !== "doctor" && row.assignedTo.length === 0))
           .sort((a, b) => a.full_name.localeCompare(b.full_name)).slice(0, Math.min(args.p_limit, 9))
           .map((row) => ({ patient_id: row.id, display_name: row.full_name }));
         return { data, error: null };
@@ -138,21 +124,23 @@ const fixtures: PatientFixture[] = [
   { id: "77777777-7777-4777-8777-777777777777", full_name: "Juan Carlos Martínez", clinic_id: clinicId, assignedTo: [] },
   { id: "88888888-8888-4888-8888-888888888888", full_name: "Juan Cross Tenant", clinic_id: "99999999-9999-4999-8999-999999999999", assignedTo: [doctorId] },
   { id: "99999999-9999-4999-8999-999999999998", full_name: "Juan Shared", clinic_id: clinicId, assignedTo: [doctorId, anotherDoctorId] },
-  { id: "99999999-9999-4999-8999-999999999997", full_name: "Juan Archived", clinic_id: clinicId, assignedTo: [], archived: true }
+  { id: "99999999-9999-4999-8999-999999999997", full_name: "Juan Archived", clinic_id: clinicId, assignedTo: [], archived: true },
+  { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab", full_name: "José Pérez", clinic_id: clinicId, assignedTo: [doctorId] }
 ];
 
-test("without a selected professional, name-only lookup retains the existing RLS directory", async () => {
+test("without a selected professional, accent-folded RPC retains the existing RLS directory", async () => {
   const { search, calls } = loadPatientSearch({ role: "admin", rows: fixtures });
   const juan = await search("juan");
   assert.equal(juan.state, "ready");
   assert.equal(juan.data.patients.length, 4);
   assert.ok(juan.data.patients.every((row: Record<string, unknown>) => Object.keys(row).sort().join() === "id,name"));
-  assert.deepEqual(calls.find((call) => call[0] === "select"), ["select", "id, full_name"]);
-  assert.deepEqual(calls.find((call) => call[0] === "eq"), ["eq", "clinic_id", clinicId]);
-  assert.equal((await search("Pérez")).data.patients.length, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls.find((call) => call[0] === "rpc"))), ["rpc", "search_patient_names_for_assistant", { p_clinic_id: clinicId, p_query: "juan", p_limit: 9 }]);
+  assert.equal((await search("Jose")).data.patients[0].name, "José Pérez");
+  assert.equal((await search("jose perez")).data.patients[0].name, "José Pérez");
+  assert.equal((await search("Pérez")).data.patients.length, 3);
   assert.equal((await search("Juan Pérez G")).data.patients.length, 1);
   assert.equal((await search("Nadie")).data.patients.length, 0);
-  assert.equal(calls.some((call) => call[0] === "rpc"), false);
+  assert.equal(calls.some((call) => call[0] === "from"), false);
 });
 
 test("selected professional uses the scoped RPC, preserving unassigned and multi-assigned patients", async () => {
@@ -162,6 +150,8 @@ test("selected professional uses the scoped RPC, preserving unassigned and multi
   assert.ok(!result.data.patients.some((row: { id: string }) => row.id === otherPatientId || row.id === fixtures[3].id || row.id === fixtures[5].id));
   assert.equal(calls.filter((call) => call[0] === "rpc").length, 1);
   assert.equal(calls.some((call) => call[0] === "from"), false);
+  assert.equal((await search("Perez", doctorId)).data.patients.some((row: { name: string }) => row.name === "José Pérez"), true);
+  assert.equal((await search("jose perez", doctorId)).data.patients[0].name, "José Pérez");
 });
 
 test("doctor lookup remains in own patient RLS scope and rejects another professional", async () => {
@@ -209,7 +199,7 @@ test("lookup is bounded to eight suggestions, with more flag", async () => {
   const result = await search("Juan");
   assert.equal(result.data.patients.length, 8);
   assert.equal(result.data.hasMore, true);
-  assert.deepEqual(calls.find((call) => call[0] === "limit"), ["limit", 9]);
+  assert.equal((calls.find((call) => call[0] === "rpc")?.[2] as { p_limit: number }).p_limit, 9);
 });
 
 test("autocomplete and structured patient choice avoid the planner and only prepare a proposal", async () => {
