@@ -67,6 +67,7 @@ export default async function MembersPage() {
   const members = membersResult.data ?? [];
   const invitations = invitationsResult.data ?? [];
   const canAddAdditionalStaff = planIncludesFeature(entitlementsResult, "additional_staff");
+  const canGrantProfessionalCapability = canCreateWithEntitlements(entitlementsResult);
 
   return (
     <>
@@ -140,7 +141,7 @@ export default async function MembersPage() {
                   <td className="px-5 py-4 font-semibold text-ink">{member.full_name ?? "Sin nombre"}</td>
                   <td className="px-5 py-4 text-slate-600">{member.email ?? "Sin correo"}</td>
                   <td className="px-5 py-4"><Badge variant={roleVariants[member.role]}>{roleLabels[member.role]}</Badge></td>
-                  <td className="px-5 py-4"><MemberProfessionalCapability memberId={member.id} role={member.role} isProfessional={member.is_professional} isCurrentMember={member.user_id === activeTenant.user.id} canManage={["owner", "admin"].includes(activeTenant.tenant.membership.role)} /></td>
+                  <td className="px-5 py-4"><MemberProfessionalCapability memberId={member.id} role={member.role} isProfessional={member.is_professional} isCurrentMember={member.user_id === activeTenant.user.id} canManage={["owner", "admin"].includes(activeTenant.tenant.membership.role)} canGrantProfessionalCapability={canGrantProfessionalCapability} /></td>
                   <td className="px-5 py-4">
                     <Badge variant={statusVariant[member.status]}>{statusLabels[member.status]}</Badge>
                   </td>

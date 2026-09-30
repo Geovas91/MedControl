@@ -40,7 +40,8 @@ export async function GET(request: NextRequest) {
     return settingsRedirect(request, "forbidden");
   }
   const callbackEntitlements = await getClinicEntitlements(context.tenant.clinic.id);
-  if (callbackEntitlements.state !== "ready") return settingsRedirect(request, "subscription_required");
+  if (callbackEntitlements.state === "missing") return settingsRedirect(request, "subscription_missing");
+  if (callbackEntitlements.state === "error") return settingsRedirect(request, "error");
   if (!planIncludesFeature(callbackEntitlements, "google_calendar")) return settingsRedirect(request, "upgrade_required");
   if (!canUseFeature(callbackEntitlements, "google_calendar")) return settingsRedirect(request, "subscription_required");
   const configuration = getGoogleCalendarConfiguration();
@@ -67,9 +68,8 @@ export async function GET(request: NextRequest) {
     return settingsRedirect(request, "exchange_failed");
   }
   const persistedEntitlements = await getClinicEntitlements(context.tenant.clinic.id);
-  if (persistedEntitlements.state !== "ready") {
-    return settingsRedirect(request, "subscription_required");
-  }
+  if (persistedEntitlements.state === "missing") return settingsRedirect(request, "subscription_missing");
+  if (persistedEntitlements.state === "error") return settingsRedirect(request, "error");
   if (!canUseFeature(persistedEntitlements, "google_calendar")) {
     return settingsRedirect(
       request,

@@ -151,6 +151,9 @@ export async function setClinicMemberProfessionalCapabilityAction(
     return { error: "No tienes permiso para administrar esta capacidad." };
   }
   if (!memberId) return { error: "No fue posible identificar al miembro." };
+  if (isProfessional && !canCreateWithEntitlements(await getClinicEntitlements(activeTenant.tenant.clinic.id))) {
+    return { error: "La suscripción actual no permite activar capacidad profesional." };
+  }
   const { data, error } = await setClinicMemberProfessionalCapability(
     activeTenant.tenant.clinic.id,
     memberId,

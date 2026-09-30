@@ -27,7 +27,8 @@ export async function GET(request: NextRequest) {
     return settingsRedirect(request, "forbidden");
   }
   const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
-  if (entitlements.state !== "ready") return settingsRedirect(request, "subscription_required");
+  if (entitlements.state === "missing") return settingsRedirect(request, "subscription_missing");
+  if (entitlements.state === "error") return settingsRedirect(request, "error");
   if (!planIncludesFeature(entitlements, "google_calendar")) return settingsRedirect(request, "upgrade_required");
   if (!canUseFeature(entitlements, "google_calendar")) return settingsRedirect(request, "subscription_required");
   const configuration = getGoogleCalendarConfiguration();

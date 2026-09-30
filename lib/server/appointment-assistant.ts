@@ -130,7 +130,7 @@ export type AppointmentAssistantData = {
 
 export type AppointmentAssistantResult =
   | { state: "ready"; data: AppointmentAssistantData }
-  | { state: "unauthenticated" | "no_active_membership" | "upgrade_required" | "error"; data: null };
+  | { state: "unauthenticated" | "no_active_membership" | "subscription_missing" | "upgrade_required" | "error"; data: null };
 
 function patientName(relation: PatientRelation) {
   return Array.isArray(relation) ? relation[0]?.full_name ?? "Paciente" : relation?.full_name ?? "Paciente";
@@ -144,7 +144,8 @@ export async function getAppointmentAssistantForActiveTenant(
 
   const clinicId = context.tenant.clinic.id;
   const entitlements = await getClinicEntitlements(clinicId);
-  if (entitlements.state !== "ready") return { state: "error", data: null };
+  if (entitlements.state === "missing") return { state: "subscription_missing", data: null };
+  if (entitlements.state === "error") return { state: "error", data: null };
   if (!planIncludesFeature(entitlements, "appointment_assistant")) {
     return { state: "upgrade_required", data: null };
   }

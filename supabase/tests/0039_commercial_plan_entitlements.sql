@@ -35,6 +35,11 @@ insert into public.clinic_members(clinic_id,user_id,role,status) values
   ('39100000-0000-4000-8000-000000000001','39000000-0000-4000-8000-000000000005','assistant','active'),
   ('39100000-0000-4000-8000-000000000001','39000000-0000-4000-8000-000000000007','assistant','suspended');
 
+-- Final schema (0048) requires explicit professional capability for clinical consent work.
+update public.clinic_members set is_professional=true
+where clinic_id='39100000-0000-4000-8000-000000000001'
+  and user_id='39000000-0000-4000-8000-000000000001';
+
 select extensions.is(public.clinic_plan_includes_commercial_feature_internal('39100000-0000-4000-8000-000000000001','additional_staff'),false,'Basic excludes additional staff');
 select extensions.is(public.clinic_plan_includes_commercial_feature_internal('39100000-0000-4000-8000-000000000002','additional_staff'),true,'Plus includes additional staff');
 select extensions.is(public.clinic_plan_includes_commercial_feature_internal('39100000-0000-4000-8000-000000000003','appointment_assistant'),true,'Pro includes Appointment Assistant');
