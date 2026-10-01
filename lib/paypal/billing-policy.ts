@@ -14,12 +14,11 @@ export function canManageBilling(role: string) { return role === "owner"; }
 
 export function authorizeBillingActor(input: {
   userId?: string; clinicId?: string; membershipClinicId?: string; role?: string;
-  membershipStatus?: string; selectedClinicId?: string; multiple?: boolean;
+  membershipStatus?: string;
 }): BillingActor {
   if (!input.userId) throw new BillingError(401, "authentication_required");
   if (!input.clinicId || input.membershipClinicId !== input.clinicId || input.membershipStatus !== "active"
-    || !canManageBilling(input.role ?? "") || (input.multiple && !input.selectedClinicId)
-    || (input.selectedClinicId && input.selectedClinicId !== input.clinicId)) {
+    || !canManageBilling(input.role ?? "")) {
     throw new BillingError(403, "billing_owner_required");
   }
   return { userId: input.userId, clinicId: input.clinicId };

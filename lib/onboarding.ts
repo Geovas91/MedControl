@@ -27,6 +27,7 @@ export type ClinicOnboardingInput = {
 };
 
 export type OnboardingStatus =
+  | { state: "error"; user: User | null; profile: ProfileRow | null; membership: null }
   | {
       state: "unauthenticated";
       user: null;
@@ -93,8 +94,6 @@ export async function getCurrentUserClinicMembership() {
     .select("*")
     .eq("user_id", user.id)
     .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .limit(1)
     .maybeSingle();
   const membership = data as ClinicMembershipRow | null;
 
@@ -128,7 +127,8 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus> {
     };
   }
 
-  const { user, profile } = await getCurrentUserProfile();
+  const { user, profile, error: profileError } = await getCurrentUserProfile();
+  if (profileError && user) return { state: "error", user, profile, membership: null };
 
   if (!user) {
     return {
@@ -148,7 +148,8 @@ export async function getOnboardingStatus(): Promise<OnboardingStatus> {
     };
   }
 
-  const { membership } = await getCurrentUserClinicMembership();
+  const { membership, error: membershipError } = await getCurrentUserClinicMembership();
+  if (membershipError) return { state: "error", user, profile, membership: null };
 
   if (!membership) {
     return {
@@ -174,7 +175,8 @@ export async function completeClinicOnboardingForCurrentUser(input: ClinicOnboar
     return { clinicId: null, error: profileError ?? new Error("Authentication required.") };
   }
 
-  const { membership } = await getCurrentUserClinicMembership();
+  const { membership, error: membershipError } = await getCurrentUserClinicMembership();
+  if (membershipError) return { clinicId: null, error: membershipError };
 
   if (membership) {
     return { clinicId: membership.clinic_id, error: null };

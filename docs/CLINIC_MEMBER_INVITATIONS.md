@@ -38,3 +38,11 @@ El enlace es personal, no debe compartirse ni incluirse en logs, capturas o tick
 ## Multi-clínica
 
 La aceptación devuelve exclusivamente el `clinic_id` de la invitación consumida. La Server Action lo guarda en la cookie HTTP-only de clínica activa y redirige a `/dashboard` sin token. Esto selecciona la clínica invitada tanto para la primera membresía como para un usuario con clínicas existentes; el selector permite volver a otra clínica autorizada.
+
+## Una sola membresía clínica activa
+
+La migración 0056 impone como máximo una membresía clínica activa por usuario para todos los roles, incluso si el usuario también es administrador de plataforma. La clínica del dashboard se deriva exclusivamente de esa membresía: no hay selector ni autoridad mediante cookie. Una suscripción ausente conserva la membresía y el acceso a Billing; las escrituras comerciales siguen sujetas a entitlements.
+
+Crear invitaciones no revela pertenencia a otras clínicas. Aceptar requiere no tener ninguna membresía activa y usa el mismo lock por usuario que onboarding. Las RPC legacy de onboarding y altas por email están revocadas para clientes. La migración aborta ante membresías activas duplicadas, sin reparar datos automáticamente.
+
+Professional Portability será una transición posterior: suspender la membresía anterior antes de activar la nueva, en una transacción; nunca acceso simultáneo a varias clínicas.

@@ -41,6 +41,7 @@ function formatDoctorUsage(currentDoctorCount: number, doctorLimit: number | nul
 
 export default async function SettingsPage() {
   const onboardingStatus = await getOnboardingStatus();
+  if (onboardingStatus.state === "error") throw new Error("Clinic access is temporarily unavailable.");
   const planContext =
     onboardingStatus.state === "complete"
       ? await getClinicPlanContext(onboardingStatus.membership.clinic_id)

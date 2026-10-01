@@ -9,7 +9,8 @@ insert into auth.users(id, email) values
   ('41100000-0000-4000-8000-000000000003', 'availability-doctor@example.test'),
   ('41100000-0000-4000-8000-000000000004', 'availability-assistant@example.test'),
   ('41100000-0000-4000-8000-000000000005', 'availability-outsider@example.test'),
-  ('41100000-0000-4000-8000-000000000006', 'availability-foreign-owner@example.test');
+  ('41100000-0000-4000-8000-000000000006', 'availability-foreign-owner@example.test'),
+  ('41100000-0000-4000-8000-000000000007', 'availability-b-doctor@example.test');
 
 insert into public.clinics(id, name, timezone) values
   ('41200000-0000-4000-8000-000000000001', 'Availability Clinic A', 'America/Mexico_City'),
@@ -21,7 +22,7 @@ insert into public.clinic_members(id, clinic_id, user_id, role, status) values
   ('41300000-0000-4000-8000-000000000003', '41200000-0000-4000-8000-000000000001', '41100000-0000-4000-8000-000000000003', 'doctor', 'active'),
   ('41300000-0000-4000-8000-000000000004', '41200000-0000-4000-8000-000000000001', '41100000-0000-4000-8000-000000000004', 'assistant', 'active'),
   ('41300000-0000-4000-8000-000000000005', '41200000-0000-4000-8000-000000000002', '41100000-0000-4000-8000-000000000006', 'owner', 'active'),
-  ('41300000-0000-4000-8000-000000000006', '41200000-0000-4000-8000-000000000002', '41100000-0000-4000-8000-000000000003', 'doctor', 'active');
+  ('41300000-0000-4000-8000-000000000006', '41200000-0000-4000-8000-000000000002', '41100000-0000-4000-8000-000000000007', 'doctor', 'active');
 
 -- B4.4 keeps new owner memberships non-professional by default. This fixture
 -- explicitly models the owner as a professional for the legacy schedule test.
