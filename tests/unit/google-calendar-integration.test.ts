@@ -201,8 +201,15 @@ test("connect and callback enforce the feature before provider work and callback
 test("callback redirects only to a fixed local path on a server-controlled origin", () => {
   assert.match(callbackRoute, /const origin = getPublicAppOrigin\(request, getRuntimePublicSiteUrl\(\)\)/);
   assert.match(callbackRoute, /buildGoogleCalendarSettingsRedirectPath\(outcome\)/);
+  for (const outcome of ["subscription_missing", "subscription_required", "upgrade_required", "error"]) {
+    assert.equal(buildGoogleCalendarSettingsRedirectPath(outcome), `/dashboard/settings/integrations?google=${outcome}`);
+  }
   assert.equal(buildGoogleCalendarSettingsRedirectPath("connected"), "/dashboard/settings/integrations?google=connected");
   assert.equal(buildGoogleCalendarSettingsRedirectPath("https://evil.example"), "/dashboard/settings/integrations?google=error");
+  assert.match(connectRoute, /state === "missing"\) return settingsRedirect\(request, "subscription_missing"\)/);
+  assert.match(connectRoute, /state === "error"\) return settingsRedirect\(request, "error"\)/);
+  assert.match(connectRoute, /!planIncludesFeature\(entitlements, "google_calendar"\)\) return settingsRedirect\(request, "upgrade_required"\)/);
+  assert.match(connectRoute, /!canUseFeature\(entitlements, "google_calendar"\)\) return settingsRedirect\(request, "subscription_required"\)/);
   assert.doesNotMatch(callbackRoute, /searchParams\.get\(["'](?:redirect|returnTo|next)["']\)/);
   assert.doesNotMatch(callbackRoute, /new URL\([^\n]*(?:state|code)/);
 });
