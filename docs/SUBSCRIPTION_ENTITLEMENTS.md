@@ -14,7 +14,7 @@ Las capacidades por plan también se declaran de forma tipada en `config/plans.t
 
 Las invitaciones ICS por email, los consentimientos personalizados por especialidad y las reseñas verificadas no tienen entitlement de plan porque están incluidos en Básico, Plus y Pro. Google Calendar es una integración distinta de las invitaciones ICS.
 
-Una clínica sin fila en `clinic_subscriptions` se representa como `missing` y la interfaz muestra "Sin plan configurado"; nunca se presenta como Básico ni recibe permisos. Las guardas de staff y Appointment Assistant se aplican en servidor y SQL, además de ocultar los controles correspondientes.
+Una clínica sin fila en `clinic_subscriptions` se representa como `missing`: es un estado explícito sin plan, distinto de Básico y de un error técnico. La interfaz muestra "Sin plan configurado" y no concede funciones ni escrituras. Activar capacidad profesional requiere una suscripción con escritura vigente; owner/admin pueden retirar esa capacidad aun sin suscripción, siempre que no existan citas futuras activas. Las guardas de staff y Appointment Assistant se aplican en servidor y SQL, además de ocultar los controles correspondientes.
 
 Al bajar a Básico, los admins y assistants existentes permanecen activos, pero no pueden crearse, aceptarse ni reactivarse otros. Los jobs del Appointment Assistant que ya existen conservan su lifecycle, lease y fencing para poder finalizar o reconciliarse sin reenvío ciego; el plan Básico no puede guardar configuración ni generar jobs nuevos.
 

@@ -50,12 +50,13 @@ export async function getGoogleCalendarIntegrationPageData() {
   const role = context.tenant.membership.role;
   const canConnectOwn = role === "owner" || role === "admin" || role === "doctor";
   const entitlements = await getClinicEntitlements(context.tenant.clinic.id);
-  if (entitlements.state !== "ready") return { state: "error" as const, data: null };
+  if (entitlements.state === "error") return { state: "error" as const, data: null };
+  const pageState = entitlements.state === "missing" ? "subscription_missing" as const : "ready" as const;
   const planIncludesGoogleCalendar = planIncludesFeature(entitlements, "google_calendar");
   const canUseGoogleCalendar = canUseFeature(entitlements, "google_calendar");
   if (!canConnectOwn) {
     return {
-      state: "ready" as const,
+      state: pageState,
       data: {
         role,
         configurationReady: getGoogleCalendarConfiguration().state === "ready",
@@ -85,7 +86,7 @@ export async function getGoogleCalendarIntegrationPageData() {
     };
   }
   return {
-    state: "ready" as const,
+    state: pageState,
     data: {
       role,
       configurationReady: getGoogleCalendarConfiguration().state === "ready",

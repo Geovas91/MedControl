@@ -19,6 +19,7 @@ const messages: Record<string, { tone: "success" | "error"; text: string }> = {
   unavailable: { tone: "error", text: "La integración no está configurada en este entorno." },
   upgrade_required: { tone: "error", text: "Google Calendar está disponible en los planes Plus y Pro." },
   subscription_required: { tone: "error", text: "La suscripción actual no permite usar Google Calendar." },
+  subscription_missing: { tone: "error", text: "Sin plan configurado. Configura una suscripción para evaluar Google Calendar." },
   forbidden: { tone: "error", text: "Tu rol no permite conectar una cuenta de calendario." },
   error: { tone: "error", text: "No fue posible completar la operación de calendario." }
 };
@@ -32,13 +33,14 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   const [result, params] = await Promise.all([getGoogleCalendarIntegrationPageData(), searchParams]);
   if (result.state === "unauthenticated") redirect("/login");
   if (result.state === "no_active_membership") redirect("/onboarding");
-  if (result.state !== "ready" || !result.data) {
+  if ((result.state !== "ready" && result.state !== "subscription_missing") || !result.data) {
     return <PageHeader title="Integraciones" description="No fue posible cargar las integraciones de la clínica activa." />;
   }
   const data = result.data;
+  const subscriptionMissing = result.state === "subscription_missing";
   const requestedMessageKey = typeof params.google === "string" ? params.google : null;
   const messageKey = requestedMessageKey === "connected" && !data.canUseGoogleCalendar
-    ? data.planIncludesGoogleCalendar ? "subscription_required" : "upgrade_required"
+    ? subscriptionMissing ? "subscription_missing" : data.planIncludesGoogleCalendar ? "subscription_required" : "upgrade_required"
     : requestedMessageKey;
   const message = messageKey ? messages[messageKey] : null;
   const connected = data.own?.status === "connected";
@@ -55,12 +57,20 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-md)] bg-teal-50 text-clinic"><CalendarDays className="h-5 w-5" /></span>
             <div><h2 className="font-bold text-ink">Google Calendar</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Crea, actualiza o elimina un evento privado con título neutral en el calendario principal del médico asignado. CliniControl continúa siendo la fuente primaria de la cita.</p></div>
           </div>
-          <Badge variant={connected ? "green" : requiresReconnect ? "amber" : "slate"}>{!data.planIncludesGoogleCalendar ? "Disponible en Plus y Pro" : connected ? "Conectado" : requiresReconnect ? "Requiere reconexión" : "No conectado"}</Badge>
+          <Badge variant={connected ? "green" : requiresReconnect ? "amber" : "slate"}>{subscriptionMissing ? "Sin plan configurado" : !data.planIncludesGoogleCalendar ? "Disponible en Plus y Pro" : connected ? "Conectado" : requiresReconnect ? "Requiere reconexión" : "No conectado"}</Badge>
         </div>
 
         {data.planIncludesGoogleCalendar && data.canUseGoogleCalendar && !data.configurationReady ? <div className="mt-5 flex gap-3 rounded-[var(--radius-md)] bg-amber-50 p-4 text-sm leading-6 text-amber-800"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" /><p>Este entorno no tiene configuradas las credenciales OAuth y la clave de cifrado de Google Calendar. La conexión permanece deshabilitada de forma segura.</p></div> : null}
 
-        {!data.planIncludesGoogleCalendar ? (
+        {subscriptionMissing ? (
+          <div className="mt-5 grid gap-4">
+            <p className="rounded-[var(--radius-md)] bg-amber-50 p-4 text-sm leading-6 text-amber-800">Sin plan configurado. Configura una suscripción para consultar las funciones disponibles para esta clínica.</p>
+            <div className="flex flex-wrap gap-3">
+              <ButtonLink href="/dashboard/billing">Ir a facturación</ButtonLink>
+              {data.hasOwnDisconnectableIntegration && data.canConnectOwn ? <form action={disconnectGoogleCalendarAction}><Button type="submit" variant="secondary"><Link2Off className="h-4 w-4" />Desconectar mi cuenta</Button></form> : null}
+            </div>
+          </div>
+        ) : !data.planIncludesGoogleCalendar ? (
           <div className="mt-5 grid gap-4">
             <div className="rounded-[var(--radius-md)] bg-teal-50 p-4 text-sm leading-6 text-slate-700"><p className="font-semibold text-ink">Disponible en Plus y Pro.</p><p className="mt-1">Automatiza la sincronización de tus citas con tu calendario personal de Google.</p></div>
             {data.hasOwnDisconnectableIntegration && data.canConnectOwn ? <form action={disconnectGoogleCalendarAction}><Button type="submit" variant="secondary"><Link2Off className="h-4 w-4" />Desconectar integración anterior</Button></form> : <Button type="button" disabled><CalendarDays className="h-4 w-4" />Disponible en Plus</Button>}

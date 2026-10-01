@@ -8,7 +8,8 @@ export const GOOGLE_CALENDAR_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
 const googleCalendarRedirectOutcomes = new Set([
   "cancelled", "connected", "error", "exchange_failed", "forbidden",
-  "invalid_callback", "invalid_state", "reconsent_required", "unavailable"
+  "invalid_callback", "invalid_state", "reconsent_required", "subscription_missing",
+  "subscription_required", "upgrade_required", "unavailable"
 ]);
 
 export function buildGoogleCalendarSettingsRedirectPath(outcome: string) {

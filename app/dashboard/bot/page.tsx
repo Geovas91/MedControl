@@ -65,6 +65,16 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
   if (result.state === "no_active_membership") {
     return <Unavailable title="Sin clínica activa" description="Necesitas una membresía activa para consultar el asistente de agenda." />;
   }
+  if (result.state === "subscription_missing") {
+    return <>
+      <PageHeader title="Appointment Assistant" description="Sin plan configurado" />
+      <section className="glass-card-strong p-5">
+        <h2 className="font-bold text-ink">Sin plan configurado</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">Configura una suscripción para consultar las funciones disponibles para esta clínica.</p>
+        <ButtonLink href="/dashboard/billing" className="mt-4">Ir a facturación</ButtonLink>
+      </section>
+    </>;
+  }
   if (result.state === "upgrade_required") {
     return (
       <>
