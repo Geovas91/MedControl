@@ -35,6 +35,12 @@ El enlace es personal, no debe compartirse ni incluirse en logs, capturas o tick
 10. Intentar `select`, `insert`, `update` o `delete` REST directo sobre `clinic_member_invitations` como `anon` y como `authenticated` debe ser denegado. La función interna de suscripción tampoco debe ser ejecutable directamente.
 11. Con `EMAIL_REQUIRED=false`, `/api/ready` puede responder 200 y `email: disabled`. Con `EMAIL_REQUIRED=true`, debe responder 503 y `email: required_unavailable`, incluso con variables ficticias.
 
-## Multi-clínica
+## Una sola membresía clínica activa
 
-La aceptación devuelve exclusivamente el `clinic_id` de la invitación consumida. La Server Action lo guarda en la cookie HTTP-only de clínica activa y redirige a `/dashboard` sin token. Esto selecciona la clínica invitada tanto para la primera membresía como para un usuario con clínicas existentes; el selector permite volver a otra clínica autorizada.
+La migración 0056 impone como máximo una fila activa de `clinic_members` por usuario clínico, sin excepción por rol. El dashboard deriva la clínica exclusivamente de esa membresía. No existe `ClinicSwitcher` y `clinicontrol_active_clinic` no concede autoridad ni selecciona un tenant.
+
+Crear una invitación no revela si su destinatario pertenece a otra clínica. Si al aceptar ya existe una membresía activa, la operación falla con un mensaje genérico y no consume la invitación. La aceptación comparte el lock por usuario con onboarding. Las RPC legacy de onboarding y altas por email están revocadas para clientes. La migración aborta ante membresías activas duplicadas, sin reparar datos automáticamente.
+
+La ausencia de una suscripción no elimina ni suspende la membresía; el usuario conserva acceso a Billing para resolver el estado comercial. Las escrituras comerciales siguen sujetas a entitlements. La administración de plataforma permanece independiente mediante `platform_admins` y `/admin`, y no crea acceso simultáneo a clínicas.
+
+Professional Portability será una transición futura: suspender la membresía anterior antes de activar la nueva, dentro de una transacción. No significa acceso simultáneo a varias clínicas.

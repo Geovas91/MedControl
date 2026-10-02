@@ -9,23 +9,27 @@ drop table if exists public.verified_reviews_concurrency_token_test;
 delete from public.clinical_change_events where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from public.clinical_records where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from public.audit_logs where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
+-- Clean assignment history created by final-schema appointment triggers before deleting fixture clinics.
+delete from public.patient_professional_assignments where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from public.clinics where id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from auth.users where id in (
   'e1000000-0000-4000-8000-000000000001','e1000000-0000-4000-8000-000000000002',
   'e1000000-0000-4000-8000-000000000003','e1000000-0000-4000-8000-000000000004',
-  'e1000000-0000-4000-8000-000000000005'
+  'e1000000-0000-4000-8000-000000000005','e1000000-0000-4000-8000-000000000006'
 );
 insert into auth.users(id, email) values
   ('e1000000-0000-4000-8000-000000000001', 'reviews-owner@example.test'),
   ('e1000000-0000-4000-8000-000000000002', 'reviews-admin@example.test'),
   ('e1000000-0000-4000-8000-000000000003', 'reviews-doctor@example.test'),
   ('e1000000-0000-4000-8000-000000000004', 'reviews-assistant@example.test'),
-  ('e1000000-0000-4000-8000-000000000005', 'reviews-other-owner@example.test');
+  ('e1000000-0000-4000-8000-000000000005', 'reviews-other-owner@example.test'),
+  ('e1000000-0000-4000-8000-000000000006', 'reviews-other-doctor@example.test');
 
 -- Direct auth.users fixtures do not create public.profiles automatically.
--- This is the one profile referenced by both tenant-specific public doctor profiles.
+-- Distinct doctor identities preserve isolation without simultaneous clinical memberships.
 insert into public.profiles(id, full_name, email, role) values
-  ('e1000000-0000-4000-8000-000000000003', 'Dra. Reviews Ficticia', 'reviews-doctor@example.test', 'doctor');
+  ('e1000000-0000-4000-8000-000000000003', 'Dra. Reviews Ficticia', 'reviews-doctor@example.test', 'doctor'),
+  ('e1000000-0000-4000-8000-000000000006', 'Dra. Reviews B Ficticia', 'reviews-other-doctor@example.test', 'doctor');
 
 insert into public.clinics(id, name) values
   ('e2000000-0000-4000-8000-000000000001', 'Reviews Clínica A'),
@@ -37,7 +41,7 @@ insert into public.clinic_members(id, clinic_id, user_id, role, status) values
   ('e6000000-0000-4000-8000-000000000003', 'e2000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'doctor', 'active'),
   ('e6000000-0000-4000-8000-000000000004', 'e2000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000004', 'assistant', 'active'),
   ('e6000000-0000-4000-8000-000000000005', 'e2000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000005', 'owner', 'active'),
-  ('e6000000-0000-4000-8000-000000000006', 'e2000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000003', 'doctor', 'active');
+  ('e6000000-0000-4000-8000-000000000006', 'e2000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000006', 'doctor', 'active');
 
 insert into public.clinic_subscriptions(clinic_id, plan_id, status, billing_provider) values
   ('e2000000-0000-4000-8000-000000000001', 'basic', 'active', 'manual'),
@@ -49,7 +53,7 @@ insert into public.patients(id, clinic_id, full_name, first_names, internal_iden
 
 insert into public.doctor_public_profiles(id, clinic_id, profile_id, clinic_member_id, slug, display_name, specialty, is_published) values
   ('e5000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'e6000000-0000-4000-8000-000000000003', 'reviews-doctor-a', 'Dra. Reviews A', 'Medicina general', true),
-  ('e5000000-0000-4000-8000-000000000002', 'e2000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000003', 'e6000000-0000-4000-8000-000000000006', 'reviews-doctor-b', 'Dra. Reviews B', 'Medicina general', true);
+  ('e5000000-0000-4000-8000-000000000002', 'e2000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000006', 'e6000000-0000-4000-8000-000000000006', 'reviews-doctor-b', 'Dra. Reviews B', 'Medicina general', true);
 
 insert into public.appointments(id, clinic_id, patient_id, doctor_id, title, starts_at, ends_at, status) values
   ('e4000000-0000-4000-8000-000000000001', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'Consulta ficticia 1', now()-interval '3 days', now()-interval '3 days'+interval '1 hour', 'scheduled'),
@@ -57,7 +61,7 @@ insert into public.appointments(id, clinic_id, patient_id, doctor_id, title, sta
   ('e4000000-0000-4000-8000-000000000003', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'Consulta ficticia 3', now()-interval '3 days', now()-interval '3 days'+interval '1 hour', 'scheduled'),
   ('e4000000-0000-4000-8000-000000000004', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'Consulta ficticia 4', now()-interval '3 days', now()-interval '3 days'+interval '1 hour', 'scheduled'),
   ('e4000000-0000-4000-8000-000000000005', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'Consulta ficticia pendiente', now()+interval '3 days', now()+interval '3 days 1 hour', 'scheduled'),
-  ('e4000000-0000-4000-8000-000000000006', 'e2000000-0000-4000-8000-000000000002', 'e3000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000003', 'Consulta ficticia tenant B', now()-interval '3 days', now()-interval '3 days'+interval '1 hour', 'scheduled'),
+  ('e4000000-0000-4000-8000-000000000006', 'e2000000-0000-4000-8000-000000000002', 'e3000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000006', 'Consulta ficticia tenant B', now()-interval '3 days', now()-interval '3 days'+interval '1 hour', 'scheduled'),
   ('e4000000-0000-4000-8000-000000000007', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'Consulta legacy 1', now()-interval '4 days', now()-interval '4 days'+interval '1 hour', 'scheduled'),
   ('e4000000-0000-4000-8000-000000000008', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'Consulta legacy 2', now()-interval '5 days', now()-interval '5 days'+interval '1 hour', 'scheduled'),
   ('e4000000-0000-4000-8000-000000000009', 'e2000000-0000-4000-8000-000000000001', 'e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000003', 'Consulta legacy 3', now()-interval '6 days', now()-interval '6 days'+interval '1 hour', 'scheduled');
@@ -255,11 +259,13 @@ drop table public.verified_reviews_concurrency_token_test;
 delete from public.clinical_change_events where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from public.clinical_records where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from public.audit_logs where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
+-- Clean assignment history created by final-schema appointment triggers before deleting fixture clinics.
+delete from public.patient_professional_assignments where clinic_id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from public.clinics where id in ('e2000000-0000-4000-8000-000000000001','e2000000-0000-4000-8000-000000000002');
 delete from auth.users where id in (
   'e1000000-0000-4000-8000-000000000001','e1000000-0000-4000-8000-000000000002',
   'e1000000-0000-4000-8000-000000000003','e1000000-0000-4000-8000-000000000004',
-  'e1000000-0000-4000-8000-000000000005'
+  'e1000000-0000-4000-8000-000000000005','e1000000-0000-4000-8000-000000000006'
 );
 select * from extensions.finish();
 commit;

@@ -2,9 +2,9 @@
 
 El resumen del dashboard resuelve el tenant exclusivamente en servidor a partir del usuario autenticado y `clinic_members`. Sólo considera membresías con `status = 'active'`; después consulta la clínica y todos los datos operativos mediante el cliente SSR normal de Supabase, RLS y un filtro explícito por `clinic_id`.
 
-## Selección temporal de clínica
+## Membresía clínica única
 
-Todavía no existe un selector multi-clínica. Si un usuario tiene más de una membresía activa, se elige de forma determinista la membresía más antigua por `created_at`; `clinic_id` ascendente funciona como desempate. Esta limitación debe sustituirse por una selección explícita de tenant en una entrega futura.
+La migración 0056 garantiza como máximo una fila activa de `clinic_members` por usuario clínico. El tenant del dashboard se deriva de esa única membresía activa en servidor; no existe selección entre varias clínicas. Las membresías activas duplicadas hacen que la migración se detenga para revisión, sin corregir datos automáticamente.
 
 El `clinic_id` nunca se recibe desde query params, localStorage ni componentes cliente.
 

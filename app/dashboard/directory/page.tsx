@@ -40,6 +40,7 @@ function canEditSelectedMember(currentMember: ManagedClinicMember, selectedMembe
 
 export default async function DashboardDirectoryPage({ searchParams }: DashboardDirectoryPageProps) {
   const onboardingStatus = await getOnboardingStatus();
+  if (onboardingStatus.state === "error") throw new Error("Clinic access is temporarily unavailable.");
 
   if (onboardingStatus.state === "unauthenticated") {
     redirect("/login");

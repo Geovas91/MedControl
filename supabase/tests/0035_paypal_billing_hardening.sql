@@ -54,11 +54,19 @@ select extensions.throws_ok($$select public.complete_paypal_billing_intent((sele
 update public.clinic_members set status='active' where user_id='35000000-0000-4000-8000-000000000001';
 
 select extensions.throws_ok($$select public.complete_paypal_billing_intent((select id from billing_fixture),'35100000-0000-4000-8000-000000000002','35000000-0000-4000-8000-000000000002','basic','I-SUBSCRIPTION1','P-BASIC','active',null,null)$$,'42501','invalid_billing_intent','other clinic and user cannot consume');
+-- Temporarily move the second owner to A; each identity still has only one active membership.
+update public.clinic_members set status='suspended' where clinic_id='35100000-0000-4000-8000-000000000002';
 insert into public.clinic_members(clinic_id,user_id,role,status) values
- ('35100000-0000-4000-8000-000000000001','35000000-0000-4000-8000-000000000002','owner','active'),
- ('35100000-0000-4000-8000-000000000002','35000000-0000-4000-8000-000000000001','owner','active');
+ ('35100000-0000-4000-8000-000000000001','35000000-0000-4000-8000-000000000002','owner','active');
 select extensions.throws_ok($$select public.complete_paypal_billing_intent((select id from billing_fixture),'35100000-0000-4000-8000-000000000001','35000000-0000-4000-8000-000000000002','basic','I-SUBSCRIPTION1','P-BASIC','active',null,null)$$,'42501','invalid_billing_intent','another owner in same clinic cannot consume another user intent');
+delete from public.clinic_members where clinic_id='35100000-0000-4000-8000-000000000001' and user_id='35000000-0000-4000-8000-000000000002';
+update public.clinic_members set status='active' where clinic_id='35100000-0000-4000-8000-000000000002';
+-- Exercise intent/clinic mismatch after a valid membership transition, rather than failing the owner guard first.
+update public.clinic_members set status='suspended' where clinic_id='35100000-0000-4000-8000-000000000001' and user_id='35000000-0000-4000-8000-000000000001';
+insert into public.clinic_members(clinic_id,user_id,role,status) values('35100000-0000-4000-8000-000000000002','35000000-0000-4000-8000-000000000001','owner','active');
 select extensions.throws_ok($$select public.complete_paypal_billing_intent((select id from billing_fixture),'35100000-0000-4000-8000-000000000002','35000000-0000-4000-8000-000000000001','basic','I-SUBSCRIPTION1','P-BASIC','active',null,null)$$,'42501','invalid_billing_intent','same owner cannot consume intent in another clinic');
+delete from public.clinic_members where clinic_id='35100000-0000-4000-8000-000000000002' and user_id='35000000-0000-4000-8000-000000000001';
+update public.clinic_members set status='active' where clinic_id='35100000-0000-4000-8000-000000000001' and user_id='35000000-0000-4000-8000-000000000001';
 select extensions.throws_ok($$select public.complete_paypal_billing_intent((select id from billing_fixture),'35100000-0000-4000-8000-000000000001','35000000-0000-4000-8000-000000000001','pro','I-SUBSCRIPTION1','P-BASIC','active',null,null)$$,'42501','invalid_billing_intent','plan bound');
 select extensions.throws_ok($$select public.complete_paypal_billing_intent((select id from billing_fixture),'35100000-0000-4000-8000-000000000001','35000000-0000-4000-8000-000000000001','basic','I-OTHER123','P-BASIC','active',null,null)$$,'42501','invalid_billing_intent','provider id bound');
 update public.paypal_billing_intents set expires_at=now()-interval '1 second';
@@ -114,14 +122,24 @@ delete from public.clinic_members where
 insert into public.clinic_subscriptions(clinic_id,plan_id,status,billing_provider)
   values('35100000-0000-4000-8000-000000000002','basic','inactive','manual');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.clinic_subscriptions'::regclass),'SaaS subscription RLS remains enabled');
+create temporary table protected_subscription_snapshot as
+ select status from public.clinic_subscriptions where clinic_id='35100000-0000-4000-8000-000000000001';
+grant select on protected_subscription_snapshot to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','35000000-0000-4000-8000-000000000001',true);
 select extensions.is((select count(*)::integer from public.clinic_subscriptions where clinic_id='35100000-0000-4000-8000-000000000001'),1,'owner reads own subscription');
 select extensions.is((select count(*)::integer from public.clinic_subscriptions where clinic_id='35100000-0000-4000-8000-000000000002'),0,'owner cannot read another tenant subscription');
-select extensions.throws_ok(
-  $$update public.clinic_subscriptions set status='cancelled' where clinic_id='35100000-0000-4000-8000-000000000001'$$,
-  '42501',null,'tenant owner cannot bypass billing and write subscription directly'
-);
+-- UPDATE USING filters unauthorized rows rather than raising 42501. Check actual
+-- writes and persisted state rather than assuming the final webhook fixture status.
+with unauthorized_update as (
+  update public.clinic_subscriptions set status='cancelled'
+  where clinic_id='35100000-0000-4000-8000-000000000001' returning id
+)
+select extensions.is((select count(*) from unauthorized_update),0::bigint,
+  'tenant owner cannot bypass billing and write subscription directly');
+select extensions.is((select status from public.clinic_subscriptions
+  where clinic_id='35100000-0000-4000-8000-000000000001'),(select status from protected_subscription_snapshot),
+  'unauthorized owner update leaves the persisted subscription unchanged');
 select extensions.throws_ok($$select * from public.paypal_billing_intents$$,'42501',null,'authenticated SELECT actually denied');
 select extensions.throws_ok($$select * from public.paypal_webhook_events$$,'42501',null,'authenticated event SELECT actually denied');
 select extensions.throws_ok($$select public.claim_paypal_webhook('FORGED','UNKNOWN.EVENT',null)$$,'42501',null,'authenticated RPC actually denied');

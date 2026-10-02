@@ -88,7 +88,6 @@ export async function GET(request: NextRequest) {
     .select("id")
     .eq("user_id", user.id)
     .eq("status", "active")
-    .limit(1)
     .maybeSingle();
 
   if (membershipError) {
@@ -97,6 +96,7 @@ export async function GET(request: NextRequest) {
       status: "clinic_lookup_failed",
       error_code: getSafeDiagnosticCode(membershipError, "clinic_lookup_failed")
     });
+    return loginRedirect(publicOrigin, next, "No fue posible verificar tu clínica. Intenta nuevamente.");
   }
 
   const destination = getPostAuthRedirect({

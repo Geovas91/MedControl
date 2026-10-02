@@ -26,6 +26,7 @@ const trialPlanLabels = {
 export default async function OnboardingPage({ searchParams }: OnboardingPageProps) {
   const params = await searchParams;
   const status = await getOnboardingStatus();
+  if (status.state === "error") throw new Error("Clinic access is temporarily unavailable.");
 
   if (status.state === "unauthenticated") {
     redirect("/login");

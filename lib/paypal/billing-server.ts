@@ -1,5 +1,4 @@
 import "server-only";
-import { cookies } from "next/headers";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isPlanId } from "@/config/plans";
@@ -11,12 +10,10 @@ import { createPaypalSubscription, getPaypalPlanId, getPaypalSubscriptionDetails
 export async function requireBillingOwner() {
   const context = await getActiveTenantContext();
   if (context.state === "error") throw new BillingError(503, "billing_unavailable");
-  const selected = (await cookies()).get("clinicontrol_active_clinic")?.value;
   return authorizeBillingActor({
     userId: context.user?.id, clinicId: context.tenant?.clinic.id,
     membershipClinicId: context.tenant?.membership.clinic_id, role: context.tenant?.membership.role,
-    membershipStatus: context.tenant?.membership.status, multiple: context.tenant?.hasMultipleActiveMemberships,
-    selectedClinicId: selected
+    membershipStatus: context.tenant?.membership.status
   });
 }
 

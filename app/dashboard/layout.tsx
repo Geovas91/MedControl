@@ -3,7 +3,6 @@ import { signOutAction } from "@/app/(auth)/actions";
 import { getOnboardingStatus } from "@/lib/onboarding";
 import { getClinicEntitlements, getEntitlementNotice, planIncludesFeature } from "@/lib/server/entitlements";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { ClinicSwitcher } from "@/components/dashboard/clinic-switcher";
 import { redirect } from "next/navigation";
 
 async function getDashboardAccount() {
@@ -13,6 +12,8 @@ async function getDashboardAccount() {
     redirect("/login");
   }
 
+  if (onboardingStatus.state === "error") throw new Error("Clinic access is temporarily unavailable.");
+
   if (onboardingStatus.state !== "complete") {
     redirect("/onboarding");
   }
@@ -20,14 +21,15 @@ async function getDashboardAccount() {
   const fullName = onboardingStatus.profile.full_name;
 
   const tenantContext = await getActiveTenantContext();
-  const clinicId = tenantContext.state === "ready" ? tenantContext.tenant.clinic.id : onboardingStatus.membership.clinic_id;
+  if (tenantContext.state !== "ready") throw new Error("Clinic access is temporarily unavailable.");
+  const clinicId = tenantContext.tenant.clinic.id;
   const entitlements = await getClinicEntitlements(clinicId);
   return {
     name: fullName ?? onboardingStatus.user.email ?? "Usuario autenticado",
     subtitle: onboardingStatus.user.email ?? "Sesión activa en Supabase",
     subscriptionNotice: getEntitlementNotice(entitlements),
     appointmentAssistantAvailable: planIncludesFeature(entitlements, "appointment_assistant"),
-    tenant: tenantContext.state === "ready" ? tenantContext.tenant : null
+    tenant: tenantContext.tenant
   };
 }
 
@@ -41,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       appointmentAssistantAvailable={account.appointmentAssistantAvailable}
       footer={
         <>
-          {account.tenant ? <ClinicSwitcher activeClinicId={account.tenant.clinic.id} clinics={account.tenant.availableClinics} /> : null}
+          <p className="mb-3 px-3 text-sm font-semibold text-[var(--foreground-soft)]">{account.tenant.clinic.name}</p>
           <form action={signOutAction}>
             <button
               type="submit"

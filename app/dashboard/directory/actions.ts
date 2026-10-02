@@ -57,6 +57,8 @@ export async function saveDirectoryProfileAction(
     redirect("/login");
   }
 
+  if (onboardingStatus.state === "error") return { error: "No fue posible verificar el acceso a tu clínica. Intenta nuevamente." };
+
   if (onboardingStatus.state !== "complete") {
     redirect("/onboarding");
   }

@@ -49,15 +49,13 @@ for (const [name, patch, status] of [
   ["no membership", { membershipClinicId: "" }, 403],
   ["suspended membership", { membershipStatus: "suspended" }, 403],
   ["wrong clinic", { membershipClinicId: "clinic-b" }, 403],
-  ["ambiguous active clinic", { multiple: true }, 403],
-  ["unverified clinic selection", { selectedClinicId: "clinic-b" }, 403]
 ] as const) test(`${name} denied before privileged access`, async () => {
   const { state, handlers } = billing(); state.role = { ...owner, ...patch };
   assert.equal((await handlers.approve(request(input))).status, status);
   assert.equal(state.writes + state.reads + state.providers, 0);
 });
-test("explicit active clinic selected and verified by server is allowed", () => {
-  assert.deepEqual(authorizeBillingActor({ ...owner, multiple: true, selectedClinicId: actor.clinicId }), actor);
+test("single active owner membership authorizes billing without clinic selection", () => {
+  assert.deepEqual(authorizeBillingActor(owner), actor);
 });
 for (const [name, patch] of [
   ["another user", { user_id: "other" }], ["another clinic", { clinic_id: "clinic-b" }],
