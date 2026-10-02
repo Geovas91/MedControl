@@ -6,7 +6,7 @@
 
 La RPC `complete_clinic_onboarding_for_current_user` (definida en 0015 y actualizada en 0056) crea una suscripción `manual` en `trialing` por 30 días mediante `current_period_start = now()` y `current_period_end = now() + interval '30 days'`, calculados exclusivamente por PostgreSQL. No acepta fechas del cliente, no crea pagos clínicos ni marca una suscripción como pagada. También registra versiones provisionales de términos, privacidad y responsabilidad con `accepted_at` generado por PostgreSQL; la redacción/versiones definitivas requieren revisión jurídica.
 
-La pantalla de miembros lista únicamente la clínica activa mediante RPC/RLS. Las invitaciones seguras usan hash de token, expiración, uso único, rotación y revocación, y nunca permiten el rol owner. La entrega de correo sigue sin implementación: el enlace se copia de forma controlada y no se simula un correo enviado.
+La pantalla de miembros lista únicamente su clínica mediante RPC/RLS. Las invitaciones seguras usan hash de token, expiración, uso único, rotación y revocación, y nunca permiten el rol owner. La entrega de correo sigue sin implementación: el enlace se copia de forma controlada y no se simula un correo enviado.
 
 ## Pruebas manuales
 
