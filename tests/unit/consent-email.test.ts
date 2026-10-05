@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
+import { getConsentWriteState } from "../../lib/consents/access.ts";
 import { canCreateConsent } from "../../lib/clinical-record/permissions.ts";
 import { loadConsentEmailData, runConsentEmailDelivery, type ConsentEmailDeliveryDependencies } from "../../lib/consents/email-delivery.ts";
 import { getConsentEmailActionOutcome, getConsentEmailAvailability, getConsentEmailDialogView } from "../../lib/consents/email.ts";
@@ -19,6 +22,32 @@ const active = {
   signingTokenRevokedAt: null,
   now: new Date("2030-01-01T12:00:00.000Z")
 };
+
+test("real consent email authorization resolves patient scope before any privileged token lookup", async () => {
+  for (const scenario of ["nonprofessional", "out_of_scope", "missing", "read_only", "technical"] as const) {
+    let adminReads = 0;
+    let dataReads = 0;
+    const mocks: Record<string, unknown> = {
+      "server-only": {},
+      "@/lib/consents/email-delivery": { loadConsentEmailData, runConsentEmailDelivery },
+      "@/lib/clinical-record/permissions": { canCreateConsent },
+      "@/lib/consents/access": { getConsentWriteState },
+      "@/lib/patients/detail": { isValidPatientUuid: () => true },
+      "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready", user: { id: "synthetic" }, tenant: { clinic: { id: "synthetic", name: "QA", timezone: "America/Mexico_City" }, membership: { role: "owner", is_professional: scenario !== "nonprofessional" } } }) },
+      "@/lib/server/patient-access": { canAccessClinicalPatientForActiveTenant: async () => ({ state: "ready", allowed: scenario !== "out_of_scope" }) },
+      "@/lib/server/entitlements": { getClinicEntitlements: async () => scenario === "missing" ? { state: "missing" } : scenario === "technical" ? { state: "error" } : { state: "ready", entitlements: { effectiveStatus: "inactive" } } },
+      "@/lib/supabase/admin": { createAdminClient: () => { adminReads++; throw new Error("must not read"); } },
+      "@/lib/supabase/server": { createClient: async () => { dataReads++; throw new Error("must not read"); } },
+      "@/lib/logger": { logger: { error: () => {}, info: () => {}, warn: () => {} } }
+    };
+    const exports: { deliverConsentSigningEmail?: (input: unknown) => Promise<{ state: string }> } = {};
+    runInNewContext(ts.transpileModule(readFileSync("lib/server/consent-email.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: (name: string) => mocks[name] ?? {} });
+    const result = await exports.deliverConsentSigningEmail!({ patientId: "synthetic", consentId: "synthetic", signingUrl });
+    assert.equal(result.state, scenario === "missing" ? "subscription_missing" : scenario === "read_only" ? "subscription_read_only" : scenario === "technical" ? "error" : "forbidden");
+    assert.equal(adminReads, 0);
+    assert.equal(dataReads, 0);
+  }
+});
 
 function createDeliveryHarness(overrides: Partial<ConsentEmailDeliveryDependencies> = {}) {
   const logs: Array<{ level: string; code: string; supabaseErrorCode?: string }> = [];
@@ -264,3 +293,16 @@ test("provider failures are audited safely and do not invalidate the consent lin
   assert.doesNotMatch(audit, /signingUrl|signing_token|tokenHash|recipient|html|consentText/);
   assert.doesNotMatch(service, /revokeConsent|cancelConsent|issueConsent/);
 });
+
+
+for (const state of ["subscription_missing", "subscription_read_only", "forbidden", "error"] as const) {
+  test(`consent email ${state}: no privileged data load, provider call or success audit`, async () => {
+    let reads = 0;
+    const harness = createDeliveryHarness({ resolveContext: async () => ({ state }), loadData: async () => { reads++; throw new Error("must not load"); } });
+    const result = await runConsentEmailDelivery({ signingUrl }, harness.dependencies);
+    assert.equal(result.state, state);
+    assert.equal(reads, 0);
+    assert.equal(harness.messages.length, 0);
+    assert.equal(harness.audits.length, 0);
+  });
+}

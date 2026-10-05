@@ -135,6 +135,14 @@ insert into public.clinical_records(id, clinic_id, patient_id, status) values
 create temporary table consent_test_ids(key text primary key, value uuid not null);
 grant select, insert, update on consent_test_ids to authenticated;
 
+-- Authorized positive fixtures now explicitly satisfy 0050 patient scope.
+update public.clinic_members set is_professional=true
+where clinic_id::text like '22000000-%' and role in ('owner','admin');
+insert into public.patient_professional_assignments(clinic_id,patient_id,clinic_member_id,source)
+select p.clinic_id,p.id,m.id,'manual' from public.patients p
+join public.clinic_members m on m.clinic_id=p.clinic_id
+where p.clinic_id::text like '22000000-%' and m.is_professional and m.status='active';
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000001', true);
 insert into consent_test_ids values (
@@ -187,7 +195,8 @@ begin
       'Cross tenant', 'v1', 'Debe rechazarse.', null
     );
     raise exception 'Doctor created a consent for another clinic patient';
-  exception when invalid_parameter_value then null; end;
+  -- Scope authorization now rejects before entity validation.
+  exception when insufficient_privilege then null; end;
 
   begin
     insert into public.consents(clinic_id, patient_id, clinical_record_id, consent_type, consent_version, consent_text, status)
@@ -342,17 +351,26 @@ begin
     );
     raise exception 'Doctor cancelled a consent through another clinic';
   exception when insufficient_privilege then null; end;
-  if public.issue_current_consent_signing_link_for_current_user(
+  begin
+    perform public.issue_current_consent_signing_link_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005',
     v_doctor, repeat('c', 64), now() + interval '7 days', now()
-  ) then raise exception 'Doctor issued a link with a foreign patient ID'; end if;
-  if public.revoke_consent_signing_link_for_current_user(
+  );
+    raise exception 'Doctor issued a link with a foreign patient ID';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.revoke_consent_signing_link_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005', v_doctor
-  ) then raise exception 'Doctor revoked a link with a foreign patient ID'; end if;
-  if public.cancel_consent_for_current_user(
+  );
+    raise exception 'Doctor revoked a link with a foreign patient ID';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.cancel_consent_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000005',
     v_doctor, 'Foreign patient'
-  ) <> 'unavailable' then raise exception 'Doctor resolved a consent with a foreign patient ID'; end if;
+  );
+    raise exception 'Doctor resolved a consent with a foreign patient ID';
+  exception when insufficient_privilege then null; end;
 
   if public.update_pending_consent_for_current_user(
     '22000000-0000-4000-8000-000000000001', '33000000-0000-4000-8000-000000000003',

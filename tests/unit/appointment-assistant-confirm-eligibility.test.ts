@@ -21,6 +21,8 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
     availabilityStart: "09:00",
     malformedSlots: false,
     mutationCalls: 0,
+    deliveryCalls: [] as Record<string, unknown>[],
+    changed: true,
     eligibilityCalls: 0,
     slotIntervalCalls: [] as number[],
     finish: null as null | { outcome: string; errorCode: string | null },
@@ -67,9 +69,11 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
     "@/lib/dashboard/timezone": { getClinicDayRange: () => ({ localDate: "2026-09-28" }) },
     "@/lib/logger": { logger: { info: () => {}, error: () => {} } },
     "@/lib/server/appointments": {},
+    "@/lib/calendar/invitation": { buildAppointmentCalendarOperation: (_id: string, _kind: string, version: string) => ({ operationKey: "calendar-key", appointmentVersion: version }) },
+    "@/lib/server/appointment-calendar-email": { deliverAppointmentCalendarEmail: async (input: Record<string, unknown>) => { state.deliveryCalls.push(input); return "delivery_unknown"; } },
     "@/lib/server/appointment-detail": {},
-    "@/lib/server/appointment-lifecycle": {},
-    "@/lib/server/create-appointment": { createAppointmentForActiveTenant: async () => { state.mutationCalls++; return { state: "success", appointmentId }; } },
+    "@/lib/server/appointment-lifecycle": { mutateAppointmentLifecycleForActiveTenant: async (input: { operation: string }) => ({ state: "success", appointment: { appointment_id: appointmentId, status: input.operation === "cancel" ? "cancelled" : "confirmed", updated_at: "2026-09-28T12:00:00Z", changed: state.changed } }) },
+    "@/lib/server/create-appointment": { createAppointmentForActiveTenant: async () => { state.mutationCalls++; return { state: "success", appointmentId, operationKey: "calendar-key", appointmentVersion: "2026-09-28T12:00:00Z" }; } },
     "@/lib/server/patients": { isPatientEligibleForSchedulingWithProfessionalActiveTenant: async (patient: string, professional: string) => {
       state.eligibilityCalls++;
       assert.equal(patient, patientId);
@@ -180,9 +184,13 @@ for (const role of ["owner", "admin", "assistant", "doctor"] as const) {
     assert.equal(confirmed.ok, true);
     assert.equal(state.eligibilityCalls, 2);
     assert.equal(state.mutationCalls, 1);
+    assert.equal(state.deliveryCalls.length, 1);
+    assert.equal(state.deliveryCalls[0].method, "REQUEST");
     assert.deepEqual(state.finish, { outcome: "executed", errorCode: null });
     assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, false);
     assert.equal(state.mutationCalls, 1);
+    assert.equal(state.deliveryCalls.length, 1);
+    assert.equal(state.deliveryCalls[0].method, "REQUEST");
   });
 }
 
@@ -227,4 +235,21 @@ test("a newly unavailable slot remains rejected after eligibility revalidation",
   assert.equal(state.eligibilityCalls, 2);
   assert.equal(state.mutationCalls, 0);
   assert.deepEqual(state.finish, { outcome: "failed", errorCode: "outside_availability" });
+});
+
+
+test("Assistant lifecycle reuses ICS for changed reschedule/cancel, not confirm or duplicate", async () => {
+  const { registry, state } = mountRegistry();
+  const tools = registry.assistantToolRegistry as unknown as Map<string, { execute: (context: unknown, input: unknown) => Promise<{ ok: boolean }> }>;
+  const context = { timeZone: "America/Mexico_City" };
+  assert.equal((await tools.get("confirm_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled" })).ok, true);
+  assert.equal(state.deliveryCalls.length, 0);
+  assert.equal((await tools.get("cancel_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled" })).ok, true);
+  assert.equal(state.deliveryCalls[0].method, "CANCEL");
+  assert.equal((await tools.get("reschedule_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled", date: input.date, startTime: input.startTime, durationMinutes: 30 })).ok, true);
+  assert.equal(state.deliveryCalls[1].method, "REQUEST");
+  state.changed = false;
+  await tools.get("cancel_appointment")!.execute(context, { appointmentId, expectedStatus: "cancelled" });
+  await tools.get("reschedule_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled", date: input.date, startTime: input.startTime, durationMinutes: 30 });
+  assert.equal(state.deliveryCalls.length, 2);
 });

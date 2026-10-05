@@ -1,3 +1,5 @@
+import { getConsentAccessMessage } from "./access.ts";
+
 export const compatiblePatientEmail = /^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/;
 
 export type ConsentEmailAvailability =
@@ -6,7 +8,7 @@ export type ConsentEmailAvailability =
 
 export type ConsentEmailResult =
   | { state: "sent"; recipient: string }
-  | { state: "missing_recipient" | "invalid_link" | "invalid_state" | "forbidden" | "unauthenticated" | "not_found" | "provider_unavailable" | "query_failed" | "delivery_failed" };
+  | { state: "missing_recipient" | "invalid_link" | "invalid_state" | "forbidden" | "unauthenticated" | "not_found" | "provider_unavailable" | "query_failed" | "delivery_failed" | "subscription_missing" | "subscription_read_only" | "error" };
 
 export type ConsentEmailActionOutcome =
   | { kind: "not_found" }
@@ -20,6 +22,7 @@ export function getConsentEmailActionOutcome(result: ConsentEmailResult): Consen
   if (result.state === "missing_recipient") return { kind: "state", state: { error: "Este paciente no tiene correo electrónico registrado." } };
   if (result.state === "invalid_link") return { kind: "state", state: { error: "El enlace de firma ya no es válido. Genera un enlace nuevo e intenta nuevamente." } };
   if (result.state === "invalid_state") return { kind: "state", state: { error: "Este consentimiento ya no puede enviarse por correo." } };
+  if (result.state === "subscription_missing" || result.state === "subscription_read_only") return { kind: "state", state: { error: getConsentAccessMessage(result.state) } };
   if (result.state === "forbidden") return { kind: "state", state: { error: "No tienes permisos para enviar este consentimiento." } };
   return { kind: "state", state: { error: "No pudimos enviar el consentimiento. Intenta nuevamente." } };
 }

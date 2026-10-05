@@ -72,3 +72,13 @@ test("marketing removes unsupported claims and publishes the approved matrix", (
   assert.match(plans, /Sin Google Calendar/);
   assert.match(plans, /Sin Appointment Assistant/);
 });
+
+
+test("ICS and custom consents remain shared capabilities, not plan feature booleans", () => {
+  for (const plan of ["basic", "plus", "pro"] as const) {
+    const features = getPlanEntitlements(plan).features;
+    for (const key of ["ics", "custom_consents", "consents"]) assert.equal(key in features, false);
+  }
+  const service = readFileSync("lib/server/appointment-calendar-email.ts", "utf8");
+  assert.doesNotMatch(service, /google_calendar|appointment_assistant|canUseFeature/);
+});

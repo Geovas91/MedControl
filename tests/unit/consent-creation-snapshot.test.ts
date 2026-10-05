@@ -11,6 +11,7 @@ const workspace = readFileSync(new URL("../../components/clinical-record/pending
 const server = readFileSync(new URL("../../lib/server/clinical-consents.ts", import.meta.url), "utf8");
 const migration0023 = readFileSync(new URL("../../supabase/migrations/0023_consent_signed_documents.sql", import.meta.url), "utf8");
 const migration0024 = readFileSync(new URL("../../supabase/migrations/0024_update_pending_consent_content.sql", import.meta.url), "utf8");
+const migration0058 = readFileSync(new URL("../../supabase/migrations/0058_align_ics_consent_authority.sql", import.meta.url), "utf8");
 const migration0025 = readFileSync(new URL("../../supabase/migrations/0025_preserve_exact_consent_snapshot.sql", import.meta.url), "utf8");
 
 test("creation parser preserves the exact visible snapshot and validates trimmed emptiness only", () => {
@@ -47,7 +48,7 @@ test("creation persists submitted snapshot values and only references the valida
   assert.match(creation, /p_template_id: templateId/);
   assert.doesNotMatch(creation, /getTemplateContent|template\.name|template_schema/);
   assert.doesNotMatch(migration0024, /create or replace function public\.create_consent_for_current_user/);
-  assert.match(migration0025, /create or replace function public\.create_consent_for_current_user[\s\S]+v_type text := coalesce\(p_consent_type, ''\)[\s\S]+v_version text := coalesce\(p_consent_version, ''\)[\s\S]+v_text text := coalesce\(p_consent_text, ''\)/);
+  assert.match(migration0058, /create or replace function public\.create_consent_for_current_user[\s\S]+v_type text := coalesce\(p_consent_type, ''\)[\s\S]+v_version text := coalesce\(p_consent_version, ''\)[\s\S]+v_text text := coalesce\(p_consent_text, ''\)/);
   assert.doesNotMatch(migration0025, /update public\.medical_note_templates/);
 });
 
@@ -58,12 +59,12 @@ test("creation redirects to a clean detail that can issue a link immediately", (
   assert.match(detailPage, /initialValues=\{\{ consentType: consent\.consent_type, consentVersion: consent\.consent_version, consentText: consent\.consent_text \}\}/);
   assert.match(detailPage, /initialUpdatedAt=\{consent\.updated_at\}/);
   assert.match(workspace, /useState\(initialValues\)[\s\S]+useState\(initialValues\)/);
-  assert.match(workspace, /signingActionsBlocked = dirty \|\| isSaving/);
+  assert.match(workspace, /signingActionsBlocked = !canWrite \|\| dirty \|\| isSaving/);
   assert.match(detailPage, /signingAction=\{generateConsentSigningLinkAction\.bind/);
 });
 
 test("creation emits no token and signed evidence freezes that same snapshot for PDF", () => {
-  const createFunction = migration0025.slice(migration0025.indexOf("create or replace function public.create_consent_for_current_user"), migration0025.indexOf("-- Subsequent pending edits"));
+  const createFunction = migration0058.slice(0, migration0058.indexOf("create or replace function public.update_pending_consent_for_current_user"));
   assert.match(createFunction, /template_id, signing_token, status[\s\S]+p_template_id, null, 'pending'/);
   assert.doesNotMatch(createFunction, /signing_token_hash\s*=/);
   assert.match(migration0023, /snapshot\.consent_type, snapshot\.consent_version,[\s\S]+snapshot\.consent_text/);

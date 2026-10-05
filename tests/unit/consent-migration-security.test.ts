@@ -57,3 +57,12 @@ test("0022 SECURITY DEFINER functions keep fixed search paths and explicit grant
   assert.match(migration0022, /revoke all on function public\.sign_public_consent\([\s\S]+from public/i);
   assert.match(migration0022, /grant execute on function public\.sign_public_consent\([\s\S]+to anon, authenticated/i);
 });
+
+
+test("0058 private clinical RPCs require patient scope and public signing is unchanged", () => {
+  const sql = readFileSync("supabase/migrations/0058_align_ics_consent_authority.sql", "utf8");
+  const clinical = sql.slice(0, sql.indexOf("create or replace function public.mutate_appointment_lifecycle"));
+  assert.equal((clinical.match(/has_patient_professional_scope\(p_clinic_id, p_patient_id\)/g) ?? []).length, 6);
+  assert.doesNotMatch(clinical, /has_clinic_role|has_clinic_professional/);
+  assert.doesNotMatch(sql, /create or replace function public\.(get_public_consent_for_signing|sign_public_consent)|alter table.*disable/);
+});

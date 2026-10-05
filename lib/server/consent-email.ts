@@ -8,7 +8,9 @@ import { canCreateConsent } from "@/lib/clinical-record/permissions";
 import { logger } from "@/lib/logger";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
+import { getConsentWriteState } from "@/lib/consents/access";
+import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
+import { getClinicEntitlements } from "@/lib/server/entitlements";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAppBaseUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -52,8 +54,13 @@ export async function deliverConsentSigningEmail(input: { patientId: string; con
       resolveContext: async () => {
         const context = await getActiveTenantContext();
         if (context.state === "unauthenticated") return { state: "unauthenticated" };
+        if (context.state === "error") return { state: "error" };
         if (context.state !== "ready" || !canCreateConsent(context.tenant.membership)) return { state: "forbidden" };
-        if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return { state: "forbidden" };
+        const access = await canAccessClinicalPatientForActiveTenant(input.patientId);
+        if (access.state === "error") return { state: "error" };
+        if (access.state !== "ready" || !access.allowed) return { state: "forbidden" };
+        const writeState = getConsentWriteState(await getClinicEntitlements(context.tenant.clinic.id));
+        if (writeState !== "ready") return { state: writeState };
         return {
           state: "ready",
           clinicId: context.tenant.clinic.id,

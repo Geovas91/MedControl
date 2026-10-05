@@ -81,6 +81,14 @@ insert into public.consents(
   ('95000000-0000-4000-8000-000000000008', '92000000-0000-4000-8000-000000000001', '93000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000001', 'Revision original', 'v1', 'Revision-controlled text', 'pending', null, null, null, null, null, null, '2026-01-01 00:00:08+00'),
   ('95000000-0000-4000-8000-000000000009', '92000000-0000-4000-8000-000000000002', '93000000-0000-4000-8000-000000000002', '94000000-0000-4000-8000-000000000002', 'Tenant B original', 'v1', 'Tenant B protected text', 'pending', null, null, null, null, null, null, '2026-01-01 00:00:09+00');
 
+-- Authorized positive fixtures now explicitly satisfy 0050 patient scope.
+update public.clinic_members set is_professional=true
+where clinic_id::text like '92000000-%' and role in ('owner','admin');
+insert into public.patient_professional_assignments(clinic_id,patient_id,clinic_member_id,source)
+select p.clinic_id,p.id,m.id,'manual' from public.patients p
+join public.clinic_members m on m.clinic_id=p.clinic_id
+where p.clinic_id::text like '92000000-%' and m.is_professional and m.status='active';
+
 set local role authenticated;
 
 -- Owner, admin and doctor can update an exact pending snapshot revision.

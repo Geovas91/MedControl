@@ -6,6 +6,8 @@ import { logger } from "@/lib/logger";
 import { getAppointmentAgendaForActiveTenant } from "@/lib/server/appointments";
 import { getAppointmentDetailForActiveTenant } from "@/lib/server/appointment-detail";
 import { mutateAppointmentLifecycleForActiveTenant } from "@/lib/server/appointment-lifecycle";
+import { deliverAppointmentCalendarEmail } from "@/lib/server/appointment-calendar-email";
+import { buildAppointmentCalendarOperation } from "@/lib/calendar/invitation";
 import { createAppointmentForActiveTenant } from "@/lib/server/create-appointment";
 import { getPatientsForActiveTenant, isPatientEligibleForSchedulingWithProfessionalActiveTenant } from "@/lib/server/patients";
 import { getProfessionalAvailableSlots } from "@/lib/server/professional-slots";
@@ -153,13 +155,16 @@ const createAppointment: AssistantToolDefinition<ReturnType<typeof toolSchemas.c
     const member = memberResult.data;
     const values: AppointmentFormValues = { patientId: input.patientId, doctorId: member.user_id, title: "Cita", appointmentType: "", date: input.date, startTime: input.startTime, duration: String(input.durationMinutes), status: "scheduled", location: "", meetingUrl: "" };
     const result = await createAppointmentForActiveTenant(values);
+    if (result.state === "success") await deliverAppointmentCalendarEmail({ appointmentId: result.appointmentId, method: "REQUEST", reason: "created", operationKey: result.operationKey, appointmentVersion: result.appointmentVersion });
     return result.state === "success" ? { ok: true, data: { appointment_id: result.appointmentId } } : safeFailure(result.state);
   }
 };
 
 function lifecycleTool(name: "confirm_appointment" | "cancel_appointment"): AssistantToolDefinition<{ appointmentId: string; expectedStatus: string }, { appointment_id: string; status: string }> {
   return { name, description: name === "confirm_appointment" ? "Confirma una cita mediante el lifecycle vigente." : "Cancela una cita mediante el lifecycle vigente.", inputSchema: toolSchemas.lifecycle, outputSchema: toolSchemas.output, mutation: true, requiresConfirmation: true,
-    async execute(_context, input) { const result = await mutateAppointmentLifecycleForActiveTenant({ appointmentId: input.appointmentId, operation: name === "confirm_appointment" ? "confirm" : "cancel", expectedStatus: input.expectedStatus as never }); return result.state === "success" ? { ok: true, data: { appointment_id: result.appointment.appointment_id, status: result.appointment.status } } : safeFailure(result.state); }
+    async execute(_context, input) { const result = await mutateAppointmentLifecycleForActiveTenant({ appointmentId: input.appointmentId, operation: name === "confirm_appointment" ? "confirm" : "cancel", expectedStatus: input.expectedStatus as never });
+      if (result.state === "success" && result.appointment.changed && name === "cancel_appointment") await deliverAppointmentCalendarEmail({ appointmentId: input.appointmentId, method: "CANCEL", reason: "cancelled", ...buildAppointmentCalendarOperation(input.appointmentId, "status", result.appointment.updated_at) });
+      return result.state === "success" ? { ok: true, data: { appointment_id: result.appointment.appointment_id, status: result.appointment.status } } : safeFailure(result.state); }
   };
 }
 
@@ -169,6 +174,7 @@ const rescheduleAppointment: AssistantToolDefinition<ReturnType<typeof toolSchem
     const local = combineClinicDateTime(input.date, input.startTime, context.timeZone);
     if (local.state !== "valid") return assistantToolError("validation_error", "No fue posible interpretar el horario local de la clínica.");
     const result = await mutateAppointmentLifecycleForActiveTenant({ appointmentId: input.appointmentId, operation: "reschedule", expectedStatus: input.expectedStatus as never, startsAt: local.iso, endsAt: calculateAppointmentEnd(local.iso, input.durationMinutes as never) });
+    if (result.state === "success" && result.appointment.changed) await deliverAppointmentCalendarEmail({ appointmentId: input.appointmentId, method: "REQUEST", reason: "rescheduled", ...buildAppointmentCalendarOperation(input.appointmentId, "updated", result.appointment.updated_at) });
     return result.state === "success" ? { ok: true, data: { appointment_id: result.appointment.appointment_id, status: result.appointment.status } } : safeFailure(result.state);
   }
 };

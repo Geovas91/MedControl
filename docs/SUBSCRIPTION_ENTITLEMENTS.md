@@ -27,3 +27,23 @@ No se anuncian tiers base/completo del Appointment Assistant, roles avanzados, r
 - Verificar `past_due`, `inactive`, `cancelled` y `trial_expired`: consultar históricos y facturación; cada operación anterior debe rechazar en servidor aunque se invoque directamente.
 - Simular fallo temporal de lectura de suscripción: no se concede escritura, se registra sólo el código técnico y se muestra aviso genérico.
 - Confirmar que una clínica no puede consultar ni cambiar la suscripción, límites o recursos de otra clínica.
+
+## Autoridad vigente (0058)
+
+ICS y consentimientos personalizados son capacidades compartidas por Básico, Plus y Pro;
+no son entitlements de Google Calendar ni Appointment Assistant. Una suscripción faltante
+es «Sin plan configurado», nunca Básico. Las escrituras nuevas requieren suscripción
+`active` o `trialing` vigente; los errores técnicos fallan cerrado.
+
+La autoridad clínica privada exige `has_patient_professional_scope(clinic, patient)`:
+membresía activa, `is_professional=true` y assignment activo al paciente. Owner/admin
+sin esa capacidad o sin scope y assistants no pueden operar consentimientos ni leer
+evidencia. No se crea scope automáticamente al intentar una operación.
+
+Crear, editar, emitir/rotar enlace y enviar correo requieren escritura habilitada.
+Consultar evidencia, revocar un enlace y cancelar un consentimiento pendiente siguen
+permitidos para profesionales con scope aunque la suscripción no permita escrituras.
+Los enlaces públicos ya emitidos conservan su validez tras perder la suscripción hasta
+uso, revocación, expiración o cancelación; se preservan bloqueo, firma única y evidencia.
+Tipo, versión y texto se guardan exactamente como se enviaron, sin recortar el snapshot.
+Esto no constituye una afirmación de cumplimiento legal.
