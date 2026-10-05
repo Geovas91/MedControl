@@ -33,7 +33,7 @@ export default async function PatientConsentsPage({ params }: { params: Promise<
         <div><h1 className="text-2xl font-bold text-ink">Consentimientos</h1><p className="mt-1 text-sm text-slate-500">Histórico documental de {data.patient.full_name}, del más reciente al más antiguo.</p></div>
         {canWrite && canCreateConsent(data.tenant.membership) ? <ButtonLink href={`/dashboard/patients/${id}/consents/new`}><Plus className="h-4 w-4" />Nuevo consentimiento</ButtonLink> : null}
       </div>
-      {!canWrite ? <p role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{getConsentAccessMessage(writeState)} <Link href="/dashboard/billing" className="font-semibold underline">Revisar facturación</Link></p> : null}
+      {!canWrite ? <p role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{getConsentAccessMessage(writeState)} {writeState === "subscription_missing" || writeState === "subscription_read_only" ? <Link href="/dashboard/billing" className="font-semibold underline">Revisar facturación</Link> : null}</p> : null}
       <div className="grid gap-3">
         {data.consents.length ? data.consents.map((consent) => (
           <article key={consent.id} className="glass-card p-4">

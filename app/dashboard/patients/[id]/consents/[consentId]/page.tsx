@@ -39,7 +39,7 @@ export default async function ConsentDetailPage({ params, searchParams }: { para
       {query.consent_cancelled === "1" ? <p role="status" className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">El consentimiento se canceló y ya no puede firmarse.</p> : null}
       {query.pdf_ready === "1" ? <p role="status" className="mb-5 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">El PDF privado está listo y verificado.</p> : null}
       {query.signing_link_error === "1" || query.cancellation_error === "1" || query.pdf_error === "1" ? <p role="alert" className="mb-5 rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">No fue posible completar la acción. La firma clínica permanece intacta.</p> : null}
-      {consent.writeState !== "ready" ? <div role="status" className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{getConsentAccessMessage(consent.writeState)} <Link href="/dashboard/billing" className="font-semibold underline">Revisar facturación</Link></div> : null}
+      {consent.writeState !== "ready" ? <div role="status" className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{getConsentAccessMessage(consent.writeState)} {consent.writeState === "subscription_missing" || consent.writeState === "subscription_read_only" ? <Link href="/dashboard/billing" className="font-semibold underline">Revisar facturación</Link> : null}</div> : null}
       <section className="glass-card-strong p-4 sm:p-6">
         <Badge variant={consent.status === "signed" ? "green" : consent.status === "pending" ? "amber" : "slate"}>{getConsentStatusLabel(consent.status)}</Badge>
         {consent.status !== "pending" ? <>

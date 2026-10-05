@@ -160,3 +160,14 @@ test("consent states distinguish missing, read-only and technical failures witho
   assert.match(access.getConsentAccessMessage("subscription_missing"), /Sin plan configurado/);
   assert.doesNotMatch(access.getConsentAccessMessage("subscription_missing"), /Basic|Básico|Plus|Pro/);
 });
+
+test("consent pages show billing CTA only for missing or read-only subscriptions", () => {
+  const list = readFileSync("app/dashboard/patients/[id]/consents/page.tsx", "utf8");
+  const detail = readFileSync("app/dashboard/patients/[id]/consents/[consentId]/page.tsx", "utf8");
+  const billingCondition = /(?:writeState|consent\.writeState) === "subscription_missing" \|\| (?:writeState|consent\.writeState) === "subscription_read_only" \? <Link href="\/dashboard\/billing"/;
+
+  assert.match(list, billingCondition);
+  assert.match(detail, billingCondition);
+  assert.match(list, /getConsentAccessMessage\(writeState\)/);
+  assert.match(detail, /getConsentAccessMessage\(consent\.writeState\)/);
+});
