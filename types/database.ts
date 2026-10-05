@@ -992,6 +992,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      get_appointment_calendar_email_context_for_current_user: {
+        Args: { p_appointment_id: string };
+        Returns: { appointment_id: string; patient_email: string | null; starts_at: string; ends_at: string; status: Database["public"]["Enums"]["appointment_status"]; location: string | null; meeting_url: string | null; doctor_name: string | null; clinic_name: string; clinic_email: string | null; clinic_timezone: string; updated_at: string }[];
+      };
       is_patient_eligible_for_scheduling: {
         Args: { p_clinic_id: string; p_professional_clinic_member_id: string; p_patient_id: string };
         Returns: boolean;

@@ -61,11 +61,9 @@ CliniControl no reemplaza el juicio médico, diagnóstico, tratamiento, consenti
 
 ### Consentimientos
 
-- La ruta pública `/consent/sign/[token]` está deshabilitada por defecto.
-- Solo se muestra el flujo mock si `NEXT_PUBLIC_ENABLE_DEMO_CONSENT=true`.
-- Por defecto se muestra un mensaje seguro: “Este flujo de consentimiento todavía no está disponible públicamente.”
-- No hay conexión real a consentimientos públicos ni políticas anon amplias.
-- La firma pública real debe implementarse server-side en una fase futura.
+- La ruta pública `/consent/sign/[token]` usa las RPCs de token vigentes, sin acceso anon directo a tablas clínicas.
+- Se valida hash, expiración, revocación, estado pendiente y uso único; no depende del plan al firmar un enlace ya emitido.
+- La firma conserva snapshot y evidencia; no implica certificación legal.
 
 ### Integraciones
 
@@ -131,7 +129,7 @@ RLS:
 - Citas: owner, admin, doctor, assistant.
 - Pagos: owner/admin pueden leer/actualizar; doctor puede leer; assistant no lee por defecto.
 - Notas médicas: owner/admin/doctor; assistant no lee por defecto.
-- Consentimientos y firmas: owner/admin/doctor; assistant no lee texto completo ni firmas por defecto.
+- Consentimientos y firmas: profesional con assignment activo al paciente; assistant no tiene acceso clínico.
 - Integraciones, bot settings, bot logs y audit logs: restringidos según rol.
 
 ## Variables de Entorno
@@ -186,3 +184,23 @@ Notas:
 - Revisión UX/legal de directorio y reseñas.
 - Confirmar que no existan datos reales de pacientes en staging.
 - Revisar todos los textos para evitar promesas de diagnóstico, tratamiento, automatización clínica o IA médica.
+
+## Autoridad vigente (0058)
+
+ICS y consentimientos personalizados son capacidades compartidas por Básico, Plus y Pro;
+no son entitlements de Google Calendar ni Appointment Assistant. Una suscripción faltante
+es «Sin plan configurado», nunca Básico. Las escrituras nuevas requieren suscripción
+`active` o `trialing` vigente; los errores técnicos fallan cerrado.
+
+La autoridad clínica privada exige `has_patient_professional_scope(clinic, patient)`:
+membresía activa, `is_professional=true` y assignment activo al paciente. Owner/admin
+sin esa capacidad o sin scope y assistants no pueden operar consentimientos ni leer
+evidencia. No se crea scope automáticamente al intentar una operación.
+
+Crear, editar, emitir/rotar enlace y enviar correo requieren escritura habilitada.
+Consultar evidencia, revocar un enlace y cancelar un consentimiento pendiente siguen
+permitidos para profesionales con scope aunque la suscripción no permita escrituras.
+Los enlaces públicos ya emitidos conservan su validez tras perder la suscripción hasta
+uso, revocación, expiración o cancelación; se preservan bloqueo, firma única y evidencia.
+Tipo, versión y texto se guardan exactamente como se enviaron, sin recortar el snapshot.
+Esto no constituye una afirmación de cumplimiento legal.

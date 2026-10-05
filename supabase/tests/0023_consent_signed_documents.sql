@@ -73,6 +73,14 @@ insert into public.consents(
   null, repeat('c', 64), now() + interval '1 day', 'pending'
 );
 
+-- Authorized positive fixtures now explicitly satisfy 0050 patient scope.
+update public.clinic_members set is_professional=true
+where clinic_id::text like '72000000-%' and role in ('owner','admin');
+insert into public.patient_professional_assignments(clinic_id,patient_id,clinic_member_id,source)
+select p.clinic_id,p.id,m.id,'manual' from public.patients p
+join public.clinic_members m on m.clinic_id=p.clinic_id
+where p.clinic_id::text like '72000000-%' and m.is_professional and m.status='active';
+
 set local role anon;
 do $$
 declare

@@ -56,7 +56,7 @@ export async function loadConsentEmailData(queries: {
 }
 
 export type ConsentEmailDeliveryDependencies = {
-  resolveContext: () => Promise<ReadyContext | { state: "unauthenticated" } | { state: "forbidden" }>;
+  resolveContext: () => Promise<ReadyContext | { state: "unauthenticated" | "forbidden" | "subscription_missing" | "subscription_read_only" | "error" }>;
   loadData: (context: ReadyContext) => Promise<ConsentEmailDataLoadResult>;
   getCanonicalBaseUrl: () => string;
   providerReady: (canonicalBaseUrl: string) => boolean;
@@ -77,6 +77,11 @@ export async function runConsentEmailDelivery(
   if (context.state === "forbidden") {
     dependencies.log("warn", "forbidden");
     return { state: "forbidden" };
+  }
+
+  if (context.state !== "ready") {
+    dependencies.log(context.state === "error" ? "error" : "info", context.state);
+    return { state: context.state };
   }
 
   const loaded = await dependencies.loadData(context);

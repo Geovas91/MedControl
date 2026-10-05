@@ -1,3 +1,5 @@
+import { getConsentWriteState, getConsentAccessMessage } from "@/lib/consents/access";
+import { getClinicEntitlements } from "@/lib/server/entitlements";
 import Link from "next/link";
 import { ArrowLeft, Download, Eye, FileSignature, Plus, RefreshCw } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
@@ -21,14 +23,17 @@ export default async function PatientConsentsPage({ params }: { params: Promise<
   if (result.state === "unauthenticated") redirect("/login");
   if (result.state !== "ready") return <section className="glass-card-strong p-5 text-sm text-slate-600">No tienes acceso a consentimientos clínicos.</section>;
   const { data } = result;
+  const writeState = getConsentWriteState(await getClinicEntitlements(data.tenant.clinic.id));
+  const canWrite = writeState === "ready";
 
   return (
     <>
       <Link href={`/dashboard/patients/${id}/clinical-record`} className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-clinic"><ArrowLeft className="h-4 w-4" />Volver al expediente</Link>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div><h1 className="text-2xl font-bold text-ink">Consentimientos</h1><p className="mt-1 text-sm text-slate-500">Histórico documental de {data.patient.full_name}, del más reciente al más antiguo.</p></div>
-        {canCreateConsent(data.tenant.membership) ? <ButtonLink href={`/dashboard/patients/${id}/consents/new`}><Plus className="h-4 w-4" />Nuevo consentimiento</ButtonLink> : null}
+        {canWrite && canCreateConsent(data.tenant.membership) ? <ButtonLink href={`/dashboard/patients/${id}/consents/new`}><Plus className="h-4 w-4" />Nuevo consentimiento</ButtonLink> : null}
       </div>
+      {!canWrite ? <p role="status" className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{getConsentAccessMessage(writeState)} {writeState === "subscription_missing" || writeState === "subscription_read_only" ? <Link href="/dashboard/billing" className="font-semibold underline">Revisar facturación</Link> : null}</p> : null}
       <div className="grid gap-3">
         {data.consents.length ? data.consents.map((consent) => (
           <article key={consent.id} className="glass-card p-4">

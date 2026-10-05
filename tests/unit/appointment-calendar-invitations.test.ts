@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
+import ts from "typescript";
 import {
   buildAppointmentCalendarOperation,
   canKeepAppointmentCalendarRecipient,
@@ -13,6 +15,62 @@ import {
 import { escapeIcsText, foldIcsLine, generateAppointmentIcs } from "../../lib/calendar/ics.ts";
 import { buildResendEmailPayload } from "../../lib/email/resend-payload.ts";
 import { buildAppointmentInvitationEmail } from "../../lib/email/templates/appointment-invitation.ts";
+
+function mountCalendarDelivery() {
+  const state = { recipient: "qa@example.test", provider: true, accepted: true, persistence: "true", reserved: false, calls: [] as string[] };
+  const version = "2030-01-01T12:00:00Z";
+  const mocks: Record<string, unknown> = {
+    "server-only": {},
+    "@/lib/calendar/ics": { generateAppointmentIcs },
+    "@/lib/calendar/invitation": { getCalendarDeliveryPreflight, isCurrentAppointmentVersion },
+    "@/lib/email/delivery-status": { getInvitationDeliveryStatus: () => "failed" },
+    "@/lib/email/provider": { getInvitationEmailConfiguration: () => state.provider ? { state: "ready", from: "agenda@example.test" } : { state: "disabled" } },
+    "@/lib/email/resend-provider": { sendWithResend: async () => { state.calls.push("provider"); return state.accepted ? { ok: true, messageId: "synthetic" } : { ok: false, code: "provider_rejected" }; } },
+    "@/lib/email/templates/appointment-invitation": { buildAppointmentInvitationEmail },
+    "@/lib/logger": { logger: { error: () => {} } },
+    "@/lib/server/active-tenant": { getActiveTenantContext: async () => ({ state: "ready" }) },
+    "@/lib/supabase/server": { createClient: async () => ({ rpc: async (name: string) => {
+      state.calls.push(name);
+      if (name === "get_appointment_calendar_email_context_for_current_user") return { error: null, data: [{ appointment_id: "synthetic", patient_email: state.recipient, starts_at: version, ends_at: "2030-01-01T12:30:00Z", status: "scheduled", clinic_name: "QA", clinic_timezone: "America/Mexico_City", updated_at: version }] };
+      if (name === "prepare_appointment_email_invite") { const duplicate = state.reserved; state.reserved = true; return { error: null, data: [{ invite_id: "synthetic", ics_uid: "qa@example.test", sequence: 0, should_send: !duplicate, version_matches: true }] }; }
+      if (state.persistence === "throw") throw new Error("not logged");
+      return { data: state.persistence === "true", error: state.persistence === "error" ? { code: "42501" } : null };
+    } }) }
+  };
+  const exports: { deliverAppointmentCalendarEmail?: (input: unknown) => Promise<string> } = {};
+  runInNewContext(ts.transpileModule(readFileSync("lib/server/appointment-calendar-email.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: (name: string) => mocks[name] ?? {} });
+  return { state, deliver: () => exports.deliverAppointmentCalendarEmail!({ appointmentId: "synthetic", method: "REQUEST", reason: "created", operationKey: "qa-key", appointmentVersion: version }) };
+}
+
+for (const persistence of ["false", "error", "throw"]) {
+  test(`real ICS service: accepted + persistence ${persistence} is unknown, no blind resend`, async () => {
+    const { state, deliver } = mountCalendarDelivery();
+    state.persistence = persistence;
+    assert.equal(await deliver(), "delivery_unknown");
+    assert.equal(await deliver(), "duplicate");
+    assert.equal(state.calls.filter((name) => name === "provider").length, 1);
+  });
+}
+
+test("real ICS service: sent requires persistence; rejected send records failure", async () => {
+  const accepted = mountCalendarDelivery();
+  assert.equal(await accepted.deliver(), "sent");
+  assert.deepEqual(accepted.state.calls, ["get_appointment_calendar_email_context_for_current_user", "prepare_appointment_email_invite", "provider", "record_appointment_email_invite_result"]);
+  const rejected = mountCalendarDelivery();
+  rejected.state.accepted = false;
+  assert.equal(await rejected.deliver(), "failed");
+});
+
+test("real ICS service: recipient/provider preflight consumes no reservation", async () => {
+  const recipient = mountCalendarDelivery();
+  recipient.state.recipient = "";
+  assert.equal(await recipient.deliver(), "missing_recipient");
+  assert.equal(recipient.state.reserved, false);
+  const provider = mountCalendarDelivery();
+  provider.state.provider = false;
+  assert.equal(await provider.deliver(), "disabled");
+  assert.equal(provider.state.reserved, false);
+});
 
 const baseIcs = {
   uid: "11111111-1111-4111-8111-111111111111@calendar.clinicontrol.mx",

@@ -91,3 +91,26 @@ No se requieren credenciales de Google Calendar para adjuntos `.ics`.
 
 La migración 0021 queda validada localmente y pendiente de aplicación controlada en staging. No está aplicada en
 staging ni en producción. La migración 0020 ya aplicada en staging no fue modificada.
+
+## Autoridad y lifecycle vigentes (0058)
+
+ICS por correo está incluido en Básico, Plus y Pro; es independiente de Google Calendar
+ y del entitlement del Appointment Assistant. Owner/admin/assistant activos operan citas
+ de su clínica; doctor sólo las propias. Esto no concede acceso clínico a assistants.
+
+Crear, confirmar y reprogramar exigen escritura habilitada. Cancelar es una reducción
+ segura aun con suscripción vencida, inactiva, past_due o faltante. `REQUEST` exige
+ escritura y cita no cancelada; `CANCEL` exige una cita realmente cancelada, sin exigir
+ escritura. El contexto administrativo mínimo se obtiene mediante una RPC autorizada
+ por cita, incluso tras perder el assignment derivado de esa cita. No debilita RLS,
+ no restaura scope clínico y no incluye diagnóstico, notas ni consentimientos.
+
+El registro de un envío previamente preparado permite reconciliar tras perder la
+ suscripción: exige actor autorizado, fila pending, secuencia y clave exactas. No crea
+ invitaciones ni avanza la secuencia. Provider accepted + persistencia fallida devuelve
+ `delivery_unknown`, nunca `sent`. No se reenvía automáticamente; la reserva permanece
+ consumida. La prevalidación de destinatario/proveedor ocurre antes de reservar.
+
+Las mutaciones confirmadas del Appointment Assistant reutilizan la misma orquestación:
+ crear/reprogramar envían REQUEST y cancelar CANCEL; confirmar no genera ICS nuevo.
+ Un fallo de correo no cambia el éxito de la mutación de cita.

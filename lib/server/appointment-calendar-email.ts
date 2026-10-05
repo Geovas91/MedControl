@@ -29,7 +29,14 @@ type PrepareResult = {
   version_matches: boolean;
 };
 
+type CalendarEmailContext = {
+  appointment_id: string; patient_email: string | null; starts_at: string; ends_at: string;
+  status: string; location: string | null; meeting_url: string | null; doctor_name: string | null;
+  clinic_name: string; clinic_email: string | null; clinic_timezone: string; updated_at: string;
+};
+
 type AppointmentDeliveryClient = {
+  rpc(fn: "get_appointment_calendar_email_context_for_current_user", args: { p_appointment_id: string }): Promise<{ data: CalendarEmailContext[] | null; error: { code?: string } | null }>;
   rpc(
     fn: "prepare_appointment_email_invite",
     args: { p_appointment_id: string; p_method: AppointmentIcsMethod; p_idempotency_key: string; p_appointment_version: string }
@@ -84,55 +91,16 @@ export async function deliverAppointmentCalendarEmail(input: DeliveryInput): Pro
 
 async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Promise<AppointmentCalendarDeliveryOutcome> {
   const context = await getActiveTenantContext();
-  if (context.state !== "ready" || !["owner", "doctor", "admin"].includes(context.tenant.membership.role)) {
-    return "failed";
-  }
-
-  const clinicId = context.tenant.clinic.id;
+  if (context.state !== "ready") return "failed";
   const supabase = await createClient();
-  const appointmentResult = await supabase
-    .from("appointments")
-    .select("id, patient_id, doctor_id, starts_at, ends_at, status, location, meeting_url, updated_at")
-    .eq("id", input.appointmentId)
-    .eq("clinic_id", clinicId)
-    .maybeSingle();
-
-  if (appointmentResult.error || !appointmentResult.data) return "failed";
-  const appointment = appointmentResult.data as {
-    id: string;
-    patient_id: string;
-    doctor_id: string | null;
-    starts_at: string;
-    ends_at: string;
-    status: string;
-    location: string | null;
-    meeting_url: string | null;
-    updated_at: string;
-  };
-
+  const lookup = await (supabase as unknown as AppointmentDeliveryClient).rpc(
+    "get_appointment_calendar_email_context_for_current_user", { p_appointment_id: input.appointmentId }
+  );
+  const appointment = lookup.data?.[0];
+  if (lookup.error || !appointment) return "failed";
   if (!isCurrentAppointmentVersion(appointment.updated_at, input.appointmentVersion)) return "duplicate";
   if ((input.method === "CANCEL") !== (appointment.status === "cancelled")) return "failed";
-
-  const [patientResult, clinicResult, doctorResult] = await Promise.all([
-    supabase.from("patients").select("email").eq("id", appointment.patient_id).eq("clinic_id", clinicId).maybeSingle(),
-    supabase.from("clinics").select("email").eq("id", clinicId).maybeSingle(),
-    appointment.doctor_id
-      ? supabase
-          .from("doctor_public_profiles")
-          .select("display_name")
-          .eq("profile_id", appointment.doctor_id)
-          .eq("clinic_id", clinicId)
-          .limit(1)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null })
-  ]);
-
-  if (patientResult.error || clinicResult.error || doctorResult.error) return "failed";
-  const patientData = patientResult.data as { email: string | null } | null;
-  const clinicData = clinicResult.data as { email: string | null } | null;
-  const doctorData = doctorResult.data as { display_name: string } | null;
-
-  const patientEmail = typeof patientData?.email === "string" ? patientData.email.trim().toLowerCase() : "";
+  const patientEmail = appointment.patient_email?.trim().toLowerCase() ?? "";
   const configuration = getInvitationEmailConfiguration();
   const preflight = getCalendarDeliveryPreflight({
     recipientValid: compatibleEmail.test(patientEmail),
@@ -141,25 +109,25 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
   if (preflight !== "ready") return preflight;
   if (configuration.state !== "ready") return "disabled";
 
-  const clinicEmail = typeof clinicData?.email === "string" ? clinicData.email.trim() : "";
+  const clinicEmail = appointment.clinic_email?.trim() ?? "";
   const organizerEmail = (compatibleEmail.test(clinicEmail) ? clinicEmail : null)
     ?? configuration.replyTo
     ?? extractFromEmail(configuration.from);
   if (!organizerEmail) return "failed";
 
-  const doctorName = typeof doctorData?.display_name === "string" ? doctorData.display_name : null;
+  const doctorName = appointment.doctor_name;
   const template = buildAppointmentInvitationEmail({
     kind: mapKind(input.method, input.reason),
-    clinicName: context.tenant.clinic.name,
+    clinicName: appointment.clinic_name,
     doctorName,
     startsAt: appointment.starts_at,
-    timeZone: context.tenant.clinic.timezone,
+    timeZone: appointment.clinic_timezone,
     location: appointment.location,
     meetingUrl: appointment.meeting_url
   });
 
   const prepare = await (supabase as unknown as AppointmentDeliveryClient).rpc("prepare_appointment_email_invite", {
-    p_appointment_id: appointment.id,
+    p_appointment_id: appointment.appointment_id,
     p_method: input.method,
     p_idempotency_key: input.operationKey,
     p_appointment_version: input.appointmentVersion
@@ -184,24 +152,31 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
   };
 
   async function persistOutcome(outcome: "sent" | "failed" | "delivery_unknown", messageId?: string, errorCode?: string) {
-    const persistence = await (supabase as unknown as AppointmentDeliveryClient).rpc(
-      "record_appointment_email_invite_result",
-      {
-        p_invite_id: invite.inviteId,
-        p_sequence: invite.sequence,
-        p_idempotency_key: input.operationKey,
-        p_outcome: outcome,
-        p_provider_message_id: messageId ?? null,
-        p_error_code: errorCode ?? null
-      }
-    );
+    try {
+      const persistence = await (supabase as unknown as AppointmentDeliveryClient).rpc(
+        "record_appointment_email_invite_result",
+        {
+          p_invite_id: invite.inviteId,
+          p_sequence: invite.sequence,
+          p_idempotency_key: input.operationKey,
+          p_outcome: outcome,
+          p_provider_message_id: messageId ?? null,
+          p_error_code: errorCode ?? null
+        }
+      );
 
-    if (persistence.error || !persistence.data) {
-      logger.error("Appointment calendar invite result persistence failed", {
-        component: "appointment_calendar_email",
-        status: "persistence_error",
-        code: persistence.error?.code
-      });
+      if (persistence.error || !persistence.data) {
+        logger.error("Appointment calendar invite result persistence failed", {
+          component: "appointment_calendar_email",
+          status: "persistence_error",
+          code: persistence.error?.code
+        });
+        return false;
+      }
+      return true;
+    } catch {
+      logger.error("Appointment calendar invite result persistence failed", { component: "appointment_calendar_email", status: "persistence_error" });
+      return false;
     }
   }
 
@@ -211,7 +186,7 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
     sequence: invite.sequence,
     startsAt: appointment.starts_at,
     endsAt: appointment.ends_at,
-    clinicName: context.tenant.clinic.name,
+    clinicName: appointment.clinic_name,
     doctorName,
     organizerEmail,
     attendeeEmail: patientEmail,
@@ -227,16 +202,16 @@ async function deliverAppointmentCalendarEmailInternal(input: DeliveryInput): Pr
       filename: input.method === "CANCEL" ? "cancelacion-cita.ics" : "cita.ics",
       contentType: `text/calendar; charset=utf-8; method=${input.method}`
     }],
-    idempotencyKey: `appointment-${appointment.id}-${invite.sequence}-${input.method.toLowerCase()}`
+    idempotencyKey: `appointment-${appointment.appointment_id}-${invite.sequence}-${input.method.toLowerCase()}`
   });
 
   if (result.ok) {
-    await persistOutcome("sent", result.messageId);
-    return "sent";
+    const persisted = await persistOutcome("sent", result.messageId);
+    return persisted ? "sent" : "delivery_unknown";
   }
 
   const outcome = getInvitationDeliveryStatus(result);
   const safeOutcome = outcome === "delivery_unknown" ? "delivery_unknown" : "failed";
-  await persistOutcome(safeOutcome, undefined, result.code);
-  return safeOutcome;
+  const persisted = await persistOutcome(safeOutcome, undefined, result.code);
+  return persisted ? safeOutcome : "delivery_unknown";
 }

@@ -122,3 +122,11 @@ test("history, signed detail, patient navigation and universal record expose the
   assert.match(clinicalRecord, /no son notas editables/);
   assert.match(clinicalRecord, /Firmado por/);
 });
+
+
+test("final signed-evidence definition scopes patient before returning snapshot", () => {
+  const sql = readFileSync("supabase/migrations/0058_align_ics_consent_authority.sql", "utf8");
+  const evidence = sql.slice(sql.indexOf("create or replace function public.get_signed_consent_evidence"), sql.indexOf("create or replace function public.mutate_appointment_lifecycle"));
+  assert.match(evidence, /has_patient_professional_scope/);
+  assert.doesNotMatch(evidence, /clinic_has_write_entitlement/);
+});

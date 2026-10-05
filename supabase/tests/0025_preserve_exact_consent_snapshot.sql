@@ -78,6 +78,14 @@ insert into public.consents(
 create temporary table exact_snapshot_test_ids(consent_id uuid primary key);
 grant select, insert on exact_snapshot_test_ids to authenticated;
 
+-- Authorized positive fixtures now explicitly satisfy 0050 patient scope.
+update public.clinic_members set is_professional=true
+where clinic_id::text like 'a2000000-%' and role in ('owner','admin');
+insert into public.patient_professional_assignments(clinic_id,patient_id,clinic_member_id,source)
+select p.clinic_id,p.id,m.id,'manual' from public.patients p
+join public.clinic_members m on m.clinic_id=p.clinic_id
+where p.clinic_id::text like 'a2000000-%' and m.is_professional and m.status='active';
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a1000000-0000-4000-8000-000000000001', true);
 

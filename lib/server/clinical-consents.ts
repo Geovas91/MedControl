@@ -7,7 +7,9 @@ import { buildConsentSigningUrl } from "@/lib/consents/signing-url";
 import { logger } from "@/lib/logger";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { canCreateWithEntitlements, getClinicEntitlements } from "@/lib/server/entitlements";
+import { getConsentWriteState, type ConsentWriteState } from "@/lib/consents/access";
+import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
+import { getClinicEntitlements } from "@/lib/server/entitlements";
 import { getAppBaseUrl } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -16,7 +18,7 @@ type ConsentRow = Database["public"]["Tables"]["consents"]["Row"];
 type SignatureRow = Database["public"]["Tables"]["consent_signatures"]["Row"];
 type TemplateOption = { id: string; name: string; description: string | null; template_schema: Database["public"]["Tables"]["medical_note_templates"]["Row"]["template_schema"]; is_system_template: boolean };
 export type ConsentDetail = Pick<ConsentRow, "id" | "clinical_record_id" | "consent_type" | "consent_version" | "consent_text" | "status" | "expires_at" | "signed_at" | "revoked_at" | "cancelled_at" | "cancelled_by" | "cancellation_reason" | "created_at" | "updated_at" | "template_id" | "signing_token_expires_at" | "signing_token_used_at" | "signing_token_revoked_at"> & { patientEmail: string | null; signatures: Pick<SignatureRow, "id" | "signer_full_name" | "signed_at" | "accepted_privacy_notice" | "accepted_sensitive_data_processing">[] };
-type Result<T> = { state: "ready"; data: T } | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "not_found" | "error"; data: null };
+type Result<T> = { state: "ready"; data: T } | { state: "invalid_id" | "unauthenticated" | "no_active_membership" | "forbidden" | "not_found" | "error" | "subscription_missing" | "subscription_read_only"; data: null };
 type RpcResult<T> = Promise<{ data: T | null; error: { code: string } | null }>;
 type ConsentLifecycleRpcClient = {
   rpc(name: "create_consent_for_current_user", args: Database["public"]["Functions"]["create_consent_for_current_user"]["Args"]): RpcResult<string>;
@@ -43,6 +45,8 @@ async function resolvePatient(patientId: string, canCreate = false): Promise<Res
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
   if (canCreate ? !canCreateConsent(context.tenant.membership) : !canViewClinicalRecord(context.tenant.membership)) return { state: "forbidden", data: null };
+  const access = await canAccessClinicalPatientForActiveTenant(patientId);
+  if (access.state !== "ready" || !access.allowed) return { state: access.state === "error" ? "error" : "forbidden", data: null };
   const supabase = await createClient();
   const patientResult = await supabase.from("patients").select("id, full_name, email").eq("id", patientId).eq("clinic_id", context.tenant.clinic.id).maybeSingle();
   if (patientResult.error) { logger.error("Consent patient query failed", { component: "clinical_consents", operation: "patient", status: "query_error", code: patientResult.error.code }); return { state: "error", data: null }; }
@@ -50,7 +54,7 @@ async function resolvePatient(patientId: string, canCreate = false): Promise<Res
   return { state: "ready", data: { context, supabase, patient: patientResult.data } };
 }
 
-export async function getConsentForActiveTenant(patientId: string, consentId: string): Promise<Result<ConsentDetail & { timeZone: string }>> {
+export async function getConsentForActiveTenant(patientId: string, consentId: string): Promise<Result<ConsentDetail & { timeZone: string; writeState: ConsentWriteState }>> {
   if (!isValidPatientUuid(consentId)) return { state: "invalid_id", data: null };
   const resolved = await resolvePatient(patientId);
   if (resolved.state !== "ready") return resolved;
@@ -60,13 +64,14 @@ export async function getConsentForActiveTenant(patientId: string, consentId: st
   if (!consentResult.data) return { state: "not_found", data: null };
   const signaturesResult = await supabase.from("consent_signatures").select("id, signer_full_name, signed_at, accepted_privacy_notice, accepted_sensitive_data_processing").eq("consent_id", consentId).eq("patient_id", patient.id).order("signed_at", { ascending: false });
   if (signaturesResult.error) { logger.error("Consent signature query failed", { component: "clinical_consents", operation: "signatures", status: "query_error", code: signaturesResult.error.code }); return { state: "error", data: null }; }
-  return { state: "ready", data: { ...(consentResult.data as Omit<ConsentDetail, "signatures" | "patientEmail">), patientEmail: patient.email, signatures: (signaturesResult.data ?? []) as ConsentDetail["signatures"], timeZone: context.tenant.clinic.timezone } };
+  return { state: "ready", data: { ...(consentResult.data as Omit<ConsentDetail, "signatures" | "patientEmail">), patientEmail: patient.email, signatures: (signaturesResult.data ?? []) as ConsentDetail["signatures"], timeZone: context.tenant.clinic.timezone, writeState: getConsentWriteState(await getClinicEntitlements(context.tenant.clinic.id)) } };
 }
 
 export async function getConsentTemplateOptions(patientId: string): Promise<Result<{ patient: { id: string; full_name: string }; templates: TemplateOption[] }>> {
   const resolved = await resolvePatient(patientId, true);
   if (resolved.state !== "ready") return resolved;
-  if (!canCreateWithEntitlements(await getClinicEntitlements(resolved.data.context.tenant.clinic.id))) return { state: "forbidden", data: null };
+  const writeState = getConsentWriteState(await getClinicEntitlements(resolved.data.context.tenant.clinic.id));
+  if (writeState !== "ready") return { state: writeState, data: null };
   const result = await resolved.data.supabase.from("medical_note_templates").select("id, name, description, template_schema, is_system_template").or(`is_system_template.eq.true,clinic_id.eq.${resolved.data.context.tenant.clinic.id}`).eq("template_kind", "consent").eq("is_active", true).order("is_system_template", { ascending: false }).order("name", { ascending: true });
   if (result.error) { logger.error("Consent templates query failed", { component: "clinical_consents", operation: "template_options", status: "query_error", code: result.error.code }); return { state: "error", data: null }; }
   return { state: "ready", data: { patient: resolved.data.patient, templates: (result.data ?? []) as TemplateOption[] } };
@@ -78,9 +83,8 @@ export async function createConsentForActiveTenant(patientId: string, values: Co
   const validation = validateConsentValues(values);
   if (!validation.valid) return { state: "validation_error" as const, error: "Revisa los campos marcados.", errors: validation.errors, values };
   const { context, supabase, patient } = resolved.data;
-  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) {
-    return { state: "forbidden" as const, error: "La suscripción actual no permite crear consentimientos." };
-  }
+  const writeState = getConsentWriteState(await getClinicEntitlements(context.tenant.clinic.id));
+  if (writeState !== "ready") return { state: writeState, data: null };
   let templateId: string | null = null;
   if (values.templateId) {
     if (!isValidPatientUuid(values.templateId)) return { state: "validation_error" as const, error: "La plantilla seleccionada no es valida.", errors: { templateId: "Selecciona una plantilla disponible." }, values };
@@ -110,7 +114,8 @@ export async function updatePendingConsentForActiveTenant(patientId: string, con
   if (!expectedUpdatedAt || Number.isNaN(Date.parse(expectedUpdatedAt))) return { state: "stale" as const };
 
   const { context, supabase, patient } = resolved.data;
-  if (!canCreateWithEntitlements(await getClinicEntitlements(context.tenant.clinic.id))) return { state: "forbidden" as const };
+  const writeState = getConsentWriteState(await getClinicEntitlements(context.tenant.clinic.id));
+  if (writeState !== "ready") return { state: writeState };
   const update = await consentRpc(supabase).rpc("update_pending_consent_for_current_user", {
     p_clinic_id: context.tenant.clinic.id,
     p_patient_id: patient.id,
@@ -150,7 +155,8 @@ export async function createConsentSigningLink(patientId: string, consentId: str
   if (!expectedUpdatedAt || detail.data.updated_at !== expectedUpdatedAt) return { state: "stale" as const };
   const resolved = await resolvePatient(patientId, true);
   if (resolved.state !== "ready") return resolved;
-  if (!canCreateWithEntitlements(await getClinicEntitlements(resolved.data.context.tenant.clinic.id))) return { state: "forbidden" as const };
+  const writeState = getConsentWriteState(await getClinicEntitlements(resolved.data.context.tenant.clinic.id));
+  if (writeState !== "ready") return { state: writeState };
   const rawToken = createSigningToken();
   const tokenHash = hashSigningToken(rawToken);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();

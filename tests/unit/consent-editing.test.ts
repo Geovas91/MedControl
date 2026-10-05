@@ -18,7 +18,7 @@ const migration = readFileSync(new URL("../../supabase/migrations/0024_update_pe
 test("editing without saving creates a dirty state and blocks every signing channel", () => {
   assert.equal(hasUnsavedConsentChanges({ ...persisted, consentText: "Texto nuevo." }, persisted), true);
   assert.equal(hasUnsavedConsentChanges({ ...persisted, consentText: `${persisted.consentText}\n` }, persisted), true);
-  assert.match(workspace, /signingActionsBlocked = dirty \|\| isSaving/);
+  assert.match(workspace, /signingActionsBlocked = !canWrite \|\| dirty \|\| isSaving/);
   assert.equal(UNSAVED_CONSENT_MESSAGE, "Guarda los cambios antes de generar un enlace de firma.");
   assert.match(workspace, /UNSAVED_CONSENT_MESSAGE/);
   assert.match(signingControls, /disabled=\{pending \|\| blocked\}/);
@@ -83,4 +83,13 @@ test("0024 keeps tenant roles and grants narrow and retires unversioned authenti
   assert.match(migration, /revoke all on function public\.issue_consent_signing_link_for_current_user\([\s\S]+from authenticated/);
   assert.match(migration, /grant execute on function public\.issue_current_consent_signing_link_for_current_user\([\s\S]+to authenticated/);
   assert.doesNotMatch(migration, /service_role|disable\s+trigger|session_replication_role/i);
+});
+
+
+test("read-only workspace blocks commercial actions while retaining safe reduction callbacks", () => {
+  const view = readFileSync("components/clinical-record/pending-consent-workspace.tsx", "utf8");
+  assert.match(view, /editorEnabled = canWrite &&/);
+  assert.match(view, /signingActionsBlocked = !canWrite/);
+  assert.match(view, /revokeAction=\{revokeAction\}/);
+  assert.match(view, /cancelAction=\{cancelAction\}/);
 });

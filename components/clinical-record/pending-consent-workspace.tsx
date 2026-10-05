@@ -13,6 +13,7 @@ type SigningLinkState = { error?: string; url?: string; expiresAt?: string; upda
 type EmailState = { error?: string; sentTo?: string };
 
 export function PendingConsentWorkspace({
+  canWrite = true,
   initialValues,
   initialUpdatedAt,
   updateAction,
@@ -26,6 +27,7 @@ export function PendingConsentWorkspace({
   signingTokenUsedAt,
   signingTokenRevokedAt
 }: {
+  canWrite?: boolean;
   initialValues: EditableConsentValues;
   initialUpdatedAt: string;
   updateAction: (state: UpdateConsentState, formData: FormData) => Promise<UpdateConsentState>;
@@ -57,8 +59,8 @@ export function PendingConsentWorkspace({
 
   const [state, formAction, isSaving] = useActionState(saveCurrentConsent, {});
   const dirty = useMemo(() => hasUnsavedConsentChanges(values, persistedValues), [values, persistedValues]);
-  const editorEnabled = canEditIssuedConsent("pending", linkActive);
-  const signingActionsBlocked = dirty || isSaving;
+  const editorEnabled = canWrite && canEditIssuedConsent("pending", linkActive);
+  const signingActionsBlocked = !canWrite || dirty || isSaving;
   const handleActiveLinkChange = useCallback((active: boolean, updatedAt?: string) => {
     setLinkActive(active);
     if (updatedAt) setExpectedUpdatedAt(updatedAt);
@@ -105,7 +107,7 @@ export function PendingConsentWorkspace({
       signingTokenUsedAt={signingTokenUsedAt}
       signingTokenRevokedAt={signingTokenRevokedAt}
       signingActionsBlocked={signingActionsBlocked}
-      signingActionsBlockedMessage={dirty ? UNSAVED_CONSENT_MESSAGE : "Espera a que termine el guardado antes de generar un enlace de firma."}
+      signingActionsBlockedMessage={!canWrite ? "La suscripción no permite generar enlaces ni enviar correos nuevos." : dirty ? UNSAVED_CONSENT_MESSAGE : "Espera a que termine el guardado antes de generar un enlace de firma."}
       onActiveLinkChange={handleActiveLinkChange}
     />
   </>;

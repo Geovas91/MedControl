@@ -10,7 +10,7 @@ Cada consentimiento pertenece a una clínica, un paciente y el expediente
 universal activo de ese mismo paciente. La relación se protege con claves
 foráneas compuestas; no depende solamente de filtros de la interfaz.
 
-Los roles `owner`, `admin` y `doctor` crean consentimientos mediante
+Los profesionales con scope activo del paciente crean consentimientos mediante
 `create_consent_for_current_user`. La función vuelve a validar membresía,
 entitlement, paciente y expediente, deriva `clinical_record_id`, inserta el
 consentimiento pendiente y registra `consent_created` en `audit_logs` dentro de
@@ -39,5 +39,24 @@ necesarias. No pueden leer directamente `signing_token`, `signing_token_hash` o
 se realizan mediante RPCs específicas con `search_path` fijo.
 
 La columna plaintext `signing_token` se conserva temporalmente para no destruir
-datos históricos, pero ningún código nuevo la usa. Se retirará en 0024 junto con
-la sustitución del modelo transitorio de tokens.
+datos históricos, pero ningún código nuevo la usa. No se utiliza como autoridad de firma; el flujo vigente valida hash y revisión del documento.
+
+## Autoridad vigente (0058)
+
+ICS y consentimientos personalizados son capacidades compartidas por Básico, Plus y Pro;
+no son entitlements de Google Calendar ni Appointment Assistant. Una suscripción faltante
+es «Sin plan configurado», nunca Básico. Las escrituras nuevas requieren suscripción
+`active` o `trialing` vigente; los errores técnicos fallan cerrado.
+
+La autoridad clínica privada exige `has_patient_professional_scope(clinic, patient)`:
+membresía activa, `is_professional=true` y assignment activo al paciente. Owner/admin
+sin esa capacidad o sin scope y assistants no pueden operar consentimientos ni leer
+evidencia. No se crea scope automáticamente al intentar una operación.
+
+Crear, editar, emitir/rotar enlace y enviar correo requieren escritura habilitada.
+Consultar evidencia, revocar un enlace y cancelar un consentimiento pendiente siguen
+permitidos para profesionales con scope aunque la suscripción no permita escrituras.
+Los enlaces públicos ya emitidos conservan su validez tras perder la suscripción hasta
+uso, revocación, expiración o cancelación; se preservan bloqueo, firma única y evidencia.
+Tipo, versión y texto se guardan exactamente como se enviaron, sin recortar el snapshot.
+Esto no constituye una afirmación de cumplimiento legal.

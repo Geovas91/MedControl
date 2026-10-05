@@ -1,5 +1,6 @@
 "use server";
 
+import { getConsentAccessMessage } from "@/lib/consents/access";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { cancelConsentForActiveTenant, createConsentSigningLink, getConsentFormValues, revokeConsentSigningLink, updatePendingConsentForActiveTenant } from "@/lib/server/clinical-consents";
@@ -12,7 +13,7 @@ export async function generateConsentSigningLinkAction(patientId: string, consen
   if (result.state === "invalid_id" || result.state === "not_found") notFound();
   if (result.state === "unauthenticated") redirect("/login");
   if (result.state === "stale") return { error: "El consentimiento cambió. Recarga la página antes de generar el enlace." };
-  if (result.state !== "success") return { error: "No fue posible generar el enlace de firma." };
+  if (result.state !== "success") return { error: getConsentAccessMessage(result.state) };
   revalidatePath(`/dashboard/patients/${patientId}/consents/${consentId}`);
   return { url: result.url, expiresAt: result.expiresAt, updatedAt: result.updatedAt };
 }
@@ -21,7 +22,7 @@ export async function revokeConsentSigningLinkAction(patientId: string, consentI
   const result = await revokeConsentSigningLink(patientId, consentId);
   if (result.state === "invalid_id" || result.state === "not_found") notFound();
   if (result.state === "unauthenticated") redirect("/login");
-  if (result.state !== "success") return;
+  if (result.state !== "success") redirect(`/dashboard/patients/${patientId}/consents/${consentId}?signing_link_error=1`);
   revalidatePath(`/dashboard/patients/${patientId}/consents/${consentId}`);
   redirect(`/dashboard/patients/${patientId}/consents/${consentId}?signing_link_revoked=1`);
 }
@@ -55,7 +56,7 @@ export async function updateConsentAction(patientId: string, consentId: string, 
   if (result.state === "active_link") return { error: "Revoca el enlace vigente antes de editar el consentimiento.", values: editableValues };
   if (result.state === "immutable") return { error: "El consentimiento ya no puede modificarse.", values: editableValues };
   if (result.state === "stale") return { error: "El consentimiento cambió en otra sesión. Recarga la página antes de guardar.", values: editableValues };
-  if (result.state !== "success") return { error: "No fue posible guardar los cambios.", values: editableValues };
+  if (result.state !== "success") return { error: getConsentAccessMessage(result.state), values: editableValues };
   revalidatePath(`/dashboard/patients/${patientId}/clinical-record`);
   revalidatePath(`/dashboard/patients/${patientId}/consents`);
   revalidatePath(`/dashboard/patients/${patientId}/consents/${consentId}`);
