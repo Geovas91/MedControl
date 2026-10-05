@@ -72,7 +72,7 @@ begin
     select cs.plan_id into v_plan_id from public.clinic_subscriptions cs where cs.clinic_id=p_clinic_id;
     v_doctors:=public.count_active_clinic_professionals_internal(p_clinic_id);
     if v_plan_id='basic' and v_doctors>=1 then raise exception 'Professional limit reached for the current plan.'; end if;
-    if v_plan_id='plus' and v_doctors>=5 then raise exception 'Doctor limit reached for the current plan.'; end if;
+    if v_plan_id='plus' and v_doctors>=5 then raise exception 'Professional limit reached for the current plan.'; end if;
   end if;
   v_token:=encode(extensions.gen_random_bytes(32),'hex'); v_hash:=encode(extensions.digest(v_token,'sha256'),'hex');
   insert into public.clinic_member_invitations as i(clinic_id,invited_email,normalized_email,role,token_hash,expires_at,created_by)
