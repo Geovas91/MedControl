@@ -23,7 +23,7 @@ export function MemberProfessionalCapability({
 }) {
   const [state, action] = useActionState(setClinicMemberProfessionalCapabilityAction, initialState);
   const fixed = role === "doctor" || role === "assistant";
-  const disabled = !canManage || fixed || isCurrentMember || (!isProfessional && !canGrantProfessionalCapability);
+  const disabled = !canManage || fixed || (isCurrentMember && role !== "owner") || (!isProfessional && !canGrantProfessionalCapability);
   const label = role === "doctor" ? "Obligatorio" : role === "assistant" ? "No permitido" : isProfessional ? "Profesional" : "No profesional";
 
   if (disabled) return <span className="text-sm text-slate-600">{label}</span>;

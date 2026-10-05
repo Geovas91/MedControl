@@ -34,7 +34,7 @@ export function AddMemberForm({ canAddDoctor, canAddAdditionalStaff }: { canAddD
           <Input id="email" name="email" type="email" placeholder="medico@clinica.com" required />
         </Field>
         <Field label="Rol" htmlFor="role">
-          <Select id="role" name="role" defaultValue="doctor" required>
+          <Select id="role" name="role" defaultValue={canAddDoctor ? "doctor" : "admin"} required>
             <option value="doctor" disabled={!canAddDoctor}>
               Médico
             </option>
@@ -46,7 +46,7 @@ export function AddMemberForm({ canAddDoctor, canAddAdditionalStaff }: { canAddD
 
       {!canAddDoctor ? (
         <p className="mt-4 rounded-md bg-amber-50 p-3 text-sm leading-6 text-amber-800">
-          El límite de médicos de tu plan ya está completo.
+          El límite de profesionales de tu plan ya está completo.
         </p>
       ) : null}
 

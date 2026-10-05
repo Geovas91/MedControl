@@ -1143,6 +1143,10 @@ export type Database = {
         Args: { p_clinic_id: string; p_patient_id: string; p_consent_id: string; p_reason?: string | null };
         Returns: string;
       };
+      count_active_clinic_professionals_internal: {
+        Args: { p_clinic_id: string };
+        Returns: number;
+      };
       count_clinic_doctors_for_current_user: {
         Args: { target_clinic_id: string };
         Returns: number;

@@ -92,7 +92,7 @@ export const commercialPlans = [
     ctaHref: "/signup",
     audience: "Médico independiente",
     features: [
-      "1 médico",
+      "1 profesional",
       "Clínica personal incluida",
       "1 perfil público en el directorio médico",
       "Agenda de citas",
@@ -109,7 +109,7 @@ export const commercialPlans = [
       "Soporte por correo"
     ],
     limits: {
-      doctors: "1 médico",
+      doctors: "1 profesional",
       users: "Sin usuarios administrativos adicionales",
       clinic: "Clínica personal incluida",
       directoryProfiles: "1 perfil público"
@@ -130,7 +130,7 @@ export const commercialPlans = [
     badgeLabel: "Más recomendado",
     audience: "Clínicas pequeñas",
     features: [
-      "Hasta 5 médicos por clínica",
+      "Hasta 5 profesionales por clínica",
       "Usuarios administrativos/asistentes",
       "Gestión centralizada de pacientes por clínica",
       "Agenda por médico",
@@ -148,7 +148,7 @@ export const commercialPlans = [
       "Suscripción mensual vía PayPal"
     ],
     limits: {
-      doctors: "Hasta 5 médicos por clínica",
+      doctors: "Hasta 5 profesionales por clínica",
       users: "Administrativos/asistentes incluidos",
       clinic: "Clínica registrada",
       directoryProfiles: "Perfil público para cada médico"
@@ -168,7 +168,7 @@ export const commercialPlans = [
     ctaHref: "/signup",
     audience: "Clínicas en crecimiento",
     features: [
-      "Médicos ilimitados por clínica",
+      "Profesionales ilimitados por clínica",
       "Usuarios administrativos/asistentes sin límite definido",
       "Agenda centralizada por médico",
       "Gestión centralizada de pacientes",
@@ -186,7 +186,7 @@ export const commercialPlans = [
       "Sujeto a uso razonable"
     ],
     limits: {
-      doctors: "Médicos ilimitados por clínica",
+      doctors: "Profesionales ilimitados por clínica",
       users: "Administrativos/asistentes sin límite definido",
       clinic: "Clínica registrada",
       directoryProfiles: "Perfil público para cada médico",

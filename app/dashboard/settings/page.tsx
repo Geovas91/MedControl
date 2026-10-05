@@ -33,10 +33,10 @@ const settings = [
 
 function formatDoctorUsage(currentDoctorCount: number, doctorLimit: number | null) {
   if (doctorLimit === null) {
-    return "Médicos ilimitados";
+    return `${currentDoctorCount} profesionales activos · sin límite`;
   }
 
-  return `${currentDoctorCount} de ${doctorLimit} médicos`;
+  return `${currentDoctorCount} de ${doctorLimit} profesionales`;
 }
 
 export default async function SettingsPage() {
@@ -62,7 +62,7 @@ export default async function SettingsPage() {
               <p className="mt-1 text-lg font-bold text-ink">{planContext.data.plan.name}</p>
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-500">Médicos registrados</p>
+              <p className="text-sm font-semibold text-slate-500">Profesionales activos</p>
               <p className="mt-1 text-lg font-bold text-ink">
                 {formatDoctorUsage(planContext.data.currentDoctorCount, planContext.data.doctorLimit)}
               </p>
