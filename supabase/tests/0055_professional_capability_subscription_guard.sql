@@ -13,7 +13,7 @@ insert into public.clinics(id,name,timezone) values
   ('55200000-0000-4000-8000-000000000002','Guard Foreign','America/Mexico_City');
 insert into public.clinic_members(id,clinic_id,user_id,role,status) values
   ('55300000-0000-4000-8000-000000000001','55200000-0000-4000-8000-000000000001','55100000-0000-4000-8000-000000000001','owner','active'),
-  ('55300000-0000-4000-8000-000000000002','55200000-0000-4000-8000-000000000001','55100000-0000-4000-8000-000000000002','owner','active'),
+  ('55300000-0000-4000-8000-000000000002','55200000-0000-4000-8000-000000000001','55100000-0000-4000-8000-000000000002','admin','active'),
   ('55300000-0000-4000-8000-000000000003','55200000-0000-4000-8000-000000000001','55100000-0000-4000-8000-000000000003','doctor','active'),
   ('55300000-0000-4000-8000-000000000004','55200000-0000-4000-8000-000000000001','55100000-0000-4000-8000-000000000004','assistant','active'),
   ('55300000-0000-4000-8000-000000000005','55200000-0000-4000-8000-000000000002','55100000-0000-4000-8000-000000000005','owner','active');
@@ -99,7 +99,7 @@ select extensions.throws_ok($$select public.set_clinic_member_professional_capab
 select extensions.throws_ok($$select public.set_clinic_member_professional_capability_for_current_user('55200000-0000-4000-8000-000000000001','55300000-0000-4000-8000-000000000004',true)$$,'22023',null,'assistant cannot gain capability');
 select extensions.throws_ok($$select public.set_clinic_member_professional_capability_for_current_user('55200000-0000-4000-8000-000000000001','55300000-0000-4000-8000-000000000005',true)$$,'22023',null,'cross-tenant target denied');
 select set_config('request.jwt.claim.sub','55100000-0000-4000-8000-000000000002',true);
-select extensions.throws_ok($$select public.set_clinic_member_professional_capability_for_current_user('55200000-0000-4000-8000-000000000001','55300000-0000-4000-8000-000000000002',false)$$,'42501',null,'self-change denied');
+select extensions.throws_ok($$select public.set_clinic_member_professional_capability_for_current_user('55200000-0000-4000-8000-000000000001','55300000-0000-4000-8000-000000000002',false)$$,'42501',null,'admin self-change denied (owner self-management covered by 0057)');
 select set_config('request.jwt.claim.sub','55100000-0000-4000-8000-000000000004',true);
 select extensions.throws_ok($$select public.set_clinic_member_professional_capability_for_current_user('55200000-0000-4000-8000-000000000001','55300000-0000-4000-8000-000000000002',false)$$,'42501',null,'assistant actor denied');
 select set_config('request.jwt.claim.sub','55100000-0000-4000-8000-000000000001',true);

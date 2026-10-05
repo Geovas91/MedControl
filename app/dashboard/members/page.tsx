@@ -38,10 +38,10 @@ const statusVariant = {
 
 function formatDoctorUsage(currentDoctorCount: number, doctorLimit: number | null) {
   if (doctorLimit === null) {
-    return "Médicos ilimitados";
+    return `${currentDoctorCount} profesionales activos · sin límite`;
   }
 
-  return `${currentDoctorCount} de ${doctorLimit} médicos`;
+  return `${currentDoctorCount} de ${doctorLimit} profesionales`;
 }
 
 export default async function MembersPage() {
@@ -67,7 +67,7 @@ export default async function MembersPage() {
   const members = membersResult.data ?? [];
   const invitations = invitationsResult.data ?? [];
   const canAddAdditionalStaff = planIncludesFeature(entitlementsResult, "additional_staff");
-  const canGrantProfessionalCapability = canCreateWithEntitlements(entitlementsResult);
+  const canGrantProfessionalCapability = canCreateWithEntitlements(entitlementsResult) && Boolean(planContext?.canAddDoctor);
 
   return (
     <>
@@ -84,7 +84,7 @@ export default async function MembersPage() {
               <p className="mt-1 text-lg font-bold text-ink">{planContext.plan.name}</p>
             </div>
             <div>
-              <p className="text-sm font-semibold text-slate-500">Médicos registrados</p>
+              <p className="text-sm font-semibold text-slate-500">Profesionales activos</p>
               <p className="mt-1 text-lg font-bold text-ink">
                 {formatDoctorUsage(planContext.currentDoctorCount, planContext.doctorLimit)}
               </p>
@@ -92,7 +92,7 @@ export default async function MembersPage() {
             <div>
               <p className="text-sm font-semibold text-slate-500">Límite del plan</p>
               <p className="mt-1 text-lg font-bold text-ink">
-                {planContext.isUnlimitedDoctors ? "Sin límite definido" : `${planContext.doctorLimit} médicos`}
+                {planContext.isUnlimitedDoctors ? "Profesionales ilimitados" : planContext.doctorLimit === 1 ? "1 profesional" : `Hasta ${planContext.doctorLimit} profesionales`}
               </p>
             </div>
           </div>
@@ -108,7 +108,7 @@ export default async function MembersPage() {
 
       {planContext?.planId === "basic" && !planContext.canAddDoctor ? (
         <section className="glass-card mb-6 p-5 text-sm text-slate-600">
-          El plan Básico ya utiliza su único lugar médico y no permite altas de administradores o asistentes.
+          El plan Básico ya utiliza su capacidad profesional y no permite altas de administradores o asistentes.
         </section>
       ) : null}
 
@@ -141,7 +141,7 @@ export default async function MembersPage() {
                   <td className="px-5 py-4 font-semibold text-ink">{member.full_name ?? "Sin nombre"}</td>
                   <td className="px-5 py-4 text-slate-600">{member.email ?? "Sin correo"}</td>
                   <td className="px-5 py-4"><Badge variant={roleVariants[member.role]}>{roleLabels[member.role]}</Badge></td>
-                  <td className="px-5 py-4"><MemberProfessionalCapability memberId={member.id} role={member.role} isProfessional={member.is_professional} isCurrentMember={member.user_id === activeTenant.user.id} canManage={["owner", "admin"].includes(activeTenant.tenant.membership.role)} canGrantProfessionalCapability={canGrantProfessionalCapability} /></td>
+                  <td className="px-5 py-4"><MemberProfessionalCapability memberId={member.id} role={member.role} isProfessional={member.is_professional} isCurrentMember={member.user_id === activeTenant.user.id} canManage={member.status === "active" && ["owner", "admin"].includes(activeTenant.tenant.membership.role)} canGrantProfessionalCapability={canGrantProfessionalCapability} /></td>
                   <td className="px-5 py-4">
                     <Badge variant={statusVariant[member.status]}>{statusLabels[member.status]}</Badge>
                   </td>

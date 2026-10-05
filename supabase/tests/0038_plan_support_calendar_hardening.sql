@@ -20,7 +20,10 @@ insert into public.platform_admins(user_id,email,role)
 select extensions.ok(pg_get_functiondef('public.accept_clinic_member_invitation_for_current_user(text)'::regprocedure)
  like '%pg_advisory_xact_lock%clinic_doctor_limit:%','doctor acceptance uses a clinic-wide transaction lock');
 select extensions.ok(pg_get_functiondef('public.accept_clinic_member_invitation_for_current_user(text)'::regprocedure)
- like '%cm.status=''active'' and cm.role in (''owner'',''doctor'')%','owner and active doctors preserve the existing seat count');
+ like '%count_active_clinic_professionals_internal%'
+ and pg_get_functiondef('public.count_active_clinic_professionals_internal(uuid)'::regprocedure)
+ like '%member.status=''active'' and member.is_professional=true%',
+ 'acceptance uses canonical active professional capability count');
 select extensions.ok(not exists(select 1 from pg_policies where schemaname='public' and tablename='clinic_members' and cmd in ('INSERT','UPDATE','ALL')),
  'direct authenticated member activation remains unavailable through RLS');
 select extensions.ok((select prosecdef and proconfig @> array['search_path=public, pg_temp'] from pg_proc
