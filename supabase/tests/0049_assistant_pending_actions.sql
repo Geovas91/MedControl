@@ -14,6 +14,7 @@ insert into public.clinic_members(id,clinic_id,user_id,role,status) values
   ('49300000-0000-4000-8000-000000000003','49200000-0000-4000-8000-000000000002','49100000-0000-4000-8000-000000000003','owner','active');
 select extensions.ok(has_function_privilege('authenticated','public.create_assistant_pending_action_for_current_user(uuid,text,jsonb,timestamptz)','execute'),'authenticated can prepare');
 select extensions.ok(not has_function_privilege('anon','public.create_assistant_pending_action_for_current_user(uuid,text,jsonb,timestamptz)','execute'),'anon cannot prepare');
+insert into public.clinic_subscriptions(clinic_id,plan_id,status,billing_provider) values ('49200000-0000-4000-8000-000000000001','pro','active','manual') on conflict(clinic_id) do nothing;
 set local role authenticated;
 select set_config('request.jwt.claim.sub','49100000-0000-4000-8000-000000000001',true);
 select extensions.is((select status from public.create_assistant_pending_action_for_current_user('49200000-0000-4000-8000-000000000001','cancel_appointment','{"appointment_id":"40100000-0000-4000-8000-000000000001","expected_status":"scheduled"}',now()+interval '5 minutes')),'pending','owner prepares pending action');
@@ -47,7 +48,7 @@ select extensions.ok(not has_table_privilege('anon','public.assistant_pending_ac
 insert into auth.users(id,email) values ('49100000-0000-4000-8000-000000000004','pending-doctor@example.test');
 insert into public.clinic_members(id,clinic_id,user_id,role,status,is_professional) values
   ('49300000-0000-4000-8000-000000000004','49200000-0000-4000-8000-000000000001','49100000-0000-4000-8000-000000000004','doctor','active',true);
-insert into public.clinic_subscriptions(clinic_id,plan_id,status,billing_provider) values ('49200000-0000-4000-8000-000000000001','pro','active','manual');
+insert into public.clinic_subscriptions(clinic_id,plan_id,status,billing_provider) values ('49200000-0000-4000-8000-000000000001','pro','active','manual') on conflict(clinic_id) do nothing;
 insert into public.patients(id,clinic_id,full_name,first_names,internal_identifier) values ('49500000-0000-4000-8000-000000000001','49200000-0000-4000-8000-000000000001','Pending Action Patient','Pending Action Patient','PAC-PENDING01');
 set local role authenticated;
 select set_config('request.jwt.claim.sub','49100000-0000-4000-8000-000000000001',true);

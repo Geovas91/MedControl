@@ -61,8 +61,8 @@ test("mutation tools remain confirmation-gated and derive context server-side", 
   assert.match(registry, /claim_assistant_pending_action_for_current_user/);
   assert.match(registry, /p_action_id: actionId/);
   assert.match(registry, /finish_assistant_pending_action_for_current_user/);
-  assert.match(registry, /parseCreateAppointmentPendingArguments\(value\)/);
-  assert.match(registry, /const executionInput = registryArguments\(tool\.name, pending\.validated_arguments\)/);
+  assert.match(registry, /execute_claimed_assistant_pending_action_for_current_user/);
+  assert.doesNotMatch(registry, /export const assistantToolRegistry/);
   assert.doesNotMatch(registry, /executeConfirmedAssistantAction\([^)]*,\s*rawInput/);
   assert.match(registry, /finish\.error \|\| finish\.data !== \(result\.ok \? "executed" : "failed"\)/);
   assert.match(registry, /mutateAppointmentLifecycleForActiveTenant/);
@@ -99,7 +99,7 @@ test("pending action storage is minimal and terminal actions are not retried", (
   const migration = readFileSync("supabase/migrations/0050_patient_professional_scope.sql", "utf8");
   const lifecycleMigration = readFileSync("supabase/migrations/0049_assistant_pending_actions.sql", "utf8");
   assert.match(registry, /serializeCreateAppointmentPendingArguments\(input as CreateAppointmentToolInput\)/);
-  assert.match(registry, /parseCreateAppointmentPendingArguments\(value\)/);
+  assert.match(registry, /execute_claimed_assistant_pending_action_for_current_user/);
   assert.doesNotMatch(registry, /validated_arguments:.*title/);
   assert.match(migration, /key not in \('appointment_id','patient_id','professional_clinic_member_id','local_date','local_time','duration_minutes','expected_status'\)/);
   assert.match(registry, /if \(pending\.status !== "claimed"\) return assistantToolError\("confirmation_required"/);

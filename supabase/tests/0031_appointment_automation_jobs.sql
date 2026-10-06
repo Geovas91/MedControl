@@ -277,9 +277,9 @@ select extensions.ok(exists(select 1 from public.appointment_automation_jobs whe
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'f1000000-0000-4000-8000-000000000003', true);
-select extensions.is(
-  (select count(*)::integer from public.get_appointment_automation_dashboard_for_current_user('f2000000-0000-4000-8000-000000000001', 25)),
-  0, 'dashboard RPC preserves tenant isolation'
+select extensions.throws_ok(
+  $$select * from public.get_appointment_automation_dashboard_for_current_user('f2000000-0000-4000-8000-000000000001', 25)$$,
+  '42501', null, 'dashboard RPC explicitly denies cross-tenant access'
 );
 reset role;
 select extensions.ok(
@@ -291,6 +291,7 @@ select * from extensions.finish();
 rollback;
 
 -- Remove committed deterministic fixtures after the concurrency proof.
+delete from public.patient_professional_assignments where clinic_id in ('f2000000-0000-4000-8000-000000000001','f2000000-0000-4000-8000-000000000002');
 delete from public.review_invitations where clinic_id in ('f2000000-0000-4000-8000-000000000001','f2000000-0000-4000-8000-000000000002');
 delete from public.appointment_automation_jobs where clinic_id in ('f2000000-0000-4000-8000-000000000001','f2000000-0000-4000-8000-000000000002');
 delete from public.audit_logs where clinic_id in ('f2000000-0000-4000-8000-000000000001','f2000000-0000-4000-8000-000000000002');

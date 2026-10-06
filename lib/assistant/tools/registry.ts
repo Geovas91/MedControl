@@ -11,6 +11,7 @@ import { buildAppointmentCalendarOperation } from "@/lib/calendar/invitation";
 import { createAppointmentForActiveTenant } from "@/lib/server/create-appointment";
 import { getPatientsForActiveTenant, isPatientEligibleForSchedulingWithProfessionalActiveTenant } from "@/lib/server/patients";
 import { getProfessionalAvailableSlots } from "@/lib/server/professional-slots";
+import { getAppointmentAssistantAccess, getAssistantAccessMessage } from "@/lib/server/appointment-assistant-access";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
 import { assistantToolError, assistantToolNames, parseCreateAppointmentPendingArguments, serializeCreateAppointmentPendingArguments, toolSchemas, type AssistantToolContext, type AssistantToolDefinition, type AssistantToolName, type AssistantToolResult, type CreateAppointmentToolInput } from "./contracts";
@@ -32,7 +33,9 @@ function logTool(event: "started" | "succeeded" | "failed", context: AssistantTo
 }
 
 export async function getAssistantToolContext(): Promise<AssistantToolResult<AssistantToolContext>> {
-  const active = await getActiveTenantContext();
+  const access = await getAppointmentAssistantAccess();
+  if (access.state !== "ready") return assistantToolError(access.state === "error" ? "generic" : access.state === "forbidden" ? "forbidden" : "entitlement", getAssistantAccessMessage(access.state));
+  const active = access.context;
   if (active.state !== "ready") return safeFailure(active.state);
   return { ok: true, data: { userId: active.user.id, clinicId: active.tenant.clinic.id, clinicMemberId: active.tenant.membership.id, role: active.tenant.membership.role, isProfessional: active.tenant.membership.is_professional, timeZone: active.tenant.clinic.timezone } };
 }
@@ -179,11 +182,11 @@ const rescheduleAppointment: AssistantToolDefinition<ReturnType<typeof toolSchem
   }
 };
 
-export const assistantToolRegistry = new Map<AssistantToolName, AssistantToolDefinition<never, never>>([
+const assistantToolRegistry = new Map<AssistantToolName, AssistantToolDefinition<never, never>>([
   [searchPatients.name, searchPatients as never], [searchAppointments.name, searchAppointments as never], [getAppointment.name, getAppointment as never], [getAvailableSlots.name, getAvailableSlots as never], [getProfessionals.name, getProfessionals as never], [createAppointment.name, createAppointment as never], [lifecycleTool("confirm_appointment").name, lifecycleTool("confirm_appointment") as never], [rescheduleAppointment.name, rescheduleAppointment as never], [lifecycleTool("cancel_appointment").name, lifecycleTool("cancel_appointment") as never]
 ]);
 
-export function getAssistantTool(name: string) { return assistantToolNames.includes(name as AssistantToolName) ? assistantToolRegistry.get(name as AssistantToolName) ?? null : null; }
+function getAssistantTool(name: string) { return assistantToolNames.includes(name as AssistantToolName) ? assistantToolRegistry.get(name as AssistantToolName) ?? null : null; }
 
 export async function executeAssistantReadTool(name: string, rawInput: unknown): Promise<AssistantToolResult<unknown>> {
   const tool = getAssistantTool(name); if (!tool) return assistantToolError("validation_error", "La herramienta solicitada no existe.");
@@ -219,11 +222,6 @@ function persistedArguments(toolName: AssistantToolName, input: Record<string, u
   return { appointment_id: input.appointmentId, expected_status: input.expectedStatus };
 }
 
-function registryArguments(toolName: AssistantToolName, value: Record<string, unknown>) {
-  if (toolName === "create_appointment") return parseCreateAppointmentPendingArguments(value);
-  if (toolName === "reschedule_appointment") return { appointmentId: value.appointment_id, expectedStatus: value.expected_status, date: value.local_date, startTime: value.local_time, durationMinutes: value.duration_minutes };
-  return { appointmentId: value.appointment_id, expectedStatus: value.expected_status };
-}
 
 export async function prepareAssistantMutation(name: string, rawInput: unknown): Promise<AssistantToolResult<AssistantProposal>> {
   const tool = getAssistantTool(name); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La herramienta solicitada no admite una acción confirmable.");
@@ -256,11 +254,19 @@ export async function executeConfirmedAssistantAction(actionId: string): Promise
   if (pending.status !== "claimed") return assistantToolError("confirmation_required", "La propuesta ya no puede ejecutarse.");
   const tool = getAssistantTool(pending.tool_name); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La acción ya no está disponible.");
   const startedAt = Date.now(); logger.info("assistant_action_confirmed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role });
-  const executable = tool as unknown as { execute(context: AssistantToolContext, input: unknown): Promise<AssistantToolResult<unknown>> };
-  const executionInput = registryArguments(tool.name, pending.validated_arguments);
-  const result = executionInput
-    ? await executable.execute(current.data, executionInput)
-    : assistantToolError("validation_error", "Los datos de la operación no son válidos.");
+  // SQL locks the subscription and action, revalidates current authority, and delegates
+  // to canonical appointment mutations in the same transaction. Never execute a TS tool here.
+  const execution = await client.rpc("execute_claimed_assistant_pending_action_for_current_user" as never, { p_action_id: actionId } as never) as unknown as {
+    data: Array<{ appointment_id: string; status: string; updated_at: string; changed: boolean }> | null; error: { code?: string } | null;
+  };
+  const row = execution.data?.[0];
+  const result: AssistantToolResult<unknown> = execution.error || !row
+    ? safeFailure(execution.error?.code === "42501" ? "forbidden" : execution.error?.code === "23P01" ? "conflict" : execution.error?.code === "40001" ? "stale_state" : execution.error?.code === "22023" ? "validation_error" : "error")
+    : { ok: true, data: { appointment_id: row.appointment_id, status: row.status } };
+  if (result.ok && row && row.changed && tool.name !== "confirm_appointment") {
+    const cancelled = tool.name === "cancel_appointment";
+    await deliverAppointmentCalendarEmail({ appointmentId: row.appointment_id, method: cancelled ? "CANCEL" : "REQUEST", reason: cancelled ? "cancelled" : tool.name === "create_appointment" ? "created" : "rescheduled", ...buildAppointmentCalendarOperation(row.appointment_id, cancelled ? "status" : tool.name === "create_appointment" ? "created" : "updated", row.updated_at) });
+  }
   const finish = await (await createClient()).rpc("finish_assistant_pending_action_for_current_user" as never, { p_action_id: actionId, p_outcome: result.ok ? "executed" : "failed", p_error_code: result.ok ? null : result.error.code } as never) as unknown as { data: string | null; error: { code?: string } | null };
   if (finish.error || finish.data !== (result.ok ? "executed" : "failed")) {
     logger.error("assistant_action_failed", { tool_name: tool.name, clinic_id: current.data.clinicId, actor_user_id: current.data.userId, actor_role: current.data.role, error_code: "generic" });
@@ -270,7 +276,9 @@ export async function executeConfirmedAssistantAction(actionId: string): Promise
 }
 
 export async function cancelAssistantPendingAction(actionId: string): Promise<AssistantToolResult<{ status: string }>> {
-  const context = await getAssistantToolContext(); if (!context.ok) return context;
+  const active = await getActiveTenantContext();
+  if (active.state !== "ready") return safeFailure(active.state);
+  const context = { data: { clinicId: active.tenant.clinic.id, userId: active.user.id, role: active.tenant.membership.role } };
   const client = await createClient();
   const scoped = await client.from("assistant_pending_actions" as never).select("id" as never).eq("id", actionId).eq("clinic_id", context.data.clinicId).maybeSingle() as unknown as { data: { id: string } | null; error: { code?: string } | null };
   if (scoped.error || !scoped.data) return assistantToolError("forbidden", "La propuesta no está disponible en la clínica activa.");

@@ -28,7 +28,6 @@ import {
 } from "@/lib/assistant/tools/registry";
 import { saveAppointmentAssistantSettingsForActiveTenant } from "@/lib/server/appointment-assistant";
 import { getPatientEligibleProfessionalIdsForSchedulingActiveTenant, isPatientAvailableForActiveTenant, isPatientEligibleForSchedulingWithProfessionalActiveTenant, searchAssistantPatientNamesForActiveTenant } from "@/lib/server/patients";
-import { getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
 import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, parseSchedulingContextPatch, reconcileSchedulingContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
 export async function saveAppointmentAssistantSettingsAction(formData: FormData) {
@@ -56,9 +55,6 @@ export async function planAssistantConversationAction(message: unknown, pending:
   const text = typeof message === "string" ? message : "";
   const context = await getAssistantToolContext();
   if (!context.ok) return { state: "parsed", result: { state: "unsupported", message: context.error.safeMessage } };
-  if (!planIncludesFeature(await getClinicEntitlements(context.data.clinicId), "appointment_assistant")) {
-    return { state: "parsed", result: { state: "unsupported", message: "El asistente no está disponible para esta clínica." } };
-  }
   const today = getClinicDayRange(context.data.timeZone).localDate;
   const active = pending === null || pending === undefined ? null : isAssistantIntent(pending) ? pending as AssistantIntent : null;
   if (process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED !== "true") return resolveConversationInput(active, text.trim().slice(0, 501), today);
@@ -147,6 +143,8 @@ function availabilityRetryResponse(intent: Extract<AssistantIntent, { type: "cre
 }
 
 export async function submitAssistantIntentAction(input: unknown): Promise<AssistantUiResponse> {
+  const access = await getAssistantToolContext();
+  if (!access.ok) return safeToolError(access);
   if (!isAssistantIntent(input)) return { state: "error", message: "La solicitud no tiene un formato válido." };
   const intent = input as AssistantIntent;
 
@@ -154,7 +152,6 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
     if (!isValidAssistantReadIntent(intent)) return { state: "error", message: "La consulta no tiene un formato válido." };
     const context = await getAssistantToolContext();
     if (!context.ok) return safeToolError(context);
-    if (!planIncludesFeature(await getClinicEntitlements(context.data.clinicId), "appointment_assistant")) return { state: "error", message: "El asistente no está disponible para esta clínica." };
     return orchestrateAssistantReadIntent(intent, {
       readTool: executeAssistantReadTool,
       today: getClinicDayRange(context.data.timeZone).localDate,
@@ -282,6 +279,8 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
 }
 
 export async function submitAssistantContextualHelperAction(input: unknown, helper: ContextualHelper): Promise<AssistantUiResponse> {
+  const access = await getAssistantToolContext();
+  if (!access.ok) return safeToolError(access);
   if (!isAssistantIntent(input) || (helper !== "patients" && helper !== "professionals")) return { state: "error", message: "La solicitud no tiene un formato válido." };
   const intent = input as AssistantIntent;
   if (helper === "patients") {
@@ -309,7 +308,6 @@ function verifiedAppointment(value: unknown): VerifiedAssistantAppointment | nul
 export async function selectAssistantResultAction(choice: unknown, pendingValue: unknown): Promise<AssistantUiResponse> {
   const context = await getAssistantToolContext();
   if (!context.ok) return safeToolError(context);
-  if (!planIncludesFeature(await getClinicEntitlements(context.data.clinicId), "appointment_assistant")) return { state: "error", message: "El asistente no está disponible para esta clínica." };
 
   const result = await resolveAssistantStructuredChoice(choice, pendingValue, {
     patient: (reference) => {
@@ -384,7 +382,6 @@ const CONTEXT_CHANGED_REPLY = "La selección anterior ya no está disponible. Vu
 async function loadAssistantContext(raw: unknown) {
   const actor = await getAssistantToolContext();
   if (!actor.ok) return { ok: false as const, message: actor.error.safeMessage, context: null };
-  if (!planIncludesFeature(await getClinicEntitlements(actor.data.clinicId), "appointment_assistant")) return { ok: false as const, message: "El asistente no está disponible para esta clínica.", context: null };
   const scope = { actorId: actor.data.userId, clinicId: actor.data.clinicId };
   const validators = {
     patient: isPatientAvailableForActiveTenant,

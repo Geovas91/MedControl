@@ -116,7 +116,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         <a href="#automation" className="rounded-full bg-white/70 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clinic">Automatizaciones y actividad</a>
       </nav>
 
-      <div id="assistant"><AppointmentAssistant key={`${activeActor.state === "ready" ? activeActor.user.id : "unknown"}:${data.tenant.clinic.id}`} today={data.localDate} timeZone={data.tenant.clinic.timezone} llmEnabled={process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED === "true"} /></div>
+      {data.canWriteSettings ? <div id="assistant"><AppointmentAssistant key={`${activeActor.state === "ready" ? activeActor.user.id : "unknown"}:${data.tenant.clinic.id}`} today={data.localDate} timeZone={data.tenant.clinic.timezone} llmEnabled={process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED === "true"} /></div> : <section className="glass-card-strong mb-5 p-5"><h2 className="font-bold text-ink">Suscripción en modo de consulta</h2><p className="mt-2 text-sm">Puedes consultar la actividad histórica. Reactiva tu suscripción para usar el asistente y crear automatizaciones.</p><ButtonLink href="/dashboard/billing" className="mt-4">Revisar facturación</ButtonLink></section>}
 
       {hasAppointmentAssistantSavedMessage(params) ? <p role="status" className="mb-5 rounded-[var(--radius-md)] bg-[var(--success-soft)] p-3 text-sm font-medium text-[var(--success)]">La configuración se guardó para esta clínica.</p> : null}
       {hasAppointmentAssistantSettingsError(params) ? <p role="alert" className="mb-5 rounded-[var(--radius-md)] bg-red-50 p-3 text-sm font-medium text-red-700">No fue posible guardar la configuración. Revisa los valores y tus permisos.</p> : null}
@@ -125,7 +125,7 @@ export default async function BotPage({ searchParams }: { searchParams: Promise<
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="flex items-center gap-2 font-bold text-ink"><Settings2 className="h-5 w-5 text-clinic" />Estado del asistente</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Motor persistente para recordatorios por email y solicitudes verificadas de reseña. No es un chatbot y no procesa conversaciones.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Motor persistente para recordatorios por email y solicitudes verificadas de reseña. El asistente conversacional prepara acciones de agenda que requieren tu confirmación; las automatizaciones envían recordatorios según la configuración.</p>
           </div>
           <Badge variant={data.assistantEnabled ? "green" : "slate"}>{data.assistantEnabled ? "Asistente activo" : "Asistente inactivo"}</Badge>
         </div>

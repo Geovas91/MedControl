@@ -37,7 +37,7 @@ test("live endpoint requires a session and exposes only generic failures with no
 });
 
 test("live service derives the tenant from the active session and preserves all current roles", () => {
-  assert.match(service, /getActiveTenantContext\(\)/);
+  assert.match(service, /getAppointmentAssistantAccess\(\)/);
   assert.match(service, /const clinicId = context\.tenant\.clinic\.id/);
   assert.match(service, /p_clinic_id: clinicId/);
   assert.match(service, /p_limit: APPOINTMENT_AUTOMATION_LIVE_JOB_LIMIT/);

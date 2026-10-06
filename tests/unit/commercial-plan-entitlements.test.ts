@@ -49,7 +49,7 @@ test("additional staff is gated in UI server actions and final SQL RPCs", () => 
 
 test("Appointment Assistant is hidden and denied for Basic while existing jobs remain reconcilable", () => {
   assert.match(dashboardShell, /appointmentAssistantAvailable[\s\S]+item\.href !== "\/dashboard\/bot"/);
-  assert.match(assistantServer, /planIncludesFeature\(entitlements, "appointment_assistant"\)/);
+  assert.match(assistantServer, /getAppointmentAssistantAccess\(\)/);
   assert.match(assistantServer, /canUseFeature\([\s\S]+"appointment_assistant"/);
   assert.match(assistantPage, /Disponible en Plus y Pro/);
   assert.match(migration, /save_appointment_assistant_settings_for_current_user[\s\S]+appointment_assistant/);

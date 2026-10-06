@@ -22,3 +22,29 @@ El lifecycle de entrega separa `not_started`, `dispatching`, `accepted` y `persi
 El contador `succeeded` sólo aumenta después de que el RPC de finalización devuelve `true`. Errores, `false`, leases vencidos y tokens obsoletos se contabilizan como `uncertain` o `lostLease`. El heartbeat termina en `error` cuando cualquiera de esos contadores es distinto de cero, aunque el cron haya alcanzado el endpoint y recibido una respuesta. Los códigos registrados están limitados a códigos operativos; no se guardan destinatarios, cuerpos, PHI, respuestas crudas ni secretos.
 
 Rollback operativo: desactivar `enabled`, `reminder_enabled` y `review_request_enabled` desde la consola cancela recordatorios pendientes y detiene provider calls en el preflight. Luego se puede retirar la única entrada cron. Los jobs y las invitaciones ya emitidas se conservan como evidencia; no se borran citas, reseñas ni eventos externos.
+
+
+## Autoridad comercial y cambios de plan
+
+Basic excluye Appointment Assistant; Plus y Pro tienen la misma funcionalidad.
+El trabajo nuevo requiere `appointment_assistant`, suscripción writable (active,
+o trialing con fin futuro) y actor autorizado en su única clínica. Missing es
+“Sin plan configurado”; un fallo técnico no es una solicitud de upgrade.
+
+Basic no muestra chat, configuración ni actividad. Plus/Pro temporalmente read-only
+conservan sólo observabilidad histórica con CTA de reactivación. El doctor sólo ve
+actividad de sus citas; owner/admin/assistant ven agenda de su clínica.
+
+0059 revalida autoridad en creación, claim y ejecución de propuestas. La ejecución
+bloquea suscripción/propuesta y delega a las mutaciones canónicas en una transacción.
+La marca `mutation_executed_at` evita dos ejecuciones antes del finish. Downgrade
+antes de ejecución deniega incluso cancelar una cita por Assistant. La Agenda normal
+y su cancelación segura siguen independientes. Cancelar propuestas pendientes y
+registrar resultados ya ejecutados son limpieza, sin requisito de plan writable.
+
+El boundary SQL de inicio de delivery valida plan/suscripción y lease/fencing.
+Jobs pendientes no comienzan nuevas entregas tras perder entitlement. Una llamada
+externa no forma parte de una transacción PostgreSQL: después de autorizar dispatching,
+un downgrade concurrente no revoca una petición ya en vuelo. Accepted siempre puede
+persistirse/reconciliarse sin resend; accepted con lease vencido se reconcilia y
+un dispatching interrumpido queda uncertain. No se elimina historial.
