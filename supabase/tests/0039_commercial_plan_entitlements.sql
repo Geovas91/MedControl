@@ -160,7 +160,11 @@ set local role service_role;
 create temp table commercial_claim on commit drop as
   select * from public.claim_due_appointment_automation_jobs('commercial_worker',1,90);
 select extensions.is((select count(*)::integer from commercial_claim),1,'pre-downgrade pending job remains claimable');
-select extensions.is(public.begin_appointment_automation_delivery((select id from commercial_claim),'commercial_worker',(select lease_token from commercial_claim)),true,'existing job may begin safe delivery');
+select extensions.is(public.begin_appointment_automation_delivery((select id from commercial_claim),'commercial_worker',(select lease_token from commercial_claim)),false,'downgrade denies beginning a new delivery');
+-- Model work already authorized/in flight before entitlement loss; no new send.
+reset role;
+update public.appointment_automation_jobs set delivery_state='dispatching' where id=(select id from commercial_claim);
+set local role service_role;
 select extensions.is(public.mark_appointment_automation_delivery_accepted((select id from commercial_claim),'commercial_worker',(select lease_token from commercial_claim)),true,'existing provider acceptance remains recordable');
 select extensions.is(public.finish_appointment_automation_job((select id from commercial_claim),'commercial_worker',(select lease_token from commercial_claim),'succeeded',null,null),true,'existing accepted job may finish after downgrade');
 reset role;

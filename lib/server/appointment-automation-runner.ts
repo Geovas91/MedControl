@@ -102,6 +102,18 @@ async function retryContextLookup(
   );
 }
 
+async function authorizeDelivery(client: RpcClient, job: Job, workerId: string) {
+  if (!await renew(client, job, workerId)) return "lostLease" as const;
+  if (await beginDelivery(client, job, workerId)) return null;
+  // A plan/status change at the SQL delivery boundary is cleanup, not lost ownership.
+  const lookup = await loadCurrentContext(client, job, workerId);
+  if (lookup.state === "ready" && !lookup.context.valid_subscription) {
+    return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", "invalidated_entitlement"));
+  }
+  if (lookup.state === "retryable") return retryContextLookup(client, job, workerId, "final", lookup.code);
+  return "lostLease" as const;
+}
+
 async function processReminder(client: RpcClient, job: Job, context: Context, workerId: string) {
   const initialInvalidation = getReminderPreflightInvalidation(job, context);
   if (initialInvalidation) {
@@ -122,7 +134,8 @@ async function processReminder(client: RpcClient, job: Job, context: Context, wo
     logPreflight(job, "final", finalInvalidation, false);
     return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", finalInvalidation));
   }
-  if (!await renew(client, job, workerId) || !await beginDelivery(client, job, workerId)) return "lostLease" as const;
+  const denied = await authorizeDelivery(client, job, workerId);
+  if (denied) return denied;
   const message = buildAppointmentReminderEmail({
     clinicName: current.clinic_name, doctorDisplayName: current.doctor_display_name!,
     startsAt: current.starts_at, timeZone: current.clinic_timezone
@@ -168,7 +181,8 @@ async function processReview(client: RpcClient, job: Job, context: Context, work
     logPreflight(job, "final", finalInvalidation, false);
     return classifyAutomationFinalization("skipped", await finish(client, job, workerId, "skipped", finalInvalidation));
   }
-  if (!await renew(client, job, workerId) || !await beginDelivery(client, job, workerId)) return "lostLease" as const;
+  const denied = await authorizeDelivery(client, job, workerId);
+  if (denied) return denied;
   const reviewUrl = buildReviewUrl(getAppBaseUrl(), invitation.raw_token);
   const message = buildReviewInvitationEmail({
     clinicName: current.clinic_name, doctorDisplayName: current.doctor_display_name!,

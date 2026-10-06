@@ -16,6 +16,8 @@ const input = { patientId, professionalClinicMemberId: professionalId, date: "20
 function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assistant") {
   const state = {
     eligible: true,
+    accessState: "ready",
+    toolName: "create_appointment",
     professionalActive: true,
     slotAvailable: true,
     availabilityStart: "09:00",
@@ -46,14 +48,22 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
       if (name === "create_assistant_pending_action_for_current_user") {
         state.pendingArguments = args.p_validated_arguments as Record<string, unknown>;
         state.pendingStatus = "pending";
-        return { data: [{ id: actionId, tool_name: "create_appointment", expires_at: "2026-09-28T12:00:00Z" }], error: null };
+        return { data: [{ id: actionId, tool_name: state.toolName, expires_at: "2026-09-28T12:00:00Z" }], error: null };
       }
       if (name === "claim_assistant_pending_action_for_current_user") {
         if (state.pendingStatus === "pending") {
           state.pendingStatus = "claimed";
-          return { data: [{ tool_name: "create_appointment", validated_arguments: state.pendingArguments, status: "claimed" }], error: null };
+          return { data: [{ tool_name: state.toolName, validated_arguments: state.pendingArguments, status: "claimed" }], error: null };
         }
-        return { data: [{ tool_name: "create_appointment", validated_arguments: state.pendingArguments, status: state.pendingStatus }], error: null };
+        return { data: [{ tool_name: state.toolName, validated_arguments: state.pendingArguments, status: state.pendingStatus }], error: null };
+      }
+      if (name === "execute_claimed_assistant_pending_action_for_current_user") {
+        state.eligibilityCalls++;
+        state.slotIntervalCalls.push(1);
+        const code = !state.professionalActive ? "42501" : !state.eligible ? "42501" : !state.slotAvailable ? "23P01" : null;
+        if (code) return { data: null, error: { code } };
+        state.mutationCalls++;
+        return { data: [{ appointment_id: appointmentId, status: "scheduled", updated_at: "2026-09-28T12:00:00Z", changed: state.changed }], error: null };
       }
       if (name === "finish_assistant_pending_action_for_current_user") {
         state.finish = { outcome: args.p_outcome as string, errorCode: args.p_error_code as string | null };
@@ -65,6 +75,10 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
   };
   const mocks: Record<string, unknown> = {
     "server-only": {},
+    "@/lib/server/appointment-assistant-access": {
+      getAppointmentAssistantAccess: async () => ({ state: state.accessState, context: { state: "ready", user: { id: actorId }, tenant: { clinic: { id: clinicId, timezone: "America/Mexico_City" }, membership: { id: professionalId, role, is_professional: true } } } }),
+      getAssistantAccessMessage: () => "Assistant unavailable"
+    },
     "@/lib/appointments/create": { calculateAppointmentEnd: () => "", combineClinicDateTime: () => ({ state: "valid", iso: "" }) },
     "@/lib/dashboard/timezone": { getClinicDayRange: () => ({ localDate: "2026-09-28" }) },
     "@/lib/logger": { logger: { info: () => {}, error: () => {} } },
@@ -113,11 +127,11 @@ test("eligibility lost between Proposal and Confirm fails the one-shot action be
   state.eligible = false;
   const confirmed = await registry.executeConfirmedAssistantAction(actionId);
   assert.equal(confirmed.ok, false);
-  assert.equal(confirmed.error.code, "stale");
-  assert.equal(confirmed.error.safeMessage, "El paciente ya no está disponible para agendar con ese profesional. Prepara una nueva propuesta.");
+  assert.equal(confirmed.error.code, "forbidden");
+  assert.equal(confirmed.error.safeMessage, "No tienes permiso para realizar esta operación.");
   assert.equal(state.eligibilityCalls, 2);
   assert.equal(state.mutationCalls, 0);
-  assert.deepEqual(state.finish, { outcome: "failed", errorCode: "stale" });
+  assert.deepEqual(state.finish, { outcome: "failed", errorCode: "forbidden" });
   assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, false);
   assert.equal(state.mutationCalls, 0);
 });
@@ -207,10 +221,10 @@ for (const scenario of [
     state.eligible = false; // The 0052 RPC owns these relationship and patient-state semantics.
     const confirmed = await registry.executeConfirmedAssistantAction(actionId);
     assert.equal(confirmed.ok, false);
-    assert.equal(confirmed.error.code, "stale");
+    assert.equal(confirmed.error.code, "forbidden");
     assert.equal(state.eligibilityCalls, 2);
     assert.equal(state.mutationCalls, 0);
-    assert.deepEqual(state.finish, { outcome: "failed", errorCode: "stale" });
+    assert.deepEqual(state.finish, { outcome: "failed", errorCode: "forbidden" });
   });
 }
 
@@ -220,9 +234,9 @@ test("a suspended professional is rejected by the existing validation at Confirm
   state.professionalActive = false;
   const confirmed = await registry.executeConfirmedAssistantAction(actionId);
   assert.equal(confirmed.ok, false);
-  assert.equal(confirmed.error.code, "not_found");
+  assert.equal(confirmed.error.code, "forbidden");
   assert.equal(state.mutationCalls, 0);
-  assert.deepEqual(state.finish, { outcome: "failed", errorCode: "not_found" });
+  assert.deepEqual(state.finish, { outcome: "failed", errorCode: "forbidden" });
 });
 
 test("a newly unavailable slot remains rejected after eligibility revalidation", async () => {
@@ -231,25 +245,41 @@ test("a newly unavailable slot remains rejected after eligibility revalidation",
   state.slotAvailable = false;
   const confirmed = await registry.executeConfirmedAssistantAction(actionId);
   assert.equal(confirmed.ok, false);
-  assert.equal(confirmed.error.code, "outside_availability");
+  assert.equal(confirmed.error.code, "conflict");
   assert.equal(state.eligibilityCalls, 2);
   assert.equal(state.mutationCalls, 0);
-  assert.deepEqual(state.finish, { outcome: "failed", errorCode: "outside_availability" });
+  assert.deepEqual(state.finish, { outcome: "failed", errorCode: "conflict" });
 });
 
 
 test("Assistant lifecycle reuses ICS for changed reschedule/cancel, not confirm or duplicate", async () => {
   const { registry, state } = mountRegistry();
-  const tools = registry.assistantToolRegistry as unknown as Map<string, { execute: (context: unknown, input: unknown) => Promise<{ ok: boolean }> }>;
-  const context = { timeZone: "America/Mexico_City" };
-  assert.equal((await tools.get("confirm_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled" })).ok, true);
-  assert.equal(state.deliveryCalls.length, 0);
-  assert.equal((await tools.get("cancel_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled" })).ok, true);
-  assert.equal(state.deliveryCalls[0].method, "CANCEL");
-  assert.equal((await tools.get("reschedule_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled", date: input.date, startTime: input.startTime, durationMinutes: 30 })).ok, true);
-  assert.equal(state.deliveryCalls[1].method, "REQUEST");
+  for (const name of ["confirm_appointment", "cancel_appointment", "reschedule_appointment"]) {
+    state.toolName = name;
+    state.pendingStatus = "pending";
+    state.pendingArguments = {};
+    assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, true);
+  }
+  assert.deepEqual(state.deliveryCalls.map((call) => call.method), ["CANCEL", "REQUEST"]);
   state.changed = false;
-  await tools.get("cancel_appointment")!.execute(context, { appointmentId, expectedStatus: "cancelled" });
-  await tools.get("reschedule_appointment")!.execute(context, { appointmentId, expectedStatus: "scheduled", date: input.date, startTime: input.startTime, durationMinutes: 30 });
+  state.toolName = "cancel_appointment";
+  state.pendingStatus = "pending";
+  await registry.executeConfirmedAssistantAction(actionId);
   assert.equal(state.deliveryCalls.length, 2);
 });
+
+for (const accessState of ["upgrade_required", "subscription_missing", "subscription_read_only", "forbidden", "error"]) {
+  test(`${accessState}: registry denies all read/proposal/confirm work before queries`, async () => {
+    const { registry, state } = mountRegistry();
+    state.accessState = accessState;
+    for (const tool of ["search_patients", "search_appointments", "get_appointment", "get_available_slots", "get_professionals"]) {
+      assert.equal((await registry.executeAssistantReadTool(tool, {})).ok, false);
+    }
+    assert.equal((await registry.prepareAssistantMutation("create_appointment", input)).ok, false);
+    assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, false);
+    assert.equal(state.pendingStatus, "none");
+    assert.equal(state.mutationCalls, 0);
+    assert.equal(state.eligibilityCalls, 0);
+    assert.deepEqual(state.slotIntervalCalls, []);
+  });
+}

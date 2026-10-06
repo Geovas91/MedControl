@@ -15,7 +15,7 @@ const migration = readFileSync("supabase/migrations/0028_appointment_assistant_i
 const navigation = readFileSync("components/dashboard/dashboard-shell.tsx", "utf8");
 
 test("appointment assistant uses real tenant-scoped agenda data and transparent limits", () => {
-  assert.match(server, /getActiveTenantContext\(\)/);
+  assert.match(server, /getAppointmentAssistantAccess\(\)/);
   assert.match(server, /\.from\("appointments"\)/);
   assert.match(server, /\.eq\("clinic_id", clinicId\)/);
   assert.match(server, /count: "exact", head: true/);
@@ -27,7 +27,7 @@ test("visible bot route is honestly named and contains no simulated conversation
   assert.match(page, /title="Asistente de agenda"/);
   assert.match(navigation, /href: "\/dashboard\/bot", label: "Asistente de agenda"/);
   assert.doesNotMatch(page, /Demo conectado|Respuesta:|Responde 1|patientResponse/i);
-  assert.match(page, /No es un chatbot y no procesa conversaciones/);
+  assert.match(page, /acciones de agenda que requieren tu confirmación/);
 });
 
 test("settings parser accepts only explicit bounded internal preferences", () => {

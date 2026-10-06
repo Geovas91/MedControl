@@ -12,8 +12,9 @@ import { addDaysToAppointmentDate, type AppointmentStatus } from "@/lib/appointm
 import { getClinicDateRange, getClinicDayRange } from "@/lib/dashboard/timezone";
 import { getInvitationEmailConfiguration } from "@/lib/email/config";
 import { logger } from "@/lib/logger";
-import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
-import { canUseFeature, getClinicEntitlements, planIncludesFeature } from "@/lib/server/entitlements";
+import type { ActiveTenant } from "@/lib/server/active-tenant";
+import { getAppointmentAssistantAccess } from "@/lib/server/appointment-assistant-access";
+import { canUseFeature } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -130,7 +131,7 @@ export type AppointmentAssistantData = {
 
 export type AppointmentAssistantResult =
   | { state: "ready"; data: AppointmentAssistantData }
-  | { state: "unauthenticated" | "no_active_membership" | "subscription_missing" | "upgrade_required" | "error"; data: null };
+  | { state: "unauthenticated" | "no_active_membership" | "subscription_missing" | "upgrade_required" | "forbidden" | "error"; data: null };
 
 function patientName(relation: PatientRelation) {
   return Array.isArray(relation) ? relation[0]?.full_name ?? "Paciente" : relation?.full_name ?? "Paciente";
@@ -139,16 +140,12 @@ function patientName(relation: PatientRelation) {
 export async function getAppointmentAssistantForActiveTenant(
   searchParams: AppointmentAssistantSearchParams
 ): Promise<AppointmentAssistantResult> {
-  const context = await getActiveTenantContext();
+  const access = await getAppointmentAssistantAccess();
+  const context = access.context;
   if (context.state !== "ready") return { state: context.state, data: null };
-
+  if (access.state !== "ready" && access.state !== "subscription_read_only") return { state: access.state, data: null };
   const clinicId = context.tenant.clinic.id;
-  const entitlements = await getClinicEntitlements(clinicId);
-  if (entitlements.state === "missing") return { state: "subscription_missing", data: null };
-  if (entitlements.state === "error") return { state: "error", data: null };
-  if (!planIncludesFeature(entitlements, "appointment_assistant")) {
-    return { state: "upgrade_required", data: null };
-  }
+  const entitlements = access.entitlements!;
   let todayRange;
   let upcomingEnd;
 
@@ -317,11 +314,11 @@ export type SaveAppointmentAssistantSettingsResult =
 export async function saveAppointmentAssistantSettingsForActiveTenant(
   input: AppointmentAssistantSettingsInput
 ): Promise<SaveAppointmentAssistantSettingsResult> {
-  const context = await getActiveTenantContext();
-  if (context.state === "error") return { state: "error" };
+  const access = await getAppointmentAssistantAccess();
+  const context = access.context;
   if (context.state !== "ready") return { state: context.state };
-  if (!canManageAppointmentAssistant(context.tenant.membership.role)) return { state: "forbidden" };
-  if (!canUseFeature(await getClinicEntitlements(context.tenant.clinic.id), "appointment_assistant")) return { state: "forbidden" };
+  if (access.state === "error") return { state: "error" };
+  if (access.state !== "ready" || !canManageAppointmentAssistant(context.tenant.membership.role)) return { state: "forbidden" };
 
   const supabase = await createClient();
   const result = await (supabase as unknown as AssistantRpcClient).rpc(

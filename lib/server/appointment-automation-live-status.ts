@@ -10,7 +10,7 @@ import {
   type AppointmentAutomationSchedulerSource
 } from "@/lib/appointment-automation-live-status";
 import { logger } from "@/lib/logger";
-import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { getAppointmentAssistantAccess } from "@/lib/server/appointment-assistant-access";
 import { createClient } from "@/lib/supabase/server";
 
 type LiveStatusRpcClient = {
@@ -23,13 +23,15 @@ export type AppointmentAutomationLiveStatusResult =
   | { state: "unauthenticated" | "no_active_membership" | "forbidden" | "error"; data: null };
 
 export async function getAppointmentAutomationLiveStatusForActiveTenant(): Promise<AppointmentAutomationLiveStatusResult> {
-  const context = await getActiveTenantContext();
+  const access = await getAppointmentAssistantAccess();
+  const context = access.context;
   if (context.state === "error") return { state: "error", data: null };
   if (context.state !== "ready") return { state: context.state, data: null };
   if (!canViewAppointmentAutomationLiveStatus(context.tenant.membership.role)) {
     return { state: "forbidden", data: null };
   }
 
+  if (access.state !== "ready" && access.state !== "subscription_read_only") return { state: access.state === "error" ? "error" : "forbidden", data: null };
   const clinicId = context.tenant.clinic.id;
   const supabase = await createClient() as unknown as LiveStatusRpcClient;
   const [schedulerResult, jobsResult] = await Promise.all([

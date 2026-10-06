@@ -67,7 +67,13 @@ test("member action denies new professional grants before RPC but permits author
 
 test("Assistant returns explicit missing before clinical queries while technical errors remain errors", async () => {
   let entitlement = missing;
+  const access = load("lib/server/appointment-assistant-access.ts", {
+    "server-only": {},
+    "@/lib/server/active-tenant": { getActiveTenantContext: async () => readyTenant },
+    "@/lib/server/entitlements": { getClinicEntitlements: async () => entitlement }
+  });
   const assistant = load("lib/server/appointment-assistant.ts", {
+    "@/lib/server/appointment-assistant-access": access,
     "server-only": {},
     "@/lib/server/active-tenant": { getActiveTenantContext: async () => readyTenant },
     "@/lib/server/entitlements": { getClinicEntitlements: async () => entitlement },
