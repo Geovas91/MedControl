@@ -86,6 +86,28 @@ begin
 end;
 $$;
 
+-- Match combineClinicDateTime: accept exactly one minute-aligned UTC instant
+-- within its +/-18 hour search window. A round trip alone cannot detect fall-back.
+create function public.resolve_assistant_local_time_internal(p_local_date date, p_local_time time, p_timezone text)
+returns timestamptz language plpgsql security invoker set search_path = public, pg_temp stable as $$
+declare v_zone text; v_wall timestamp; v_approx timestamptz; v_result timestamptz; v_matches integer;
+begin
+  select name into v_zone from pg_catalog.pg_timezone_names where lower(name)=lower(p_timezone) limit 1;
+  if v_zone is null or p_local_date is null or p_local_time is null then
+    raise exception 'Invalid local time.' using errcode='22023';
+  end if;
+  v_wall:=p_local_date+p_local_time;
+  v_approx:=v_wall at time zone 'UTC';
+  select count(*)::integer,min(candidate) into v_matches,v_result
+  from generate_series(v_approx-interval '18 hours',v_approx+interval '18 hours',interval '1 minute') as instants(candidate)
+  where candidate at time zone v_zone=v_wall;
+  if v_matches <> 1 then
+    raise exception 'Invalid local time.' using errcode='22023';
+  end if;
+  return v_result;
+end; $$;
+revoke all on function public.resolve_assistant_local_time_internal(date,time,text) from public, anon, authenticated;
+
 -- The subscription lock spans the canonical mutation. The action lock plus marker
 -- prevents two callers executing the same claimed action, including before finish.
 create function public.execute_claimed_assistant_pending_action_for_current_user(p_action_id uuid)
@@ -114,11 +136,7 @@ begin
     v_local_date:=(v_args->>'local_date')::date; v_local_time:=(v_args->>'local_time')::time;
     v_duration:=(v_args->>'duration_minutes')::integer;
     select timezone into v_timezone from public.clinics where id=v_action.clinic_id;
-    v_start:=(v_local_date+v_local_time) at time zone v_timezone;
-    -- Reject nonexistent local wall clock times instead of silently shifting them.
-    if (v_start at time zone v_timezone) <> v_local_date+v_local_time then
-      raise exception 'Invalid local time.' using errcode='22023';
-    end if;
+    v_start:=public.resolve_assistant_local_time_internal(v_local_date,v_local_time,v_timezone);
     v_end:=v_start+make_interval(mins=>v_duration);
   end if;
   if v_action.tool_name='create_appointment' then
