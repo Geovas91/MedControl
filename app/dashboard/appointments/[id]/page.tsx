@@ -263,6 +263,6 @@ export default async function AppointmentDetailPage({
   );
 }
 
-function appointmentEventLabel(event: "created" | "confirmed" | "cancelled" | "rescheduled") {
-  return { created: "Cita creada", confirmed: "Cita confirmada", cancelled: "Cita cancelada", rescheduled: "Cita reprogramada" }[event];
+function appointmentEventLabel(event: "created" | "confirmed" | "cancelled" | "rescheduled" | "waiting" | "completed" | "restored" | "metadata_updated") {
+  return { created: "Cita creada", confirmed: "Cita confirmada", cancelled: "Cita cancelada", rescheduled: "Cita reprogramada", waiting: "Cita en espera", completed: "Cita completada", restored: "Cita restaurada", metadata_updated: "Datos de cita actualizados" }[event];
 }

@@ -307,6 +307,9 @@ test("create, update and status mutations return PostgreSQL updated_at for calen
   const statusService = readFileSync(new URL("../../lib/server/update-appointment-status.ts", import.meta.url), "utf8");
 
   assert.match(createService, /rpc\(\s*"create_appointment_for_current_user"[\s\S]+appointment_updated_at/);
-  assert.match(updateService, /\.update\([\s\S]+?\.select\("id, patient_id, updated_at"\)\s*\.maybeSingle\(\)/);
-  assert.match(statusService, /\.update\([\s\S]+?\.select\("id, patient_id, starts_at, status, updated_at"\)\s*\.maybeSingle\(\)/);
+  assert.match(updateService, /\.rpc\("update_appointment_metadata_for_current_user"/);
+  assert.match(updateService, /buildAppointmentCalendarOperation\([\s\S]+updateResult\.data\.updated_at/);
+  assert.match(statusService, /mutateAppointmentLifecycleForActiveTenant\([\s\S]+buildAppointmentCalendarOperation\(appointmentId, "status", lifecycle\.appointment\.updated_at\)/);
+  assert.doesNotMatch(updateService, /\.update\(/);
+  assert.doesNotMatch(statusService, /\.update\(/);
 });

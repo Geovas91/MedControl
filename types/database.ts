@@ -992,6 +992,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      update_appointment_metadata_for_current_user: {
+        Args: { p_clinic_id: string; p_appointment_id: string; p_title: string; p_appointment_type: string | null; p_location: string | null; p_expected_updated_at: Timestamp };
+        Returns: Array<{ appointment_id: string; patient_id: string; updated_at: Timestamp; changed: boolean }>;
+      };
+      mutate_appointment_lifecycle_for_current_user: {
+        Args: { p_clinic_id: string; p_appointment_id: string; p_operation: "confirm" | "cancel" | "reschedule" | "waiting" | "completed" | "restore"; p_expected_status?: Database["public"]["Enums"]["appointment_status"] | null; p_new_starts_at?: Timestamp | null; p_new_ends_at?: Timestamp | null };
+        Returns: Array<{ appointment_id: string; status: Database["public"]["Enums"]["appointment_status"]; starts_at: Timestamp; ends_at: Timestamp; updated_at: Timestamp; changed: boolean }>;
+      };
       execute_claimed_assistant_pending_action_for_current_user: {
         Args: { p_action_id: string };
         Returns: { appointment_id: string; status: string; starts_at: string; ends_at: string; updated_at: string; changed: boolean }[];

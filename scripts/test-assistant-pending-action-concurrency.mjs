@@ -141,3 +141,39 @@ test("downgrade winning the subscription lock denies execution with zero mutatio
     assert.equal(await appointmentCount(f), 0);
   });
 });
+
+const canonicalCreate = (f) => `select * from public.create_appointment_for_current_user('${f.clinic}','${f.patient}','${f.doctor}','QA serialization',null,null,null,'2030-01-07 12:00 America/Mexico_City','2030-01-07 12:30 America/Mexico_City');`;
+const authorizedMutation = (f, statement) => sql(`begin; set local role authenticated; select set_config('request.jwt.claim.sub','${f.actor}',true); ${statement} commit;`);
+
+test("canonical scheduling serializes two overlapping creates", async () => {
+  await executionFixture(async (f) => {
+    const results = await Promise.all([authorizedMutation(f, canonicalCreate(f)), authorizedMutation(f, canonicalCreate(f))]);
+    assert.equal(results.filter((r) => r.code === 0).length, 1);
+    assert.equal(results.filter((r) => r.code !== 0).length, 1);
+    assert.equal(await appointmentCount(f), 1);
+    const events = await sql(`select count(*) from public.appointment_events where clinic_id='${f.clinic}' and event_type='created';`);
+    assert.equal(events.code, 0, events.stderr);
+    assert.equal(events.stdout, "1");
+  });
+});
+
+test("canonical restore and overlapping create share scheduling serialization", async () => {
+  await executionFixture(async (f) => {
+    const created = await authorizedMutation(f, canonicalCreate(f));
+    assert.equal(created.code, 0, created.stderr);
+    const original = await sql(`select id from public.appointments where clinic_id='${f.clinic}';`);
+    assert.equal(original.code, 0, original.stderr);
+    const appointment = original.stdout;
+    assert.match(appointment, /^[0-9a-f-]{36}$/i);
+    const cancelled = await authorizedMutation(f, `select * from public.mutate_appointment_lifecycle_for_current_user('${f.clinic}','${appointment}','cancel','scheduled');`);
+    assert.equal(cancelled.code, 0, cancelled.stderr);
+    const restore = `select * from public.mutate_appointment_lifecycle_for_current_user('${f.clinic}','${appointment}','restore','cancelled');`;
+    const results = await Promise.all([authorizedMutation(f, restore), authorizedMutation(f, canonicalCreate(f))]);
+    assert.equal(results.filter((r) => r.code === 0).length, 1);
+    assert.equal(results.filter((r) => r.code !== 0).length, 1);
+    const persisted = await sql(`select count(*) from public.appointments where clinic_id='${f.clinic}' and status<>'cancelled';
+      select count(*) from public.appointment_events where clinic_id='${f.clinic}' and (event_type='restored' or (event_type='created' and appointment_id<>'${appointment}'));`);
+    assert.equal(persisted.code, 0, persisted.stderr);
+    assert.equal(persisted.stdout, "1\n1");
+  });
+});

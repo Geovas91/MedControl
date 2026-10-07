@@ -91,6 +91,7 @@ export async function updateAppointmentStatusForActiveTenant(
   if (!appointmentResult.data) return { state: "not_found" };
 
   const appointment = appointmentResult.data as StatusAppointment;
+  if (context.tenant.membership.role === "doctor" && appointment.doctor_id !== context.user.id) return { state: "forbidden" };
 
   if (appointment.status !== input.expectedCurrentStatus) {
     return {
@@ -135,110 +136,26 @@ export async function updateAppointmentStatusForActiveTenant(
     return { state: "invalid_status", error: "El estado solicitado no es válido." };
   }
 
-  if (outcome === "restored") {
-    if (!appointment.doctor_id) {
-      return {
-        state: "conflict",
-        error: "Asigna un profesional a la cita antes de restaurarla."
-      };
-    }
-
-    const conflictResult = await supabase
-      .from("appointments")
-      .select("id")
-      .eq("clinic_id", clinicId)
-      .eq("doctor_id", appointment.doctor_id)
-      .neq("id", appointmentId)
-      .neq("status", "cancelled")
-      .lt("starts_at", appointment.ends_at)
-      .gt("ends_at", appointment.starts_at)
-      .limit(1)
-      .maybeSingle();
-
-    if (conflictResult.error) {
-      logger.error("Appointment restoration conflict query failed", {
-        component: "appointment_status",
-        status: "conflict_query_error",
-        code: conflictResult.error.code
-      });
-      return { state: "error", error: "No fue posible verificar la disponibilidad." };
-    }
-
-    if (conflictResult.data) {
-      return { state: "conflict", error: "El profesional ya tiene una cita en ese horario." };
-    }
-  }
-
-  if (input.targetStatus === "confirmed" || input.targetStatus === "cancelled") {
-    const lifecycle = await mutateAppointmentLifecycleForActiveTenant({
-      appointmentId,
-      operation: input.targetStatus === "confirmed" ? "confirm" : "cancel",
-      expectedStatus: input.expectedCurrentStatus
-    });
-
-    if (lifecycle.state !== "success") {
-      if (lifecycle.state === "forbidden") return { state: "forbidden" };
-      if (lifecycle.state === "conflict") return { state: "conflict", error: "El profesional ya tiene una cita en ese horario." };
-      if (lifecycle.state === "stale_state") return { state: "stale_state", error: "La cita cambió en otra sesión. Actualiza la página e intenta nuevamente." };
-      if (lifecycle.state === "invalid_transition") return { state: "invalid_transition", error: "El cambio de estado solicitado no está permitido." };
-      if (lifecycle.state === "not_found") return { state: "not_found" };
-      return { state: "error", error: "No fue posible actualizar el estado de la cita." };
-    }
-
-    const localDate = formatAppointmentDetailDateTime(
-      lifecycle.appointment.starts_at,
-      appointment.ends_at,
-      context.tenant.clinic.timezone
-    ).localDate;
-    const calendarOperation = buildAppointmentCalendarOperation(appointmentId, "status", lifecycle.appointment.updated_at);
-    return { state: "success", outcome, patientId: appointment.patient_id, localDate, ...calendarOperation };
-  }
-
-  const updateResult = (await supabase
-    .from("appointments")
-    .update({ status: input.targetStatus } as never)
-    .eq("id", appointmentId)
-    .eq("clinic_id", clinicId)
-    .eq("status", input.expectedCurrentStatus)
-    .select("id, patient_id, starts_at, status, updated_at")
-    .maybeSingle()) as unknown as {
-    data: Pick<AppointmentRow, "id" | "patient_id" | "starts_at" | "status" | "updated_at"> | null;
-    error: { code: string } | null;
-  };
-
-  if (updateResult.error) {
-    logger.error("Appointment status update failed", {
-      component: "appointment_status",
-      status: "update_error",
-      code: updateResult.error.code
-    });
+  const operation = input.targetStatus === "confirmed" ? "confirm"
+    : input.targetStatus === "cancelled" ? "cancel"
+    : input.targetStatus === "scheduled" ? "restore"
+    : input.targetStatus === "waiting" ? "waiting" : "completed";
+  const lifecycle = await mutateAppointmentLifecycleForActiveTenant({
+    appointmentId, operation, expectedStatus: input.expectedCurrentStatus
+  });
+  if (lifecycle.state !== "success") {
+    if (lifecycle.state === "forbidden") return { state: "forbidden" };
+    if (lifecycle.state === "conflict") return { state: "conflict", error: "El profesional ya tiene una cita en ese horario." };
+    if (lifecycle.state === "stale_state") return { state: "stale_state", error: "La cita cambió en otra sesión. Actualiza la página e intenta nuevamente." };
+    if (lifecycle.state === "too_early") return { state: "too_early", error: temporalError(input.targetStatus) };
+    if (lifecycle.state === "terminal_state") return { state: "terminal_state", error: "Una cita completada ya no admite cambios de estado." };
+    if (lifecycle.state === "invalid_transition") return { state: "invalid_transition", error: "El cambio de estado solicitado no está permitido." };
+    if (lifecycle.state === "not_found") return { state: "not_found" };
     return { state: "error", error: "No fue posible actualizar el estado de la cita." };
   }
-
-  if (!updateResult.data) {
-    return {
-      state: "stale_state",
-      error: "La cita cambió en otra sesión. Actualiza la página e intenta nuevamente."
-    };
-  }
-
   const localDate = formatAppointmentDetailDateTime(
-    updateResult.data.starts_at,
-    appointment.ends_at,
-    context.tenant.clinic.timezone
+    lifecycle.appointment.starts_at, lifecycle.appointment.ends_at, context.tenant.clinic.timezone
   ).localDate;
-
-  const calendarOperation = buildAppointmentCalendarOperation(
-    appointmentId,
-    "status",
-    updateResult.data.updated_at
-  );
-
-  return {
-    state: "success",
-    outcome,
-    patientId: updateResult.data.patient_id,
-    localDate,
-    ...calendarOperation
-  };
+  const calendarOperation = buildAppointmentCalendarOperation(appointmentId, "status", lifecycle.appointment.updated_at);
+  return { state: "success", outcome, patientId: appointment.patient_id, localDate, ...calendarOperation };
 }
