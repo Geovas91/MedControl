@@ -1,7 +1,6 @@
 import {
   appointmentDurations,
   calculateAppointmentEnd,
-  canCreateAppointments,
   validateAppointmentFormValues,
   type AppointmentFormValues,
   type ValidatedAppointmentInput
@@ -30,7 +29,9 @@ export type EditableAppointment = Pick<
 
 export type ValidatedAppointmentEditInput = Omit<ValidatedAppointmentInput, "status">;
 
-export const canEditAppointments = canCreateAppointments;
+export function canEditAppointments(role: Database["public"]["Enums"]["clinic_member_role"]) {
+  return role === "owner" || role === "admin" || role === "doctor";
+}
 
 export function appointmentTimestampToLocalParts(value: string, timeZone: string) {
   const date = new Date(value);

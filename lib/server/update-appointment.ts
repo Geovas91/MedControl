@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  buildAppointmentUpdate,
   canEditAppointments,
   getAppointmentEditEnd,
   getAppointmentEditInitialValues,
@@ -44,6 +43,14 @@ type DoctorProfileRow = {
   display_name: string;
 };
 
+type MetadataRpc = Database["public"]["Functions"]["update_appointment_metadata_for_current_user"];
+type MetadataRpcClient = {
+  rpc(name: "update_appointment_metadata_for_current_user", args: MetadataRpc["Args"]): Promise<{
+    data: MetadataRpc["Returns"] | null;
+    error: { code?: string } | null;
+  }>;
+};
+
 export type AppointmentEditData = {
   appointment: EditableAppointment;
   initialValues: AppointmentFormValues;
@@ -76,7 +83,7 @@ export type UpdateAppointmentResult =
     };
 
 const editableAppointmentColumns =
-  "id, patient_id, doctor_id, title, appointment_type, location, starts_at, ends_at, status";
+  "id, patient_id, doctor_id, title, appointment_type, location, starts_at, ends_at, status, updated_at";
 
 function mapPatients(rows: PatientOptionRow[]) {
   return rows.map((patient) => ({
@@ -151,6 +158,7 @@ export async function getAppointmentEditForActiveTenant(appointmentId: string): 
   }
 
   const appointment = appointmentResult.data as EditableAppointment;
+  if (context.tenant.membership.role === "doctor" && appointment.doctor_id !== context.user.id) return { state: "forbidden", data: null };
   const initialValues = getAppointmentEditInitialValues(appointment, context.tenant.clinic.timezone);
 
   if (!initialValues) {
@@ -236,7 +244,8 @@ export async function updateAppointmentForActiveTenant(
     return { state: "not_found" };
   }
 
-  const original = appointmentResult.data as EditableAppointment;
+  const original = appointmentResult.data as EditableAppointment & { updated_at: string };
+  if (context.tenant.membership.role === "doctor" && original.doctor_id !== context.user.id) return { state: "forbidden" };
   if (!canKeepAppointmentCalendarRecipient(original.patient_id, input.patientId)) {
     return {
       state: "validation_error",
@@ -350,24 +359,24 @@ export async function updateAppointmentForActiveTenant(
     return { state: "error", error: "No fue posible actualizar la cita. Intenta nuevamente.", values };
   }
 
-  const updateResult = (await supabase
-    .from("appointments")
-    .update(buildAppointmentUpdate(input, startsAt, endsAt) as never)
-    .eq("id", appointmentId)
-    .eq("clinic_id", clinicId)
-    .select("id, patient_id, updated_at")
-    .maybeSingle()) as unknown as {
-    data: { id: string; patient_id: string; updated_at: string } | null;
-    error: { code: string } | null;
-  };
-
+  const result = await (supabase as unknown as MetadataRpcClient).rpc("update_appointment_metadata_for_current_user", {
+    p_clinic_id: clinicId,
+    p_appointment_id: appointmentId,
+    p_title: input.title,
+    p_appointment_type: input.appointmentType,
+    p_location: input.location,
+    p_expected_updated_at: original.updated_at
+  });
+  const updateResult = { data: result.data?.[0] ?? null, error: result.error };
   if (updateResult.error || !updateResult.data) {
     logger.error("Appointment update failed", {
-      component: "edit_appointment",
-      status: updateResult.error ? "update_error" : "missing_result",
-      code: updateResult.error?.code
+      component: "edit_appointment", status: updateResult.error ? "update_error" : "missing_result", code: updateResult.error?.code
     });
-    return { state: "error", error: "No fue posible actualizar la cita. Intenta nuevamente.", values };
+    if (updateResult.error?.code === "42501") return { state: "forbidden" };
+    if (updateResult.error?.code === "P0002") return { state: "not_found" };
+    return { state: "error", error: updateResult.error?.code === "40001"
+      ? "La cita cambió en otra sesión. Actualiza la página e intenta nuevamente."
+      : "No fue posible actualizar la cita. Intenta nuevamente.", values };
   }
 
   const calendarOperation = buildAppointmentCalendarOperation(

@@ -1,4 +1,4 @@
-import { DOCTORS, assertNoError, createAdmin, fail, getRuntimeConfig, isEntrypoint, loadContext, loadRules, signIn } from "./professional-availability-demo.mjs";
+import { DOCTORS, assertNoError, createAdmin, fail, getRuntimeConfig, isEntrypoint, loadContext, loadRules } from "./professional-availability-demo.mjs";
 
 export function printCleanupDryRun({ local = false } = {}) {
   console.log(`[dry-run] target plan: ${local ? "LOCAL" : "STAGING"}; QA Professional Availability cleanup: NO READS, NO WRITES.`);
@@ -11,17 +11,16 @@ export async function runCleanup({ dryRun, local }) {
   const config = getRuntimeConfig({ local });
   const admin = createAdmin(config);
   const context = await loadContext(admin);
-  const owners = new Map();
   for (const doctor of DOCTORS) {
     const rows = await loadRules(admin, context, doctor);
     const target = rows.filter((row) => row.effective_from === "2026-01-01" && row.is_active && doctor.intervals.some((interval) => row.weekday === interval.weekday && String(row.start_time).slice(0, 5) === interval.start_time && String(row.end_time).slice(0, 5) === interval.end_time));
     if (rows.some((row) => !target.includes(row))) fail(`Refusing cleanup: incompatible availability exists for ${doctor.email}.`);
     if (!target.length) { console.log(`[apply] no QA availability found for ${doctor.email}`); continue; }
-    const ownerEmail = doctor.region === "Norte" ? "qa.owner.norte@clinicontrol.mx" : "qa.owner.sur@clinicontrol.mx";
-    let ownerClient = owners.get(ownerEmail);
-    if (!ownerClient) { ownerClient = await signIn(config, ownerEmail); owners.set(ownerEmail, ownerClient); }
     for (const row of target) {
-      const { error } = await ownerClient.from("professional_availability_rules").delete().eq("id", row.id);
+      // Physical cleanup is a guarded operator-only QA task. Client table writes
+      // are revoked by 0060; the application continues to use canonical RPCs.
+      const { error } = await admin.from("professional_availability_rules").delete()
+        .eq("id", row.id).eq("clinic_id", row.clinic_id).eq("clinic_member_id", row.clinic_member_id);
       assertNoError(error, "Deleting exact QA availability rule");
     }
     console.log(`[apply] removed ${target.length} exact QA rules for ${doctor.email}`);
