@@ -3,6 +3,7 @@ import "server-only";
 import { aggregateMxnPayments, type DashboardPayment } from "@/lib/dashboard/metrics";
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import { logger } from "@/lib/logger";
+import { canCreateClinicalPayments } from "@/lib/payments/create";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -28,8 +29,9 @@ export type DashboardOverview = {
   localDate: string;
   patientCount: number;
   appointmentsToday: DashboardAgendaItem[];
-  paidMxn: number;
-  pendingMxn: number;
+  financial:
+    | { state: "visible"; paidMxn: number; pendingMxn: number }
+    | { state: "forbidden" };
 };
 
 export type DashboardOverviewResult =
@@ -67,6 +69,7 @@ export async function getDashboardOverview(): Promise<DashboardOverviewResult> {
   }
 
   const supabase = await createClient();
+  const canViewPayments = canCreateClinicalPayments(tenant.membership.role);
   const [patientsResult, appointmentsResult, paymentsResult] = await Promise.all([
     supabase
       .from("patients")
@@ -82,12 +85,14 @@ export async function getDashboardOverview(): Promise<DashboardOverviewResult> {
       .gte("starts_at", dayRange.startIso)
       .lt("starts_at", dayRange.endIso)
       .order("starts_at", { ascending: true }),
-    supabase
-      .from("payments")
-      .select("amount, currency, status")
-      .eq("clinic_id", tenant.clinic.id)
-      .eq("currency", "MXN")
-      .in("status", ["paid", "pending"])
+    canViewPayments
+      ? supabase
+          .from("payments")
+          .select("amount, currency, status")
+          .eq("clinic_id", tenant.clinic.id)
+          .eq("currency", "MXN")
+          .in("status", ["paid", "pending"])
+      : Promise.resolve({ data: null, error: null })
   ]);
 
   if (patientsResult.error || appointmentsResult.error || paymentsResult.error) {
@@ -102,8 +107,11 @@ export async function getDashboardOverview(): Promise<DashboardOverviewResult> {
   }
 
   const appointmentRows = (appointmentsResult.data ?? []) as AppointmentQueryRow[];
-  const paymentRows = (paymentsResult.data ?? []) as DashboardPayment[];
-  const paymentTotals = aggregateMxnPayments(paymentRows);
+  let financial: DashboardOverview["financial"] = { state: "forbidden" };
+  if (canViewPayments) {
+    const totals = aggregateMxnPayments((paymentsResult.data ?? []) as DashboardPayment[]);
+    financial = { state: "visible", paidMxn: totals.paid, pendingMxn: totals.pending };
+  }
 
   return {
     state: "ready",
@@ -119,8 +127,7 @@ export async function getDashboardOverview(): Promise<DashboardOverviewResult> {
         appointmentType: appointment.appointment_type,
         status: appointment.status
       })),
-      paidMxn: paymentTotals.paid,
-      pendingMxn: paymentTotals.pending
+      financial
     }
   };
 }

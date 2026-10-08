@@ -3,6 +3,7 @@ import { signOutAction } from "@/app/(auth)/actions";
 import { getOnboardingStatus } from "@/lib/onboarding";
 import { getClinicEntitlements, getEntitlementNotice, planIncludesFeature } from "@/lib/server/entitlements";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canCreateClinicalPayments } from "@/lib/payments/create";
 import { redirect } from "next/navigation";
 
 async function getDashboardAccount() {
@@ -41,6 +42,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       account={{ name: account.name, subtitle: account.subtitle }}
       subscriptionNotice={account.subscriptionNotice}
       appointmentAssistantAvailable={account.appointmentAssistantAvailable}
+      clinicalPaymentsAvailable={canCreateClinicalPayments(account.tenant.membership.role)}
       footer={
         <>
           <p className="mb-3 px-3 text-sm font-semibold text-[var(--foreground-soft)]">{account.tenant.clinic.name}</p>

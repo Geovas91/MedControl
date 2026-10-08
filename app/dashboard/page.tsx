@@ -75,8 +75,8 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Panel clínico" title="Resumen de clínica" description="Vista rápida de la actividad de hoy, pacientes y flujo de pagos." />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:gap-5">
+      <PageHeader eyebrow="Panel clínico" title="Resumen de clínica" description={data.financial.state === "visible" ? "Vista rápida de la actividad de hoy, pacientes y flujo de pagos." : "Vista rápida de la actividad de hoy y pacientes."} />
+      <div className={`grid gap-4 md:grid-cols-2 xl:gap-5 ${data.financial.state === "visible" ? "xl:grid-cols-4" : "xl:grid-cols-2"}`}>
         <StatCard
           label="Pacientes"
           value={`${data.patientCount}`}
@@ -91,20 +91,24 @@ export default async function DashboardPage() {
           icon={<CalendarDays className="h-5 w-5" />}
           href={`/dashboard/appointments?date=${data.localDate}&period=day`}
         />
-        <StatCard
-          label="Ingresos"
-          value={formatMxnCurrency(data.paidMxn)}
-          detail="Pagos cobrados totales en MXN"
-          icon={<WalletCards className="h-5 w-5" />}
-          href="/dashboard/payments?status=paid"
-        />
-        <StatCard
-          label="Pendiente"
-          value={formatMxnCurrency(data.pendingMxn)}
-          detail="Saldo pendiente total en MXN"
-          icon={<CreditCard className="h-5 w-5" />}
-          href="/dashboard/payments?status=pending"
-        />
+        {data.financial.state === "visible" ? (
+          <>
+            <StatCard
+              label="Ingresos"
+              value={formatMxnCurrency(data.financial.paidMxn)}
+              detail="Pagos cobrados totales en MXN"
+              icon={<WalletCards className="h-5 w-5" />}
+              href="/dashboard/payments?status=paid"
+            />
+            <StatCard
+              label="Pendiente"
+              value={formatMxnCurrency(data.financial.pendingMxn)}
+              detail="Saldo pendiente total en MXN"
+              icon={<CreditCard className="h-5 w-5" />}
+              href="/dashboard/payments?status=pending"
+            />
+          </>
+        ) : null}
       </div>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-[1.28fr_0.72fr] xl:gap-6">
