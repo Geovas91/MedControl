@@ -4,6 +4,7 @@ import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import { canViewClinicalRecord } from "@/lib/clinical-record/permissions";
 import { isValidPatientUuid } from "@/lib/patients/detail";
 import { logger } from "@/lib/logger";
+import { canCreateClinicalPayments } from "@/lib/payments/create";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
 import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
@@ -69,7 +70,9 @@ export type PatientDetailData = {
   patient: PatientDetailRecord;
   upcomingAppointments: PatientDetailAppointment[];
   recentAppointments: PatientDetailAppointment[];
-  payments: PatientDetailPayment[];
+  financial:
+    | { state: "visible"; payments: PatientDetailPayment[] }
+    | { state: "forbidden" };
   medicalNotes: PatientDetailMedicalNote[];
   consents: PatientDetailConsent[];
   canAccessClinicalData: boolean;
@@ -154,6 +157,7 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
     ? await canAccessClinicalPatientForActiveTenant(id)
     : null;
   const canViewClinical = scope?.state === "ready" && scope.allowed;
+  const canViewPayments = canCreateClinicalPayments(context.tenant.membership.role);
   const [
     upcomingResult,
     recentResult,
@@ -179,13 +183,15 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
       .lt("starts_at", now)
       .order("starts_at", { ascending: false })
       .limit(5),
-    supabase
-      .from("payments")
-      .select("id, amount, currency, status, concept, paid_at, created_at")
-      .eq("clinic_id", clinicId)
-      .eq("patient_id", id)
-      .order("created_at", { ascending: false })
-      .limit(5),
+    canViewPayments
+      ? supabase
+          .from("payments")
+          .select("id, amount, currency, status, concept, paid_at, created_at")
+          .eq("clinic_id", clinicId)
+          .eq("patient_id", id)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      : Promise.resolve({ data: null, error: null }),
     canViewClinical
       ? supabase
           .from("medical_notes")
@@ -245,7 +251,9 @@ export async function getPatientDetailForActiveTenant(id: string): Promise<Patie
         (recentResult.data ?? []) as Omit<PatientDetailAppointment, "doctorName">[],
         doctorProfiles
       ),
-      payments: (paymentsResult.data ?? []) as PatientDetailPayment[],
+      financial: canViewPayments
+        ? { state: "visible", payments: (paymentsResult.data ?? []) as PatientDetailPayment[] }
+        : { state: "forbidden" },
       medicalNotes: (medicalNotesResult.data ?? []) as PatientDetailMedicalNote[],
       consents: (consentsResult.data ?? []) as PatientDetailConsent[],
       canAccessClinicalData: canViewClinical

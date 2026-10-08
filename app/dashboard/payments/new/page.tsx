@@ -34,7 +34,7 @@ export default async function NewClinicalPaymentPage({ searchParams }: NewClinic
   }
 
   if (result.state === "forbidden") {
-    return <PaymentCreationUnavailable title="Acceso de solo lectura" description="Tu rol actual puede consultar esta sección, pero no registrar pagos clínicos." />;
+    return <PaymentCreationUnavailable title="Acceso restringido" description="No tienes autorización para registrar pagos clínicos con tu rol o el estado actual de la suscripción." />;
   }
 
   if (result.state === "error") {

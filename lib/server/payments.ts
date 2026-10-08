@@ -70,6 +70,7 @@ export type ClinicalPaymentData = {
 
 export type ClinicalPaymentResult =
   | { state: "ready"; data: ClinicalPaymentData }
+  | { state: "forbidden"; data: null }
   | { state: "unauthenticated"; data: null }
   | { state: "no_active_membership"; data: null }
   | { state: "error"; data: null };
@@ -146,6 +147,12 @@ export async function getClinicalPaymentsForActiveTenant(
 
   if (context.state !== "ready") {
     return { state: context.state, data: null };
+  }
+
+  // The approved temporary financial read roles match the existing creator roles.
+  // Check before querying even financial filter options or counts; RLS is final authority.
+  if (!canCreateClinicalPayments(context.tenant.membership.role)) {
+    return { state: "forbidden", data: null };
   }
 
   const clinicId = context.tenant.clinic.id;

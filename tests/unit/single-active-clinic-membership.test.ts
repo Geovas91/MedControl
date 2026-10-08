@@ -152,7 +152,9 @@ test("auth callback fails closed on duplicate or unavailable membership reads", 
 test("dashboard renders clinic identity without a selector and refuses a failed tenant resolution", async () => {
   let state = "ready";
   const react = require("react");
+  const payments = await import("../../lib/payments/create.ts");
   const loaded = load("app/dashboard/layout.tsx", {
+    "@/lib/payments/create": payments,
     "@/components/dashboard/dashboard-shell": { DashboardShell: ({ children, footer }: any) => react.createElement("main", null, children, footer) },
     "@/app/(auth)/actions": { signOutAction: () => {} },
     "@/lib/onboarding": { getOnboardingStatus: async () => ({ state: "complete", profile: { full_name: "Synthetic Owner" }, user: { email: "synthetic@example.test" }, membership: member }) },

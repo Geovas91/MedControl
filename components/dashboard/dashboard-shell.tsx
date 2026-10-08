@@ -34,9 +34,10 @@ type DashboardShellProps = {
   account?: { name: string; subtitle: string };
   subscriptionNotice?: string | null;
   appointmentAssistantAvailable?: boolean;
+  clinicalPaymentsAvailable?: boolean;
 };
 
-export function DashboardShell({ children, footer, account, subscriptionNotice, appointmentAssistantAvailable = false }: DashboardShellProps) {
+export function DashboardShell({ children, footer, account, subscriptionNotice, appointmentAssistantAvailable = false, clinicalPaymentsAvailable = false }: DashboardShellProps) {
   const pathname = usePathname();
   const [drawerPath, setDrawerPath] = useState<string | null>(null);
   const appContentRef = useRef<HTMLDivElement>(null);
@@ -46,7 +47,10 @@ export function DashboardShell({ children, footer, account, subscriptionNotice, 
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const open = drawerPath === pathname;
-  const visibleNavItems = appointmentAssistantAvailable ? navItems : navItems.filter((item) => item.href !== "/dashboard/bot");
+  const visibleNavItems = navItems.filter((item) =>
+    (appointmentAssistantAvailable || item.href !== "/dashboard/bot") &&
+    (clinicalPaymentsAvailable || item.href !== "/dashboard/payments")
+  );
   const closeDrawer = () => setDrawerPath(null);
   const openDrawer = (event: React.MouseEvent<HTMLButtonElement>) => {
     openerRef.current = event.currentTarget;

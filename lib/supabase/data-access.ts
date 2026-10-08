@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { getActiveTenantContext } from "@/lib/server/active-tenant";
+import { canCreateClinicalPayments } from "@/lib/payments/create";
 import type { Database } from "@/types/database";
 
 type Tables = Database["public"]["Tables"];
@@ -43,6 +45,11 @@ export async function listAppointmentsForClinic(clinicId: string) {
 }
 
 export async function listPaymentsForClinic(clinicId: string) {
+  const context = await getActiveTenantContext();
+  if (context.state !== "ready") return { state: context.state, data: null, error: null };
+  if (context.tenant.clinic.id !== clinicId || !canCreateClinicalPayments(context.tenant.membership.role)) {
+    return { state: "forbidden", data: null, error: null };
+  }
   const supabase = await createClient();
 
   return supabase

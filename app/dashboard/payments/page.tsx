@@ -58,6 +58,15 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
 
   if (result.state === "unauthenticated") redirect("/login");
 
+  if (result.state === "forbidden") {
+    return (
+      <PaymentsUnavailable
+        title="Acceso restringido"
+        description="Los pagos clínicos están disponibles únicamente para los roles administrativos de la clínica."
+      />
+    );
+  }
+
   if (result.state === "no_active_membership") {
     return (
       <PaymentsUnavailable
