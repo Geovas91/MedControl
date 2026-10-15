@@ -130,7 +130,7 @@ export default function LandingPage() {
       <section className="relative overflow-hidden border-b border-[var(--border)] bg-[var(--background-soft)]">
         <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.02fr_0.98fr] lg:px-8 lg:py-24">
           <div className="responsive-grid-child flex flex-col justify-center">
-            <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-clinic">
+            <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-teal-800">
               Gestión médica para clínicas en México
             </p>
             <h1 className="max-w-3xl text-4xl font-bold tracking-normal text-ink sm:text-5xl lg:text-6xl">

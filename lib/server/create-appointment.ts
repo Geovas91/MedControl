@@ -78,10 +78,6 @@ type DoctorProfileRow = {
   display_name: string;
 };
 
-type ProfessionalMemberRow = {
-  user_id: string;
-};
-
 type AppointmentCreationRpcRow = {
   appointment_id: string;
   appointment_updated_at: string;
@@ -141,12 +137,7 @@ export async function getAppointmentCreationOptions(
       .select("id, full_name, status")
       .eq("clinic_id", clinicId)
       .order("full_name", { ascending: true }),
-    supabase
-      .from("clinic_members")
-      .select("user_id")
-      .eq("clinic_id", clinicId)
-      .eq("status", "active")
-      .eq("is_professional", true),
+    listClinicMembersForClinic(clinicId),
     supabase
       .from("doctor_public_profiles")
       .select("profile_id, display_name")
@@ -174,8 +165,11 @@ export async function getAppointmentCreationOptions(
       .filter((profile): profile is DoctorProfileRow & { profile_id: string } => Boolean(profile.profile_id))
       .map((profile) => [profile.profile_id, profile.display_name])
   );
-  const doctors = ((professionalsResult.data ?? []) as ProfessionalMemberRow[])
-    .map((professional) => ({ id: professional.user_id, name: profileNames.get(professional.user_id) ?? "Profesional" }))
+  const doctors = (professionalsResult.data ?? [])
+    .filter((member) => member.clinic_id === clinicId && member.status === "active" && member.is_professional
+      && (context.tenant.membership.role !== "doctor" || member.user_id === context.user.id))
+    // Appointments retain their existing auth-user FK; availability uses member IDs.
+    .map((professional) => ({ id: professional.user_id, name: profileNames.get(professional.user_id) ?? (professional.full_name?.trim() || "Profesional") }))
     .sort((a, b) => a.name.localeCompare(b.name, "es"));
   const preselectedPatientId =
     requestedPatientId &&

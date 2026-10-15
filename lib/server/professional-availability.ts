@@ -5,6 +5,7 @@ import { getClinicDayRange } from "@/lib/dashboard/timezone";
 import type { AvailabilityWeek } from "@/lib/availability/form";
 import type { AvailabilityException } from "@/lib/availability/exceptions";
 import { logger } from "@/lib/logger";
+import { listClinicMembersForClinic } from "@/lib/supabase/clinic-members";
 
 export type AvailabilityData = { clinic: { id: string; name: string; timezone: string }; role: string; canEdit: boolean; today: string; effectiveFrom: string; professionals: { id: string; name: string }[]; selectedProfessionalId: string; week: AvailabilityWeek };
 const rpc = (client: Awaited<ReturnType<typeof createClient>>) => client as unknown as { rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string; code?: string } | null }> };
@@ -13,13 +14,12 @@ export async function getProfessionalAvailability(professionalId?: string): Prom
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state };
   const client = await createClient(); const clinicId = context.tenant.clinic.id;
-  const members = await client.from("clinic_members").select("id, role, user_id").eq("clinic_id", clinicId).eq("status", "active").eq("is_professional", true);
+  const members = await listClinicMembersForClinic(clinicId);
   if (members.error) return { state: "error" };
-  const memberRows = (members.data ?? []) as unknown as { id: string }[];
+  const memberRows = (members.data ?? []).filter((member) => member.clinic_id === clinicId && member.status === "active" && member.is_professional
+    && (context.tenant.membership.role !== "doctor" || member.user_id === context.user.id));
   const ids = memberRows.map((m) => m.id);
-  const allowed = context.tenant.membership.role === "doctor"
-    ? context.tenant.membership.id
-    : ids.includes(professionalId ?? "") ? professionalId! : ids[0];
+  const allowed = ids.includes(professionalId ?? "") ? professionalId! : ids[0];
   if (!allowed) return { state: "no_eligible" };
   const profiles = await client.from("doctor_public_profiles").select("profile_id, display_name, clinic_member_id").eq("clinic_id", clinicId);
   const profileRows = (profiles.data ?? []) as unknown as { clinic_member_id?: string | null; profile_id?: string | null; display_name: string }[];
@@ -29,7 +29,7 @@ export async function getProfessionalAvailability(professionalId?: string): Prom
   if (result.error) { logger.error("Professional availability week lookup failed", { component: "professional_availability", operation: "get_week", clinic_id: clinicId, role: context.tenant.membership.role, code: result.error.code ?? "rpc_error" }); return { state: "error" }; }
   for (let day = 1; day <= 7; day += 1) week[day] = [];
   for (const row of (result.data ?? []) as { weekday: number; start_time: string; end_time: string }[]) { if (Number.isInteger(row.weekday) && row.weekday >= 1 && row.weekday <= 7) week[row.weekday].push({ start: row.start_time.slice(0, 5), end: row.end_time.slice(0, 5) }); }
-  return { state: "ready", data: { clinic: context.tenant.clinic, role: context.tenant.membership.role, canEdit: ["owner", "admin", "doctor"].includes(context.tenant.membership.role), today, effectiveFrom: today, professionals: ids.map((id) => ({ id, name: names.get(id) ?? "Profesional" })), selectedProfessionalId: allowed, week } };
+  return { state: "ready", data: { clinic: context.tenant.clinic, role: context.tenant.membership.role, canEdit: ["owner", "admin", "doctor"].includes(context.tenant.membership.role), today, effectiveFrom: today, professionals: memberRows.map((member) => ({ id: member.id, name: names.get(member.id) ?? (member.full_name?.trim() || "Profesional") })), selectedProfessionalId: allowed, week } };
 }
 
 export async function saveProfessionalAvailability(input: { professionalId: string; effectiveFrom: string; week: AvailabilityWeek }) {
