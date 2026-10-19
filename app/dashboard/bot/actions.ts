@@ -478,17 +478,27 @@ export async function planAssistantConversationWithContextAction(message: unknow
   if (text.length > getAssistantLlmMaxInputChars(process.env.APPOINTMENT_ASSISTANT_LLM_MAX_INPUT_CHARS)) return { resolved: { state: "parsed", result: { state: "unsupported", message: "El mensaje es demasiado largo. Resume la solicitud de agenda." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
   const parsedTime = parseAssistantTimeFilter(text);
   if (parsedTime.state === "ambiguous") return { resolved: { state: "parsed", result: { state: "needs_input", message: "¿Te refieres a la mañana o a la tarde? Indica la hora en formato de 24 horas." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
-  if (parsedTime.state === "filter" && /\b(?:agenda|agendar|crear|reprograma|reprogramar|mueve|mover|cancela|cancelar|confirma|confirmar)\b/i.test(text)) return { resolved: { state: "parsed", result: { state: "needs_input", message: "Para cambiar una cita necesito una hora exacta; el filtro horario sólo se usa en consultas." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
+  if (parsedTime.state === "filter" && /\b(?:agenda\s+(?:una\s+)?cita|agendar|crear|reprograma|reprogramar|mueve|mover|cancela|cancelar|confirma|confirmar)\b/i.test(text)) return { resolved: { state: "parsed", result: { state: "needs_input", message: "Para cambiar una cita necesito una hora exacta; el filtro horario sólo se usa en consultas." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
   const explicitReadTarget = /\b(?:citas?|agenda)\b/i.test(text) ? "search_appointments" : /\b(?:horarios?|disponibilidad)\b/i.test(text) ? "check_availability" : null;
+  const localRead = parsedTime.state === "filter" ? parseAssistantText(text, loaded.today) : null;
+  const localReadIntent = localRead?.state === "intent" ? localRead.intent : localRead?.state === "needs_input" ? localRead.intent : undefined;
   if (parsedTime.state === "filter" && (pending?.type === "search_appointments" || pending?.type === "check_availability") && (!explicitReadTarget || explicitReadTarget === pending.type)) {
     const localDate = parseDateExpression(text, loaded.today) ?? pending.localDate;
-    const filtered = { ...pending, localDate, timeFilter: parsedTime.filter };
+    const parsedEntityRefinement = localReadIntent?.type === pending.type ? localReadIntent : null;
+    const filtered = {
+      ...pending,
+      ...(parsedEntityRefinement ?? {}),
+      ...(parsedEntityRefinement?.type === "search_appointments" && parsedEntityRefinement.patientQuery ? { patientId: undefined } : {}),
+      ...(parsedEntityRefinement?.type === "search_appointments" && parsedEntityRefinement.professionalQuery ? { professionalId: undefined } : {}),
+      localDate,
+      timeFilter: parsedTime.filter
+    };
     const next = updateAssistantConversationContext(loaded.context, filtered, { state: "message" }, loaded.timeZone);
     return { resolved: { state: "parsed", result: { state: "intent", intent: filtered } } as ConversationInput, context: next, proposalDisposition: "retained" as const };
   }
   if (parsedTime.state === "filter" && !/\b(?:citas?|agenda|horarios?|disponibilidad)\b/i.test(text)) return { resolved: { state: "parsed", result: { state: "needs_input", message: "Indica qué agenda o disponibilidad y en qué fecha quieres consultar." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
   if (parsedTime.state === "filter") {
-    const local = parseAssistantText(text, loaded.today);
+    const local = localRead!;
     if (local.state === "needs_input" && local.intent && (local.intent.type === "search_appointments" || local.intent.type === "check_availability")) {
       const next = updateAssistantConversationContext(loaded.context, local.intent, { state: "message" }, loaded.timeZone);
       return { resolved: { state: "parsed", result: local } as ConversationInput, context: next, proposalDisposition: "retained" as const };

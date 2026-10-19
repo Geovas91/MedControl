@@ -41,6 +41,15 @@ test("deterministic read parser preserves time filters without creating proposal
     assert.equal(agenda.intent.type, "search_appointments");
     if (agenda.intent.type === "search_appointments") assert.deepEqual(agenda.intent.timeFilter, filter("después de las 15"));
   }
+  const agendaNoun = parseAssistantText("Muéstrame mi agenda de mañana después de las 15:00.", today);
+  assert.equal(agendaNoun.state, "intent");
+  if (agendaNoun.state === "intent") assert.equal(agendaNoun.intent.type, "search_appointments");
+  const professionalRefinement = parseAssistantText("Muéstrame las citas del doctor García después de las 15:00.", today);
+  assert.equal(professionalRefinement.state, "needs_input");
+  if (professionalRefinement.state === "needs_input" && professionalRefinement.intent?.type === "search_appointments") assert.equal(professionalRefinement.intent.professionalQuery, "García");
+  const patientRefinement = parseAssistantText("¿Y las de Juan Pérez después de las 14:00?", today);
+  assert.equal(patientRefinement.state, "needs_input");
+  if (patientRefinement.state === "needs_input" && patientRefinement.intent?.type === "search_appointments") assert.equal(patientRefinement.intent.patientQuery, "Juan Pérez");
   const availability = parseAssistantText("¿Qué horarios tiene mañana el doctor García después del mediodía?", today);
   assert.equal(availability.state, "intent");
   if (availability.state === "intent") assert.equal(availability.intent.type, "check_availability");

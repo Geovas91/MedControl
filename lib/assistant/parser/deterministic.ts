@@ -111,8 +111,14 @@ function extractPatient(value: string) {
 }
 
 function extractProfessional(value: string) {
-  const match = /\b(?:con|y|de|tiene)\s+(?:(?:la|el)\s+)?(?:dra?\.?|dr\.?|doctor(?:a)?)\s+(.+?)(?=\s+(?:el|la)\s+\d|\s+\d{1,2}[/-]|\s+(?:hoy|mañana|manana|a\s+las?)\b|$)/i.exec(value);
+  const match = /\b(?:con|y|de(?:l)?|tiene)\s+(?:(?:la|el)\s+)?(?:dra?\.?|dr\.?|doctor(?:a)?)\s+(.+?)(?=\s+(?:el|la)\s+\d|\s+\d{1,2}[/-]|\s+(?:hoy|mañana|manana|a\s+las?)\b|$)/i.exec(value);
   return match ? cleanName(stripReadTimeFilterSuffix(match[1])) : undefined;
+}
+
+function extractAppointmentPatient(value: string) {
+  const match = /\b(?:citas?|las)\s+de\s+(?!((?:el|la)\s+)?(?:dra?\.?|dr\.?|doctor(?:a)?)\b)(.+?)(?=\s+(?:a\s+partir\s+de|despu[eé]s\s+de|antes\s+de|por\s+la\s+(?:ma[ñn]ana|tarde))\b|$)/i.exec(value);
+  const patient = match ? cleanName(match[2]) : undefined;
+  return patient && !/^(?:hoy|mañana|manana|pasado\s+mañana|pasado\s+manana)$/i.test(patient) ? patient : undefined;
 }
 
 function stripReadTimeFilterSuffix(value: string) {
@@ -164,8 +170,8 @@ function baseIntent(value: string, today: string): ParserResult {
   if (/\b(?:confirma|confirmar)\b.*\bcita\b/i.test(plain)) {
     return { state: "intent", intent: { type: "confirm_appointment", appointmentQuery: extractAppointmentQuery(normalized) } };
   }
-  if (/\b(?:ver|dame|que|muestra|muestrame|mostrar)\b.*\bcitas?\b/i.test(plain)) {
-    const intent: AssistantIntent = { type: "search_appointments", query: undefined, localDate, timeFilter };
+  if (/\b(?:ver|dame|que|muestra|muestrame|mostrar)\b.*\b(?:citas?|agenda)\b|\blas\s+de\s+/i.test(plain)) {
+    const intent: AssistantIntent = { type: "search_appointments", query: undefined, patientQuery: extractAppointmentPatient(normalized), professionalQuery: extractProfessional(normalized), localDate, timeFilter };
     if (timeFilter && !localDate) return { state: "needs_input", intentType: "search_appointments", intent, message: "¿De qué fecha quieres consultar la agenda?" };
     return { state: "intent", intent };
   }
