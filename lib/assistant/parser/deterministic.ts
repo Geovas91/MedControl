@@ -1,5 +1,6 @@
 import { isCanonicalAppointmentDate, isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import type { AssistantIntent } from "@/lib/assistant/orchestration/intents";
+import { isValidAssistantTimeFilter, parseAssistantTimeFilter } from "@/lib/assistant/orchestration/time-filter";
 
 export type ParserResult =
   | { state: "intent"; intent: AssistantIntent }
@@ -111,7 +112,12 @@ function extractPatient(value: string) {
 
 function extractProfessional(value: string) {
   const match = /\b(?:con|y|de|tiene)\s+(?:(?:la|el)\s+)?(?:dra?\.?|dr\.?|doctor(?:a)?)\s+(.+?)(?=\s+(?:el|la)\s+\d|\s+\d{1,2}[/-]|\s+(?:hoy|mañana|manana|a\s+las?)\b|$)/i.exec(value);
-  return match ? cleanName(match[1]) : undefined;
+  return match ? cleanName(stripReadTimeFilterSuffix(match[1])) : undefined;
+}
+
+function stripReadTimeFilterSuffix(value: string) {
+  return value.replace(/\s+(?:a partir de|despu[eé]s de|antes de)(?:l)?\s+.*$/i, "")
+    .replace(/\s+(?:s[oó]lo\s+)?por la (?:ma[ñn]ana|tarde)\b.*$/i, "").trim();
 }
 
 function extractAppointmentQuery(value: string) {
@@ -132,16 +138,22 @@ function baseIntent(value: string, today: string): ParserResult {
   const durationMinutes = durationMatch ? Number(durationMatch[1]) : 30;
   const localDate = parseDateExpression(normalized, today) ?? undefined;
   const localTime = parseTimeExpression(normalized) ?? undefined;
+  const parsedFilter = parseAssistantTimeFilter(normalized);
+  const timeFilter = parsedFilter.state === "filter" ? parsedFilter.filter : undefined;
+  if (parsedFilter.state === "ambiguous") return { state: "needs_input", message: "¿Te refieres a la mañana o a la tarde? Indica la hora en formato de 24 horas." };
 
   if (/\b(?:agenda|agendar|crear)\b.*\bcita\b/i.test(plain)) {
+    if (timeFilter) return { state: "needs_input", intentType: "create_appointment", intent: { type: "create_appointment", patientQuery: extractPatient(normalized), professionalQuery: extractProfessional(normalized), localDate, durationMinutes }, message: "Para agendar necesito una hora exacta; el filtro horario sólo se usa en consultas." };
     const intent: AssistantIntent = { type: "create_appointment", patientQuery: extractPatient(normalized), professionalQuery: extractProfessional(normalized), localDate, localTime, durationMinutes };
     if (plain.includes("por la tarde") || plain.includes("por la manana")) return { state: "needs_input", intentType: "create_appointment", intent, message: "¿A qué hora quieres agendarla?" };
     return { state: "intent", intent };
   }
   if (/\b(?:horarios?|disponibilidad)\b/i.test(plain)) {
-    if (plain.includes("por la tarde") || resolveSchedulingDateExpression(normalized, today).state === "ambiguous") return { state: "needs_input", intentType: "check_availability", message: "¿Qué fecha específica quieres consultar?" };
-    const professionalQuery = extractProfessional(normalized) ?? (/(?:disponibilidad|horarios?).*(?:de|para)\s+/i.test(plain) ? cleanName(normalized.replace(/.*(?:de|para)\s+/i, "")) : undefined);
-    return { state: "intent", intent: { type: "check_availability", professionalQuery, localDate, durationMinutes } };
+    if (resolveSchedulingDateExpression(normalized, today).state === "ambiguous") return { state: "needs_input", intentType: "check_availability", message: "¿Qué fecha específica quieres consultar?" };
+    const professionalQuery = extractProfessional(normalized) ?? (/(?:disponibilidad|horarios?).*(?:de|para)\s+/i.test(plain) ? cleanName(stripReadTimeFilterSuffix(normalized.replace(/.*(?:de|para)\s+/i, ""))) : undefined);
+    const intent: AssistantIntent = { type: "check_availability", professionalQuery, localDate, durationMinutes, timeFilter };
+    if (timeFilter && !localDate) return { state: "needs_input", intentType: "check_availability", intent, message: "¿De qué fecha quieres consultar la disponibilidad?" };
+    return { state: "intent", intent };
   }
   if (/\b(?:reprograma|reprogramar|mueve|mover)\b.*\bcita\b/i.test(plain)) {
     return { state: "intent", intent: { type: "reschedule_appointment", appointmentQuery: extractAppointmentQuery(normalized), localDate, localTime, durationMinutes } };
@@ -152,9 +164,12 @@ function baseIntent(value: string, today: string): ParserResult {
   if (/\b(?:confirma|confirmar)\b.*\bcita\b/i.test(plain)) {
     return { state: "intent", intent: { type: "confirm_appointment", appointmentQuery: extractAppointmentQuery(normalized) } };
   }
-  if (/\b(?:ver|dame|qué|que|muestra|muéstrame|mostrar)\b.*\bcitas?\b/i.test(plain)) {
-    return { state: "intent", intent: { type: "search_appointments", query: undefined, localDate } };
+  if (/\b(?:ver|dame|que|muestra|muestrame|mostrar)\b.*\bcitas?\b/i.test(plain)) {
+    const intent: AssistantIntent = { type: "search_appointments", query: undefined, localDate, timeFilter };
+    if (timeFilter && !localDate) return { state: "needs_input", intentType: "search_appointments", intent, message: "¿De qué fecha quieres consultar la agenda?" };
+    return { state: "intent", intent };
   }
+  if (timeFilter) return { state: "needs_input", message: "¿De qué fecha quieres consultar la agenda?" };
   return { state: "unsupported", message: "Puedo ayudarte con citas, disponibilidad, confirmaciones, cancelaciones y reprogramaciones." };
 }
 
@@ -168,5 +183,6 @@ export function isAssistantIntent(value: unknown): value is AssistantIntent {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const intent = value as Record<string, unknown>;
   return typeof intent.type === "string" && ["search_patients", "search_appointments", "get_appointment", "get_professionals", "check_availability", "create_appointment", "confirm_appointment", "cancel_appointment", "reschedule_appointment"].includes(intent.type)
-    && (!("durationMinutes" in intent) || (typeof intent.durationMinutes === "number" && Number.isInteger(intent.durationMinutes) && intent.durationMinutes > 0 && intent.durationMinutes <= 240));
+    && (!("durationMinutes" in intent) || (typeof intent.durationMinutes === "number" && Number.isInteger(intent.durationMinutes) && intent.durationMinutes > 0 && intent.durationMinutes <= 240))
+    && (intent.timeFilter === undefined || (["search_appointments", "check_availability"].includes(intent.type) && isValidAssistantTimeFilter(intent.timeFilter)));
 }

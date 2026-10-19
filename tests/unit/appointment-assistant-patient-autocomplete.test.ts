@@ -12,6 +12,7 @@ import * as structuredSelection from "../../lib/assistant/orchestration/structur
 import { ASSISTANT_PATIENT_SUGGESTION_LIMIT, parseAssistantPatientQuery } from "../../lib/assistant/orchestration/patient-selection.ts";
 import { resolveUniqueEntity } from "../../lib/assistant/orchestration/intents.ts";
 import * as parser from "../../lib/assistant/parser/deterministic.ts";
+import * as timeFilter from "../../lib/assistant/orchestration/time-filter.ts";
 import { isCanonicalAppointmentUuid } from "../../lib/appointments/query.ts";
 
 const actorId = "11111111-1111-4111-8111-111111111111";
@@ -243,6 +244,7 @@ test("autocomplete and structured patient choice avoid the planner and only prep
     "@/lib/assistant/orchestration/structured-selection": structuredSelection,
     "@/lib/assistant/orchestration/intents": { resolveUniqueEntity },
     "@/lib/assistant/parser/deterministic": parser,
+    "@/lib/assistant/orchestration/time-filter": timeFilter,
     "@/lib/assistant/llm/domain-gate": domainGate,
     "@/lib/assistant/llm/gated-planner": { runGatedAssistantPlanner: async () => { providerCalls++; throw new Error("Planner called"); } },
     "@/lib/assistant/orchestration/read-tools": { shouldOrchestrateAssistantReads: () => false },
