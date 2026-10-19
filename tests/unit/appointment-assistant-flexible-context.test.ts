@@ -4,6 +4,7 @@ import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import * as parser from "../../lib/assistant/parser/deterministic.ts";
+import * as timeFilter from "../../lib/assistant/orchestration/time-filter.ts";
 import { parseDateExpression, resolveSchedulingDateExpression } from "../../lib/assistant/parser/deterministic.ts";
 import * as schedulingContext from "../../lib/assistant/orchestration/context.ts";
 import { contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, parseSchedulingContextPatch, readAssistantConversationContext, reconcileSchedulingContext, updateAssistantConversationContext, type AssistantConversationContext } from "../../lib/assistant/orchestration/context.ts";
@@ -178,10 +179,13 @@ test("server action reaches real slot lookup for the staging sentence with zero 
   let providerCalls = 0;
   let slotReads = 0;
   let proposals = 0;
+  let appointmentReadInput: unknown;
+  let slotRows = [{ local_start: "10:00", local_end: "10:30" }];
   let professionals = [{ professional_clinic_member_id: professionalId, professional_user_id: actorId, display_name: "QA Doctor 2 Norte" }];
-  const readTool = async (name: string) => {
+  const readTool = async (name: string, input?: unknown) => {
     if (name === "get_professionals") return { ok: true, data: professionals };
-    if (name === "get_available_slots") { slotReads++; return { ok: true, data: [{ local_start: "10:00", local_end: "10:30" }] }; }
+    if (name === "get_available_slots") { slotReads++; return { ok: true, data: slotRows }; }
+    if (name === "search_appointments") { appointmentReadInput = input; return { ok: true, data: { appointments: [], hasMore: false } }; }
     throw new Error(`Unexpected read tool: ${name}`);
   };
   const mocks: Record<string, unknown> = {
@@ -190,6 +194,7 @@ test("server action reaches real slot lookup for the staging sentence with zero 
     "@/lib/assistant/orchestration/structured-selection": structuredSelection,
     "@/lib/assistant/orchestration/intents": { resolveUniqueEntity },
     "@/lib/assistant/parser/deterministic": parser,
+    "@/lib/assistant/orchestration/time-filter": timeFilter,
     "@/lib/assistant/llm/domain-gate": domainGate,
     "@/lib/assistant/llm/gated-planner": { runGatedAssistantPlanner: async () => { providerCalls++; throw new Error("Unexpected planner call"); } },
     "@/lib/assistant/orchestration/read-tools": { shouldOrchestrateAssistantReads: () => false },
@@ -240,10 +245,54 @@ test("server action reaches real slot lookup for the staging sentence with zero 
   assert.equal(selected.context.focusedPatientRef, patientId);
   assert.equal(providerCalls, 0);
   assert.equal(proposals, 1);
+  const agendaContext = { ...submitted.context, activeIntent: "search_appointments", selectedSlot: undefined, updatedAt: Date.now() };
+  const agendaNoun = await actions.planAssistantConversationWithContextAction("Muéstrame mi agenda de mañana después de las 15:00.", agendaContext);
+  assert.equal(agendaNoun.resolved.result.state, "intent");
+  assert.equal(agendaNoun.resolved.result.intent.type, "search_appointments");
+  assert.equal(agendaNoun.resolved.result.intent.localDate, "2026-09-26");
+  assert.equal(proposals, 1);
+  const professionalRefinement = await actions.planAssistantConversationWithContextAction("Muéstrame las citas del doctor García después de las 15:00.", agendaContext);
+  assert.equal(professionalRefinement.resolved.result.state, "intent");
+  assert.equal(professionalRefinement.resolved.result.intent.type, "search_appointments");
+  assert.equal(professionalRefinement.resolved.result.intent.localDate, "2026-09-28");
+  assert.equal(professionalRefinement.resolved.result.intent.professionalQuery, "García");
+  assert.equal(professionalRefinement.resolved.result.intent.professionalId, undefined);
+  const patientRefinement = await actions.planAssistantConversationWithContextAction("¿Y las de Juan Pérez después de las 14:00?", agendaContext);
+  assert.equal(patientRefinement.resolved.result.state, "intent");
+  assert.equal(patientRefinement.resolved.result.intent.type, "search_appointments");
+  assert.equal(patientRefinement.resolved.result.intent.localDate, "2026-09-28");
+  assert.equal(patientRefinement.resolved.result.intent.patientQuery, "Juan Pérez");
+  assert.equal(patientRefinement.resolved.result.intent.patientId, undefined);
+  const createWithFilter = await actions.planAssistantConversationWithContextAction("Agenda una cita mañana después de las 15:00.", agendaContext);
+  assert.equal(createWithFilter.resolved.result.state, "needs_input");
+  assert.equal(proposals, 1);
+  const agendaPlan = await actions.planAssistantConversationWithContextAction("¿Y después de las 15?", agendaContext);
+  assert.equal(agendaPlan.resolved.result.state, "intent");
+  assert.equal(agendaPlan.resolved.result.intent.type, "search_appointments");
+  assert.equal(agendaPlan.resolved.result.intent.localDate, "2026-09-28");
+  assert.equal(agendaPlan.resolved.result.intent.patientId, patientId);
+  await actions.submitAssistantIntentWithContextAction(agendaPlan.resolved.result.intent, agendaPlan.context);
+  assert.equal((appointmentReadInput as { date: string }).date, "2026-09-28");
+  assert.equal((appointmentReadInput as { patientId: string }).patientId, patientId);
+  assert.equal((appointmentReadInput as { timeFilter: { minimum: { time: string } } }).timeFilter.minimum.time, "15:00");
+  assert.equal(providerCalls, 0);
+  assert.equal(proposals, 1);
   professionals = [professionals[0], { professional_clinic_member_id: otherProfessionalId, professional_user_id: otherProfessionalId, display_name: "QA Doctor 3 Norte" }];
   const ambiguous = await actions.submitAssistantIntentAction({ type: "create_appointment", patientId, professionalQuery: "Doctor", localDate: "2026-09-28", durationMinutes: 30 });
   assert.equal(ambiguous.state, "choices");
   assert.equal(ambiguous.field, "professional");
   assert.equal(ambiguous.choices.length, 2);
+  assert.equal(proposals, 1);
+  slotRows = [{ local_start: "12:00", local_end: "12:30" }, { local_start: "12:30", local_end: "13:00" }];
+  const readContext = { ...submitted.context, activeIntent: "check_availability", selectedSlot: undefined, updatedAt: Date.now() };
+  const filtered = await actions.planAssistantConversationWithContextAction("Mejor después del mediodía", readContext);
+  assert.equal(filtered.resolved.result.state, "intent");
+  assert.equal(filtered.resolved.result.intent.type, "check_availability");
+  assert.equal(filtered.resolved.result.intent.localDate, "2026-09-28");
+  assert.equal(filtered.resolved.result.intent.professionalClinicMemberId, professionalId);
+  const filteredRead = await actions.submitAssistantIntentWithContextAction(filtered.resolved.result.intent, filtered.context);
+  assert.equal(filteredRead.response.state, "slots");
+  assert.deepEqual(filteredRead.response.slots.map((slot: { start: string }) => slot.start), ["12:30"]);
+  assert.equal(providerCalls, 0);
   assert.equal(proposals, 1);
 });

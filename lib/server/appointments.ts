@@ -17,6 +17,8 @@ import {
 } from "@/lib/appointments/query";
 import { hasAppointmentUpdatedMessage } from "@/lib/appointments/edit";
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
+import { combineClinicDateTime } from "@/lib/appointments/create";
+import { isValidAssistantTimeFilter, type AssistantTimeFilter } from "@/lib/assistant/orchestration/time-filter";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
@@ -67,6 +69,8 @@ type FilterBuilder<T> = {
   eq(column: string, value: string): T;
   gte(column: string, value: string): T;
   lt(column: string, value: string): T;
+  gt(column: string, value: string): T;
+  lte(column: string, value: string): T;
   or(filters: string): T;
 };
 
@@ -77,11 +81,14 @@ function applyAgendaFilters<T extends FilterBuilder<T>>(
   searchFilter: string | null,
   includeStatus = true,
   exactPatientId?: string,
-  exactProfessionalId?: string
+  exactProfessionalId?: string,
+  timeBounds?: { minimum?: { iso: string; inclusive: boolean }; maximum?: { iso: string; inclusive: boolean } }
 ) {
   let filteredQuery = query;
   if (bounds.startIso) filteredQuery = filteredQuery.gte("starts_at", bounds.startIso);
   if (bounds.endIso) filteredQuery = filteredQuery.lt("starts_at", bounds.endIso);
+  if (timeBounds?.minimum) filteredQuery = timeBounds.minimum.inclusive ? filteredQuery.gte("starts_at", timeBounds.minimum.iso) : filteredQuery.gt("starts_at", timeBounds.minimum.iso);
+  if (timeBounds?.maximum) filteredQuery = timeBounds.maximum.inclusive ? filteredQuery.lte("starts_at", timeBounds.maximum.iso) : filteredQuery.lt("starts_at", timeBounds.maximum.iso);
   if (includeStatus && filters.status) filteredQuery = filteredQuery.eq("status", filters.status);
   if (filters.doctor) filteredQuery = filteredQuery.eq("doctor_id", filters.doctor);
   if (exactPatientId) filteredQuery = filteredQuery.eq("patient_id", exactPatientId);
@@ -117,7 +124,8 @@ function emptyAgendaData(
 export async function getAppointmentAgendaForActiveTenant(
   searchParams: AppointmentSearchParams,
   exactPatientId?: string,
-  exactProfessionalId?: string
+  exactProfessionalId?: string,
+  timeFilter?: AssistantTimeFilter
 ): Promise<AppointmentAgendaResult> {
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state, data: null };
@@ -168,8 +176,20 @@ export async function getAppointmentAgendaForActiveTenant(
   }
 
   let bounds: AppointmentPeriodBounds;
+  let timeBounds: { minimum?: { iso: string; inclusive: boolean }; maximum?: { iso: string; inclusive: boolean } } | undefined;
   try {
     bounds = getAppointmentPeriodBounds(query, timeZone, new Date());
+    if (timeFilter) {
+      if (!isValidAssistantTimeFilter(timeFilter) || query.period !== "day") return { state: "error", data: null };
+      timeBounds = {};
+      for (const key of ["minimum", "maximum"] as const) {
+        const bound = timeFilter[key];
+        if (!bound) continue;
+        const converted = combineClinicDateTime(query.date, bound.time, timeZone);
+        if (converted.state !== "valid") return { state: "error", data: null };
+        timeBounds[key] = { iso: converted.iso, inclusive: bound.inclusive };
+      }
+    }
   } catch {
     logger.error("Appointment agenda period is invalid", { component: "appointments", status: "period_range_error" });
     return { state: "error", data: null };
@@ -205,7 +225,8 @@ export async function getAppointmentAgendaForActiveTenant(
         searchFilter,
         false,
         exactPatientId,
-        exactProfessionalId
+        exactProfessionalId,
+        timeBounds
       );
       return countQuery.eq("status", status);
     })
@@ -241,7 +262,8 @@ export async function getAppointmentAgendaForActiveTenant(
     searchFilter,
     true,
     exactPatientId,
-    exactProfessionalId
+    exactProfessionalId,
+    timeBounds
   );
   const appointmentsResult = await rowsQuery
     .order("starts_at", { ascending })

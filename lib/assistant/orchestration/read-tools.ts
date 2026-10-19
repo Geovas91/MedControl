@@ -3,6 +3,7 @@ import { isAllowedAppointmentDuration } from "@/lib/appointments/create";
 import { appointmentStatuses, isCanonicalAppointmentDate, isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import type { AssistantIntent } from "./intents";
 import type { AssistantStructuredChoice } from "./structured-selection";
+import { assistantTimeMatches, isValidAssistantTimeFilter } from "./time-filter";
 
 export type AssistantReadToolName = "search_patients" | "search_appointments" | "get_appointment" | "get_available_slots" | "get_professionals";
 export type AssistantReadIntent = Extract<AssistantIntent, { type: "search_patients" | "search_appointments" | "get_appointment" | "check_availability" | "get_professionals" }>;
@@ -45,9 +46,9 @@ export function isValidAssistantReadIntent(intent: AssistantReadIntent) {
   const optionalDate = (value: unknown) => value === undefined || typeof value === "string" && isCanonicalAppointmentDate(value);
   if (intent.type === "search_patients") return text(intent.query, true);
   if (intent.type === "get_professionals") return optionalText(intent.professionalQuery);
-  if (intent.type === "check_availability") return optionalText(intent.professionalQuery) && optionalId(intent.professionalClinicMemberId) && optionalDate(intent.localDate) && isAllowedAppointmentDuration(intent.durationMinutes);
+  if (intent.type === "check_availability") return optionalText(intent.professionalQuery) && optionalId(intent.professionalClinicMemberId) && optionalDate(intent.localDate) && isAllowedAppointmentDuration(intent.durationMinutes) && (intent.timeFilter === undefined || isValidAssistantTimeFilter(intent.timeFilter));
   if (intent.type === "get_appointment") return optionalText(intent.appointmentQuery) && optionalId(intent.appointmentId) && optionalText(intent.professionalQuery) && optionalId(intent.professionalId) && optionalDate(intent.localDate);
-  return optionalText(intent.query) && optionalText(intent.patientQuery) && optionalId(intent.patientId) && optionalText(intent.professionalQuery) && optionalId(intent.professionalId) && optionalDate(intent.localDate) && (intent.period === undefined || intent.period === "upcoming") && (intent.status === undefined || appointmentStatuses.some((status) => status === intent.status));
+  return optionalText(intent.query) && optionalText(intent.patientQuery) && optionalId(intent.patientId) && optionalText(intent.professionalQuery) && optionalId(intent.professionalId) && optionalDate(intent.localDate) && (intent.period === undefined || intent.period === "upcoming") && (intent.timeFilter === undefined || isValidAssistantTimeFilter(intent.timeFilter) && intent.period !== "upcoming") && (intent.status === undefined || appointmentStatuses.some((status) => status === intent.status));
 }
 
 function limited<T>(rows: T[]) { return { rows: rows.slice(0, MAX_RESULTS), hasMore: rows.length > MAX_RESULTS }; }
@@ -128,8 +129,9 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
     const result = await call("get_available_slots", { professionalClinicMemberId: resolved.professional.professional_clinic_member_id, date: intent.localDate, durationMinutes: intent.durationMinutes });
     const rows = arrayData<Slot>(result);
     if (!rows) return failed;
-    if (!rows.length) return { state: "message", message: "No encontré horarios disponibles para esa fecha.", intent };
-    const list = limited(rows);
+    const filtered = intent.timeFilter ? rows.filter((row) => assistantTimeMatches(row.local_start, intent.timeFilter!)) : rows;
+    if (!filtered.length) return { state: "message", message: "No encontré horarios disponibles para esa fecha y horario.", intent };
+    const list = limited(filtered);
     const localDate = intent.localDate;
     return { state: "slots", professional: resolved.professional.display_name, professionalClinicMemberId: resolved.professional.professional_clinic_member_id, date: localDate, durationMinutes: intent.durationMinutes, slots: list.rows.map((row) => ({ start: row.local_start, end: row.local_end, choice: { kind: "available_slot" as const, label: `${row.local_start}–${row.local_end}`, professionalReference: resolved.professional.professional_clinic_member_id, localDate, startTime: row.local_start, endTime: row.local_end, durationMinutes: intent.durationMinutes } })), hasMore: list.hasMore };
   }
@@ -156,15 +158,17 @@ export async function orchestrateAssistantReadIntent(intent: AssistantReadIntent
       ...(patientId ? { patientId } : {}), ...(professionalId ? { professionalId } : {}),
       date: intent.localDate ?? today,
       ...(intent.type === "search_appointments" && intent.period === "upcoming" ? { period: "upcoming" } : {}),
-      ...(intent.type === "search_appointments" && intent.status ? { status: intent.status } : {})
+      ...(intent.type === "search_appointments" && intent.status ? { status: intent.status } : {}),
+      ...(intent.type === "search_appointments" && intent.timeFilter ? { timeFilter: intent.timeFilter } : {})
     });
-    const rows = arrayData<Appointment>(result);
+    const data = result.ok && result.data && typeof result.data === "object" && !Array.isArray(result.data) && "appointments" in result.data ? result.data as { appointments: Appointment[]; hasMore: boolean } : null;
+    const rows = data ? data.appointments : arrayData<Appointment>(result);
     if (!rows) return failed;
     const query = intent.type === "search_appointments" ? intent.query : intent.appointmentQuery;
     const matches = query ? rows.filter((row) => matchesAssistantQuery(`${row.patient_display_name} ${row.professional_display_name ?? ""}`, query)) : rows;
     if (intent.type === "search_appointments") {
       const list = limited(matches);
-      return { state: "appointments", appointments: list.rows.map(appointmentView), resolvedPatientRef: patientId, uniqueVerified: rows.length < 25 && matches.length === 1, hasMore: list.hasMore };
+      return { state: "appointments", appointments: list.rows.map(appointmentView), resolvedPatientRef: patientId, uniqueVerified: !(data?.hasMore ?? rows.length >= 25) && matches.length === 1, hasMore: list.hasMore || Boolean(data?.hasMore) };
     }
     if (!matches.length) return { state: "message", message: "No encontré una cita que coincida en la clínica activa." };
     if (rows.length >= 25 && matches.length === 1) return { state: "message", message: "Hay más citas; refina la búsqueda para identificar una sola." };

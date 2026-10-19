@@ -16,7 +16,8 @@ import { evaluateAssistantDomainGate, getAssistantLlmMaxInputChars } from "@/lib
 import { assistantLlmRateLimiter, getAssistantLlmRateLimitConfig } from "@/lib/assistant/llm/rate-limit";
 import { openAiPlannerProvider } from "@/lib/assistant/llm/provider";
 import { logger } from "@/lib/logger";
-import { isAssistantIntent, matchesAssistantQuery } from "@/lib/assistant/parser/deterministic";
+import { isAssistantIntent, matchesAssistantQuery, parseAssistantText, parseDateExpression } from "@/lib/assistant/parser/deterministic";
+import { parseAssistantTimeFilter, assistantTimeMatches } from "@/lib/assistant/orchestration/time-filter";
 import {
   cancelAssistantPendingAction,
   executeAssistantReadTool,
@@ -169,10 +170,11 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
   }
 
   if (intent.type === "search_appointments") {
-    const result = await readTool<ReadAppointment[]>("search_appointments", { date: intent.localDate ?? undefined });
+    const result = await readTool<{ appointments: ReadAppointment[]; hasMore: boolean }>("search_appointments", { date: intent.localDate ?? undefined, patientId: intent.patientId, professionalId: intent.professionalId, timeFilter: intent.timeFilter });
     if (!result.ok) return safeToolError(result);
-    const rows = matchingAppointments(result.data, intent.query);
-    return { state: "appointments", appointments: rows.slice(0, 10).map((row) => ({ id: row.appointment_id, patient: row.patient_display_name, professional: row.professional_display_name, startsAt: row.starts_at, endsAt: row.ends_at, status: row.status, choice: { kind: "appointment" as const, label: `${row.patient_display_name} · ${row.starts_at}`, reference: row.appointment_id } })), uniqueVerified: result.data.length < 25 && rows.length === 1, hasMore: rows.length > 10 };
+    const data = Array.isArray(result.data) ? { appointments: result.data as ReadAppointment[], hasMore: result.data.length >= 25 } : result.data;
+    const rows = matchingAppointments(data.appointments, intent.query);
+    return { state: "appointments", appointments: rows.slice(0, 10).map((row) => ({ id: row.appointment_id, patient: row.patient_display_name, professional: row.professional_display_name, startsAt: row.starts_at, endsAt: row.ends_at, status: row.status, choice: { kind: "appointment" as const, label: `${row.patient_display_name} · ${row.starts_at}`, reference: row.appointment_id } })), uniqueVerified: !data.hasMore && rows.length === 1, hasMore: data.hasMore || rows.length > 10 };
   }
 
   if (intent.type === "check_availability") {
@@ -193,8 +195,9 @@ export async function submitAssistantIntentAction(input: unknown): Promise<Assis
       if (slots.error.code === "not_found" || slots.error.code === "forbidden") return { state: "message", message: slots.error.safeMessage, intent: workingIntent };
       return safeToolError(slots);
     }
-    if (slots.data.length === 0) return { state: "message", message: `No encontré horarios disponibles para ${professional.label} en esa fecha.`, intent: workingIntent };
-    return { state: "slots", professional: professional.label, professionalClinicMemberId: professional.id, date: workingIntent.localDate, durationMinutes: workingIntent.durationMinutes, slots: slots.data.map((slot) => ({ start: slot.local_start, end: slot.local_end, choice: { kind: "available_slot" as const, label: `${slot.local_start}–${slot.local_end}`, professionalReference: professional.id, localDate: workingIntent.localDate!, startTime: slot.local_start, endTime: slot.local_end, durationMinutes: workingIntent.durationMinutes } })) };
+    const filteredSlots = workingIntent.timeFilter ? slots.data.filter((slot) => assistantTimeMatches(slot.local_start, workingIntent.timeFilter!)) : slots.data;
+    if (filteredSlots.length === 0) return { state: "message", message: `No encontré horarios disponibles para ${professional.label} en esa fecha y horario.`, intent: workingIntent };
+    return { state: "slots", professional: professional.label, professionalClinicMemberId: professional.id, date: workingIntent.localDate, durationMinutes: workingIntent.durationMinutes, slots: filteredSlots.map((slot) => ({ start: slot.local_start, end: slot.local_end, choice: { kind: "available_slot" as const, label: `${slot.local_start}–${slot.local_end}`, professionalReference: professional.id, localDate: workingIntent.localDate!, startTime: slot.local_start, endTime: slot.local_end, durationMinutes: workingIntent.durationMinutes } })) };
   }
 
   if (intent.type === "create_appointment") {
@@ -461,11 +464,52 @@ export async function searchAssistantProfessionalSuggestionsAction(query: unknow
 }
 
 /** The browser carries only bounded, ephemeral UX state. Every canonical reference is re-read under the current actor and tenant. */
+async function invalidateAssistantProposalForRead(actionId: unknown): Promise<"invalidated" | "unavailable"> {
+  if (typeof actionId !== "string" || !isCanonicalAppointmentUuid(actionId)) return "unavailable";
+  const result = await cancelAssistantPendingAction(actionId);
+  return result.ok && ["cancelled", "expired"].includes(result.data.status) ? "invalidated" : "unavailable";
+}
+
 export async function planAssistantConversationWithContextAction(message: unknown, rawContext: unknown, pendingProposalActionId?: unknown) {
   const loaded = await loadAssistantContext(rawContext);
   if (!loaded.ok) return { resolved: { state: "parsed", result: { state: "unsupported", message: loaded.message } } as ConversationInput, context: loaded.context };
   const text = typeof message === "string" ? message : "";
   const pending = intentFromAssistantContext(loaded.context);
+  if (text.length > getAssistantLlmMaxInputChars(process.env.APPOINTMENT_ASSISTANT_LLM_MAX_INPUT_CHARS)) return { resolved: { state: "parsed", result: { state: "unsupported", message: "El mensaje es demasiado largo. Resume la solicitud de agenda." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
+  const parsedTime = parseAssistantTimeFilter(text);
+  if (parsedTime.state === "ambiguous") return { resolved: { state: "parsed", result: { state: "needs_input", message: "¿Te refieres a la mañana o a la tarde? Indica la hora en formato de 24 horas." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
+  if (parsedTime.state === "filter" && /\b(?:agenda\s+(?:una\s+)?cita|agendar|crear|reprograma|reprogramar|mueve|mover|cancela|cancelar|confirma|confirmar)\b/i.test(text)) return { resolved: { state: "parsed", result: { state: "needs_input", message: "Para cambiar una cita necesito una hora exacta; el filtro horario sólo se usa en consultas." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
+  const explicitReadTarget = /\b(?:citas?|agenda)\b/i.test(text) ? "search_appointments" : /\b(?:horarios?|disponibilidad)\b/i.test(text) ? "check_availability" : null;
+  const localRead = parsedTime.state === "filter" ? parseAssistantText(text, loaded.today) : null;
+  const localReadIntent = localRead?.state === "intent" ? localRead.intent : localRead?.state === "needs_input" ? localRead.intent : undefined;
+  if (parsedTime.state === "filter" && (pending?.type === "search_appointments" || pending?.type === "check_availability") && (!explicitReadTarget || explicitReadTarget === pending.type)) {
+    const localDate = parseDateExpression(text, loaded.today) ?? pending.localDate;
+    const parsedEntityRefinement = localReadIntent?.type === pending.type ? localReadIntent : null;
+    const filtered = {
+      ...pending,
+      ...(parsedEntityRefinement ?? {}),
+      ...(parsedEntityRefinement?.type === "search_appointments" && parsedEntityRefinement.patientQuery ? { patientId: undefined } : {}),
+      ...(parsedEntityRefinement?.type === "search_appointments" && parsedEntityRefinement.professionalQuery ? { professionalId: undefined } : {}),
+      localDate,
+      timeFilter: parsedTime.filter
+    };
+    const next = updateAssistantConversationContext(loaded.context, filtered, { state: "message" }, loaded.timeZone);
+    return { resolved: { state: "parsed", result: { state: "intent", intent: filtered } } as ConversationInput, context: next, proposalDisposition: "retained" as const };
+  }
+  if (parsedTime.state === "filter" && !/\b(?:citas?|agenda|horarios?|disponibilidad)\b/i.test(text)) return { resolved: { state: "parsed", result: { state: "needs_input", message: "Indica qué agenda o disponibilidad y en qué fecha quieres consultar." } } as ConversationInput, context: loaded.context, proposalDisposition: "retained" as const };
+  if (parsedTime.state === "filter") {
+    const local = localRead!;
+    if (local.state === "needs_input" && local.intent && (local.intent.type === "search_appointments" || local.intent.type === "check_availability")) {
+      const next = updateAssistantConversationContext(loaded.context, local.intent, { state: "message" }, loaded.timeZone);
+      return { resolved: { state: "parsed", result: local } as ConversationInput, context: next, proposalDisposition: "retained" as const };
+    }
+    if (local.state === "intent" && (local.intent.type === "search_appointments" || local.intent.type === "check_availability")) {
+      const next = updateAssistantConversationContext(loaded.context, local.intent, { state: "message" }, loaded.timeZone);
+      const proposalDisposition = pendingProposalActionId === undefined ? "retained" as const : await invalidateAssistantProposalForRead(pendingProposalActionId);
+      if (proposalDisposition === "unavailable") return { resolved: { state: "parsed", result: { state: "unsupported", message: "La propuesta pendiente ya no está disponible. Vuelve a preparar la acción." } } as ConversationInput, context: loaded.context, proposalDisposition };
+      return { resolved: { state: "parsed", result: local } as ConversationInput, context: next, proposalDisposition };
+    }
+  }
   const gate = evaluateAssistantDomainGate({ message: text, today: loaded.today, pending, maxInputChars: getAssistantLlmMaxInputChars(process.env.APPOINTMENT_ASSISTANT_LLM_MAX_INPUT_CHARS) });
   const amendment = pending && gate.state === "allowed" ? amendPendingProposalIntent({ intent: pending, message: gate.message, clinicLocalDate: loaded.today }) : null;
   let proposalDisposition = "retained" as "retained" | "invalidated" | "unavailable";

@@ -49,14 +49,15 @@ const searchPatients: AssistantToolDefinition<{ query: string }, ReadPatient[]> 
   }
 };
 
-const searchAppointments: AssistantToolDefinition<{ patientId: string | null; professionalId: string | null; date: string | null; status: string | null; period: "day" | "upcoming" }, ReadAppointment[]> = {
+const searchAppointments: AssistantToolDefinition<NonNullable<ReturnType<typeof toolSchemas.searchAppointments.parse>>, ReadAppointment[] | { appointments: ReadAppointment[]; hasMore: boolean }> = {
   name: "search_appointments", description: "Consulta la agenda de la clínica activa.", inputSchema: toolSchemas.searchAppointments, outputSchema: toolSchemas.output, mutation: false, requiresConfirmation: false,
   async execute(context, input) {
     const date = input.date ?? getClinicDayRange(context.timeZone).localDate;
-    const result = await getAppointmentAgendaForActiveTenant({ date, period: input.period, status: input.status ?? undefined }, input.patientId ?? undefined, input.professionalId ?? undefined);
+    const result = await getAppointmentAgendaForActiveTenant({ date, period: input.period, status: input.status ?? undefined }, input.patientId ?? undefined, input.professionalId ?? undefined, input.timeFilter ?? undefined);
     if (result.state !== "ready" || !result.data) return safeFailure(result.state);
     const rows = result.data.appointments.filter((appointment) => (!input.patientId || appointment.patient_id === input.patientId) && (!input.professionalId || appointment.doctor_id === input.professionalId) && (context.role !== "doctor" || appointment.doctor_id === context.userId));
-    return { ok: true, data: rows.slice(0, 25).map((appointment) => ({ appointment_id: appointment.id, patient_id: appointment.patient_id, patient_display_name: appointment.patientName, professional_id: appointment.doctor_id, professional_display_name: appointment.doctorName, starts_at: appointment.starts_at, ends_at: appointment.ends_at, status: appointment.status })) };
+    const appointments = rows.map((appointment) => ({ appointment_id: appointment.id, patient_id: appointment.patient_id, patient_display_name: appointment.patientName, professional_id: appointment.doctor_id, professional_display_name: appointment.doctorName, starts_at: appointment.starts_at, ends_at: appointment.ends_at, status: appointment.status }));
+    return { ok: true, data: input.timeFilter ? { appointments, hasMore: result.data.filteredTotal > rows.length } : appointments };
   }
 };
 

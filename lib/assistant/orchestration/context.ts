@@ -3,6 +3,7 @@ import { isCanonicalAppointmentDate, isCanonicalAppointmentUuid } from "@/lib/ap
 import { parseAssistantText, parseDateExpression, parseTimeExpression, resolveSchedulingDateExpression } from "@/lib/assistant/parser/deterministic";
 import { parseAssistantPatientQuery } from "./patient-selection";
 import type { AssistantIntent } from "./intents";
+import { isValidAssistantTimeFilter, type AssistantTimeFilter } from "./time-filter";
 import type { AssistantStructuredChoice } from "./structured-selection";
 
 export const DEFAULT_ASSISTANT_CONTEXT_TTL_SECONDS = 15 * 60;
@@ -16,6 +17,7 @@ export type AssistantConversationContext = {
   focusedProfessionalUserRef?: string;
   focusedAppointmentRef?: string;
   localDate?: string;
+  timeFilter?: AssistantTimeFilter;
   startTime?: string;
   durationMinutes?: number;
   selectedSlot?: { professionalRef: string; localDate: string; startTime: string; durationMinutes: number };
@@ -49,7 +51,7 @@ export function newAssistantConversationContext(scope: AssistantContextScope, no
 function validContext(value: unknown): value is AssistantConversationContext {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
-  const allowed = new Set(["actorId", "clinicId", "activeIntent", "focusedPatientRef", "focusedProfessionalRef", "focusedProfessionalUserRef", "focusedAppointmentRef", "localDate", "startTime", "durationMinutes", "selectedSlot", "availableSlotTimes", "lastReadKind", "lastResultCount", "updatedAt"]);
+  const allowed = new Set(["actorId", "clinicId", "activeIntent", "focusedPatientRef", "focusedProfessionalRef", "focusedProfessionalUserRef", "focusedAppointmentRef", "localDate", "timeFilter", "startTime", "durationMinutes", "selectedSlot", "availableSlotTimes", "lastReadKind", "lastResultCount", "updatedAt"]);
   if (Object.keys(row).some((key) => !allowed.has(key))) return false;
   if (typeof row.actorId !== "string" || typeof row.clinicId !== "string" || !isCanonicalAppointmentUuid(row.actorId) || !isCanonicalAppointmentUuid(row.clinicId)) return false;
   if (row.activeIntent !== null && !intentTypes.has(row.activeIntent as AssistantIntent["type"])) return false;
@@ -58,6 +60,7 @@ function validContext(value: unknown): value is AssistantConversationContext {
   }
   if (row.focusedProfessionalUserRef && !row.focusedProfessionalRef) return false;
   if (row.localDate !== undefined && (typeof row.localDate !== "string" || !isCanonicalAppointmentDate(row.localDate))) return false;
+  if (row.timeFilter !== undefined && (!isValidAssistantTimeFilter(row.timeFilter) || !["search_appointments", "check_availability"].includes(String(row.activeIntent)))) return false;
   if (row.startTime !== undefined && (typeof row.startTime !== "string" || !isValidAppointmentTime(row.startTime))) return false;
   if (row.durationMinutes !== undefined && (typeof row.durationMinutes !== "number" || !isAllowedAppointmentDuration(row.durationMinutes))) return false;
   if (row.availableSlotTimes !== undefined && (!Array.isArray(row.availableSlotTimes) || row.availableSlotTimes.length > 10 || row.availableSlotTimes.some((time) => typeof time !== "string" || !isValidAppointmentTime(time)))) return false;
@@ -115,9 +118,9 @@ export function intentFromAssistantContext(context: AssistantConversationContext
   switch (context.activeIntent) {
     case "search_patients": return { type: "search_patients", query: "" };
     case "get_professionals": return { type: "get_professionals" };
-    case "search_appointments": return { type: "search_appointments", patientId: context.focusedPatientRef, professionalId: context.focusedProfessionalUserRef, localDate: context.localDate };
+    case "search_appointments": return { type: "search_appointments", patientId: context.focusedPatientRef, professionalId: context.focusedProfessionalUserRef, localDate: context.localDate, timeFilter: context.timeFilter };
     case "get_appointment": return { type: "get_appointment", appointmentId: context.focusedAppointmentRef, localDate: context.localDate };
-    case "check_availability": return { type: "check_availability", professionalClinicMemberId: context.focusedProfessionalRef, localDate: context.localDate, durationMinutes };
+    case "check_availability": return { type: "check_availability", professionalClinicMemberId: context.focusedProfessionalRef, localDate: context.localDate, durationMinutes, timeFilter: context.timeFilter };
     case "create_appointment": return { type: "create_appointment", patientId: context.focusedPatientRef, professionalClinicMemberId: context.focusedProfessionalRef, localDate: context.localDate, localTime: context.startTime, durationMinutes };
     case "confirm_appointment": return { type: "confirm_appointment", appointmentId: context.focusedAppointmentRef };
     case "cancel_appointment": return { type: "cancel_appointment", appointmentId: context.focusedAppointmentRef };
@@ -260,8 +263,10 @@ export function updateAssistantConversationContext(context: AssistantConversatio
   let next = { ...context };
   if (result.state === "error" || result.state === "proposal_terminal") return next;
   if (intent) {
+    if (intent.type !== next.activeIntent || intent.type !== "search_appointments" && intent.type !== "check_availability") next.timeFilter = undefined;
     if (intent.type !== next.activeIntent && intent.type !== "create_appointment") next = { ...next, selectedSlot: undefined, availableSlotTimes: undefined, startTime: undefined };
     next.activeIntent = intent.type;
+    if (intent.type === "search_appointments" || intent.type === "check_availability") next.timeFilter = intent.timeFilter;
     if ("patientQuery" in intent && intent.patientQuery) next.focusedPatientRef = undefined;
     if ("professionalQuery" in intent && intent.professionalQuery) next = { ...next, focusedProfessionalRef: undefined, focusedProfessionalUserRef: undefined, focusedAppointmentRef: undefined, selectedSlot: undefined, availableSlotTimes: undefined, startTime: undefined };
     if ("appointmentQuery" in intent && intent.appointmentQuery) next.focusedAppointmentRef = undefined;
