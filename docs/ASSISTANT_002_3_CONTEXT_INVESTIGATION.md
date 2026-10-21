@@ -1,4 +1,4 @@
-# ASSISTANT-002.3: context investigation
+# ASSISTANT-002.3 / 002.3A: context diagnostics and investigation tests
 
 Status: original Staging failure NOT REPRODUCED locally; diagnostics added, no functional correction is claimed. The user confirmed `STAGING_SHA=e2dcf4f4d1e5701494944756190ac411dfc74210`; the failure reason is unavailable.
 
@@ -35,9 +35,22 @@ The existing `assistant_context_invalidated` event now distinguishes `reference_
 
 The validators retain their existing return values, thrown-error behavior, and reset/authorization semantics. The diagnostic tests failed on the baseline (missing category/result) and pass with this instrumentation. That red/green evidence concerns the observability gap only, not the original empty-agenda failure. The patient availability helper's boolean contract still cannot distinguish an underlying safe false from a database error returned as false; this limitation remains explicit.
 
+## ASSISTANT-002.3A: post-revalidation exceptions
+
+Confirmed on PR head `e754dfd3cb77755caf47dcadb87edcac9385e991`: both `submitAssistantIntentWithContextAction` and `selectAssistantResultWithContextAction` awaited revalidation before calling the diagnostic. When a validator threw during that await, the rejection propagated and the diagnostic was never reached.
+
+Two targeted tests failed before the correction with zero invalidation events instead of one:
+
+- `after_read`: an authorized agenda lookup returns exactly one appointment; validation of the newly focused appointment throws.
+- `after_selection`: the protected appointment-selection lookup succeeds; the following revalidation lookup throws. The initial context contains no focused references, ensuring the failure occurs after selection rather than during load.
+
+The shared post-revalidation wrapper now logs `validation_exception`, the known static reference category (or `context` when unavailable), `error`, and the appropriate transition before rethrowing the exact same exception. Normal results still follow the same validation/reset branches. The load path retains its existing behavior. This change does not turn validation or authorization failures into successful action responses and does not change proposal/confirmation/one-shot execution.
+
+The new tests assert exact rejection identity, exactly one diagnostic event, the protected lookup sequence and absence of identifiers, patient/professional names, selection labels, timestamps, credentials, exception messages and stacks from diagnostics. Successful continuation still emits no invalidation event. This is a confirmed diagnostic-coverage correction, not a verified fix of the original conversational incident. It has not been deployed.
+
 ## Coverage
 
-`tests/unit/appointment-assistant-context-reliability.test.ts` adds sixteen tests:
+`tests/unit/appointment-assistant-context-reliability.test.ts` adds eighteen tests:
 
 - Exact two-turn empty-agenda server sequence.
 - Actual component form flow across three empty-result turns.
@@ -52,6 +65,7 @@ The validators retain their existing return values, thrown-error behavior, and r
 - Unavailable patient versus thrown patient-validator exception, with no reference/exception leakage.
 - Post-read invalidation of a newly focused cancelled appointment, with no appointment-data leakage.
 - Unavailable professional versus a failed protected lookup versus a thrown lookup exception.
+- Validator exceptions after a read and after a structured selection: one safe diagnostic and unchanged rejection.
 
 Provider and mutation entry points fail immediately if called. The LLM flag is disabled. Existing focused suites also cover authorization, stale selections, proposal confirmation and one-shot execution; their success is local/mocked evidence only. Changed-professional resolution after an empty read has not been established by this reproduction test and remains an explicit gap.
 
@@ -61,7 +75,9 @@ The prior tests covered parser/filter/context pieces and server actions starting
 
 - Exact conversation, UI integration and Flight transport passed before application changes.
 - Diagnostics tests fail before instrumentation and pass afterwards.
-- All `appointment-assistant-*.test.ts` tests: 227 passed, 0 failed, 0 skipped (16 tests in the new investigation file).
+- ASSISTANT-002.3A reproduction: 2 FAIL before the correction, both due to missing events; both PASS afterwards.
+- Investigation file: 18 passed, 0 failed.
+- All `appointment-assistant-*.test.ts` tests: 229 passed, 0 failed, 0 skipped.
 - Lint: passed.
 - Typecheck: passed.
 - Diff check: passed.

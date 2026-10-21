@@ -24,9 +24,11 @@ const require = createRequire(import.meta.url);
 const appointmentId = "33333333-3333-4333-8333-333333333333";
 const fixture = { appointment_id: appointmentId, patient_display_name: "QA Patient", professional_display_name: "QA Doctor", starts_at: "2026-10-21T22:00:00Z", ends_at: "2026-10-21T22:30:00Z", status: "scheduled" };
 
-function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolean; readError?: boolean; patientValidation?: "unavailable" | "error"; professionalValidation?: "unavailable" | "error" | "exception"; appointmentStatus?: string } = {}) {
+function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolean; readError?: boolean; patientValidation?: "unavailable" | "error"; professionalValidation?: "unavailable" | "error" | "exception"; appointmentStatus?: string; appointmentThrowsOnRead?: number } = {}) {
   const reads: Array<{ name: string; input: any }> = [];
   const diagnostics: Array<[string, Record<string, unknown>]> = [];
+  const validationError = new Error("PRIVATE_POST_VALIDATION_ERROR credential=PRIVATE_CREDENTIAL");
+  let appointmentReads = 0;
   const mocks: Record<string, unknown> = {
     "@/lib/assistant/orchestration/context": context,
     "@/lib/assistant/orchestration/conversation": conversation,
@@ -50,7 +52,11 @@ function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolea
             ? { ok: false, error: { code: "generic", safeMessage: "PRIVATE_LOOKUP_ERROR" } }
             : { ok: true, data: [] };
         }
-        if (name === "get_appointment") return { ok: true, data: { status: options.appointmentStatus ?? "scheduled" } };
+        if (name === "get_appointment") {
+          appointmentReads++;
+          if (appointmentReads === options.appointmentThrowsOnRead) throw validationError;
+          return { ok: true, data: { ...fixture, status: options.appointmentStatus ?? "scheduled" } };
+        }
         assert.equal(name, "search_appointments");
         if (options.readError) return { ok: false, error: { code: "generic", safeMessage: "No fue posible consultar la agenda. Intenta de nuevo." } };
         const filter = (input as { timeFilter?: timeFilter.AssistantTimeFilter }).timeFilter;
@@ -78,7 +84,7 @@ function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolea
     if (["next/cache", "next/navigation", "@/lib/appointment-assistant", "@/lib/assistant/llm/rate-limit", "@/lib/server/appointment-assistant", "@/lib/server/entitlements"].includes(name)) return {};
     throw new Error(`Unexpected dependency: ${name}`);
   } });
-  return { actions, reads, diagnostics };
+  return { actions, reads, diagnostics, validationError };
 }
 
 function mountAssistant(actions: ReturnType<typeof loadActions>["actions"]) {
@@ -288,4 +294,24 @@ for (const result of ["unavailable", "error", "exception"] as const) test(`profe
   assert.equal(invalidation[1].reason_code, result === "unavailable" ? "reference_unavailable" : result === "error" ? "reference_lookup_error" : "validation_exception");
   assert.deepEqual(reads.map((read) => read.name), ["get_professionals"]);
   for (const value of [actorId, clinicId, appointmentId, "PRIVATE_LOOKUP_ERROR", "PRIVATE_LOOKUP_EXCEPTION"]) assert.equal(JSON.stringify(diagnostics).includes(value), false);
+});
+
+for (const transition of ["after_read", "after_selection"] as const) test(`${transition} validator exception emits one safe diagnostic and preserves rejection`, async () => {
+  const { actions, diagnostics, reads, validationError } = loadActions([fixture], { appointmentThrowsOnRead: transition === "after_read" ? 1 : 2 });
+  const operation = transition === "after_read"
+    ? actions.submitAssistantIntentWithContextAction({ type: "search_appointments", localDate: "2026-10-21" }, null)
+    : actions.selectAssistantResultWithContextAction({ kind: "appointment", label: "PRIVATE_SELECTION_LABEL", reference: appointmentId }, null);
+  await assert.rejects(operation, (error: unknown) => error === validationError, "revalidation failure must not become a successful response or a different exception");
+  assert.deepEqual(reads.map((read) => read.name), transition === "after_read" ? ["search_appointments", "get_appointment"] : ["get_appointment", "get_appointment"]);
+  const invalidations = diagnostics.filter(([event]) => event === "assistant_context_invalidated");
+  assert.equal(invalidations.length, 1, "the post-validation exception needs exactly one diagnostic");
+  assert.deepEqual(JSON.parse(JSON.stringify(invalidations[0][1])), {
+    reason_code: "validation_exception",
+    transition_type: transition,
+    reference_category: "appointment",
+    validation_result: "error"
+  });
+  for (const privateValue of [actorId, clinicId, appointmentId, fixture.patient_display_name, fixture.professional_display_name, fixture.starts_at, "PRIVATE_SELECTION_LABEL", validationError.message, validationError.stack!, "PRIVATE_CREDENTIAL"]) {
+    assert.equal(JSON.stringify(diagnostics).includes(privateValue), false, "diagnostics contain static metadata only");
+  }
 });

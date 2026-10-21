@@ -437,7 +437,19 @@ async function loadAssistantContext(raw: unknown) {
     if (reason !== "continued") logger.info(`assistant_context_${reason === "created" ? "created" : reason === "expired" ? "expired" : "invalidated"}`, { reason_code: reason, transition_type: transition, ...validationFailure });
   };
   diagnoseContext(checked.reason, "load");
-  return { ok: true as const, context: checked.context, reason: checked.reason, scope, validators, diagnoseContext, timeZone: actor.data.timeZone, today: getClinicDayRange(actor.data.timeZone).localDate, ttl };
+  const revalidateContext = async (next: AssistantConversationContext, transition: "after_read" | "after_selection") => {
+    let result;
+    try {
+      result = await revalidateAssistantConversationContext(next, scope, validators, Date.now(), ttl);
+    } catch (error) {
+      validationFailure = { reason_code: "validation_exception", reference_category: validationFailure?.reference_category ?? "context", validation_result: "error" };
+      diagnoseContext("invalidated", transition);
+      throw error;
+    }
+    diagnoseContext(result.reason, transition);
+    return result;
+  };
+  return { ok: true as const, context: checked.context, reason: checked.reason, scope, validators, revalidateContext, timeZone: actor.data.timeZone, today: getClinicDayRange(actor.data.timeZone).localDate, ttl };
 }
 
 /** A read-only, bounded name lookup for the current patient-selection step. */
@@ -608,8 +620,7 @@ export async function submitAssistantIntentWithContextAction(input: unknown, raw
   const response = await submitAssistantIntentAction(input);
   const intent = isAssistantIntent(input) ? input : null;
   const next = updateAssistantConversationContext(loaded.context, intent, response, loaded.timeZone);
-  const checked = await revalidateAssistantConversationContext(next, loaded.scope, loaded.validators, Date.now(), loaded.ttl);
-  loaded.diagnoseContext(checked.reason, "after_read");
+  const checked = await loaded.revalidateContext(next, "after_read");
   if (checked.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: checked.context };
   return { response, context: checked.context };
 }
@@ -633,8 +644,7 @@ export async function selectAssistantResultWithContextAction(choice: unknown, ra
   const selected = parseAssistantStructuredChoice(choice);
   if (selected && response.state !== "error" && response.state !== "proposal_terminal") next = applyVerifiedAssistantChoiceToContext(next, selected);
   next = updateAssistantConversationContext(next, pending, response, loaded.timeZone);
-  const checked = await revalidateAssistantConversationContext(next, loaded.scope, loaded.validators, Date.now(), loaded.ttl);
-  loaded.diagnoseContext(checked.reason, "after_selection");
+  const checked = await loaded.revalidateContext(next, "after_selection");
   if (checked.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: checked.context };
   return { response, context: checked.context };
 }
