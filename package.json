@@ -19,6 +19,7 @@
     "test:assistant:qa:browser": "playwright test --config playwright.assistant.config.ts",
     "test:assistant:qa:live": "node --import ./scripts/test/register-typescript-imports.mjs --experimental-strip-types scripts/qa/assistant-staging-smoke.ts",
     "test:assistant:qa:openai": "node --import ./scripts/test/register-typescript-imports.mjs --experimental-strip-types scripts/qa/assistant-openai-smoke.ts",
+    "test:assistant:qa:lifecycle": "node --import ./scripts/test/register-typescript-imports.mjs --experimental-strip-types scripts/qa/assistant-lifecycle.ts",
     "test:consent-integration": "node --experimental-strip-types scripts/test-consent-token-integration.ts",
     "test:patients:migration": "node scripts/test-patient-migration.mjs",
     "test:invitation-email": "node --experimental-strip-types scripts/test-invitation-email.ts",

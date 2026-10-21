@@ -1,8 +1,10 @@
-# ASSISTANT-002.4 / 002.4B — QA execution report
+# ASSISTANT-002.4 / 002.4B / 002.4E — QA execution report
 
 ## Baseline and scope
 
 Baseline `eec7274b108394664f98daff52da03488a0ffe55`; 002.4A head `27731c32a7c8a61932825e0a197784544b3d4163`. Continue only branch `codex/assistant-002-4-qa-automation` and draft PR #93.
+
+002.4E starts at validated head `46fc2ea6b0f25e70f74b4cb9980437b5e80d6ab6`. The user separately confirmed Authenticated Staging Browser PASS and OpenAI Staging PASS: `llm_gate_allowed=1`, `planner_called=1`, `planner_success=1`, fallback/timeout/invalid_output each zero. These are user-supplied results, not reruns by this task. The dedicated OpenAI CLI has still not executed a provider request.
 
 Production component, actions, parser, orchestration, authorization, RLS and migrations are unchanged. This replaces the earlier broad scenario totals with independent execution levels and bounded evidence. A mock confirmation does not establish Supabase persistence or database atomicity.
 
@@ -20,11 +22,12 @@ Each test uses a fresh browser context and synthetic Norte/Sur data. Counters ob
 
 | Level | PASS | FAIL | BLOCKED | NOT RUN | Evidence |
 | --- | ---: | ---: | ---: | ---: | --- |
-| UNIT / INTEGRATION | 242 tests | 0 | 0 | 0 | `npm run test:assistant:qa`; previous 234 + 8 gate/provider-observer tests; no skips |
-| BROWSER COMPONENT INTEGRATION | 12 tests | 0 | 0 | 0 | `npm run test:assistant:qa:browser`; headless Chrome, real React/actions, simulated services |
-| AUTHENTICATED BROWSER E2E | 0 | 0 | 1 smoke | 0 | Live command BLOCKED before browser launch (`opt_in_required`) |
-| LIVE STAGING lifecycle | 0 | 0 | 1 suite | 0 | Temporary fixtures/current outbound isolation/exact cleanup unverified; mutation runner unsupported |
-| OPENAI LIVE | 0 | 0 | 1 smoke | 0 | OpenAI command BLOCKED (`opt_in_required`); 0 requests |
+| UNIT / INTEGRATION | 269 tests | 0 | 0 | 0 | Previous 242 + 27 lifecycle/fixture/journal/recovery tests; no skips |
+| BROWSER COMPONENT INTEGRATION | 14 tests | 0 | 0 | 0 | Previous 12 + shared lifecycle/forms test and unknown-notification gate test |
+| AUTHENTICATED BROWSER E2E | User-confirmed PASS | 0 observed here | 0 | Not rerun here | User evidence supplied for 002.4E; no new login attempted |
+| LIVE STAGING lifecycle | 0 | 0 | 1 suite / all 6 scenarios | 0 | Task prohibits live mutations; CLI stopped before login; deployment/WhatsApp evidence unknown |
+| OPENAI STAGING | User-confirmed PASS | 0 reported | 0 | Not rerun here | Safe planner counts supplied above |
+| OPENAI CLI LIVE | 0 | 0 | 0 | 1 smoke | Dedicated provider CLI request remains unexecuted |
 
 Statuses are exclusive: an unexecuted level with an identified gate is BLOCKED rather than NOT RUN. Unit tests, browser tests and acceptance scenarios are different units. No combined PASS total is claimed.
 
@@ -44,6 +47,8 @@ Statuses are exclusive: an unexecuted level with an identified gate is BLOCKED r
 | BROWSER-010 | Exact three requested turns preserve tomorrow, replace exclusive bounds, execute 3 empty reads and emit no invalidation |
 | BROWSER-011 | Failed read stays error, date survives and retry executes after recovery; zero mutations |
 | BROWSER-012 | Simulated missing session blocks read and confirmation; mock clinic switch and missing reference reject old visible choice; zero mutations |
+
+002.4E adds two tests in `appointment-assistant-lifecycle.spec.ts`. The first runs the same `runLifecycle` and `BrowserLifecycleAdapter` intended for Staging, using actual React CreatePatientForm/EditPatientForm/AppointmentAssistant with fake protected services. It validates LIVE-001 through LIVE-005 against simulated persistence, unchanged booking before confirmation, one-shot rejection, audit history and two cleanup passes. LIVE-006 remains BLOCKED in that browser test without a second real user; expected runner status is PARTIAL. The second proves unknown email evidence prevents patient creation despite mutation opt-in.
 
 These security assertions test component/action reactions to simulated protected-service results, not deployed authorization or Supabase isolation. Duplicate UI-click suppression is distinct from the mocked concurrent claim test and from real database concurrency.
 
@@ -86,10 +91,10 @@ These security assertions test component/action reactions to simulated protected
 
 ## Validation and failure analysis
 
-- Unit/integration: 242 PASS, 0 FAIL, 0 SKIP.
-- Browser component: 12 PASS, 0 FAIL, 0 SKIP.
-- Staging command: exit 2 BLOCKED, no remote operation.
-- OpenAI command: exit 2 BLOCKED, 0 requests.
+- Unit/integration: 269 PASS, 0 FAIL, 0 SKIP.
+- Browser component: 14 PASS, 0 FAIL, 0 SKIP.
+- Lifecycle preflight CLI: exit 2 BLOCKED (`read_only_opt_in_required`); no login or remote operation.
+- No lifecycle execution/recovery command or real provider request was executed.
 - `npm run lint`: PASS.
 - `npx tsc --noEmit --incremental false --pretty false`: PASS.
 - `npm run build`: PASS (Next 16.3.3, 31 static pages; unchanged route inventory).
@@ -101,9 +106,32 @@ During harness bring-up, Webpack exposed DefinePlugin as `webpack.DefinePlugin` 
 
 Each browser test clears its in-memory appointments/proposals, verifies zero remaining records, repeats cleanup for idempotency and closes its browser context. The harness removes its exact OS-temp build. No real fixture was created, no baseline fixture changed and no remote cleanup was needed. Real fixture cleanup is NOT VERIFIED.
 
+For the new full simulated runner test, cleanup follows retention policy instead: one cancelled synthetic booking and one inactive synthetic patient, audit preserved. Synthetic test-only sessionStorage carries boundary state across browser navigation; Playwright destroys the isolated context afterward. This is separate from persisting a real login/session. Journal unit tests create encrypted files only in a dedicated OS-temp directory, release locks and remove that exact directory.
+
 See `ASSISTANT_002_4_LIVE_PREPARATION.md` for environment-only opt-in of supported read/provider smokes, safe output semantics and the outstanding lifecycle isolation/ownership/cleanup gate. Mutation mode cannot be enabled by a flag. No Staging LLM key/flags/model or other configuration was changed.
 
-ASSISTANT-003 recommendation: NOT READY for a full lifecycle release. Authenticated HTTP actions, Supabase/RLS/persistence, real provider success, real outbound isolation and cleanup remain unverified. The original conversational incident is not declared resolved.
+ASSISTANT-003 recommendation: NOT READY for a full lifecycle release. Staging browser/OpenAI success is user-confirmed; lifecycle Supabase persistence/RLS, runtime outbound isolation and real cleanup remain unverified. The original conversational incident is not declared resolved.
+
+## 002.4E deliverables and readiness
+
+See `ASSISTANT_002_4E_BOUNDARY_AUDIT.md` for the precise service/auth/notification inventory and `ASSISTANT_002_4_LIVE_PREPARATION.md` for safe configuration, recovery and blocker-resolution procedures.
+
+| Requirement | Implementation / evidence | Real Staging lifecycle result |
+| --- | --- | --- |
+| PREFLIGHT | Exact origins/project, public key, real-user cookie session, QA tenant/membership/subscription/member/slot reads and per-channel gates | BLOCKED before login; runtime deployment/WhatsApp proof unsupported |
+| FIXTURE MANAGER | Unique synthetic marker, authorized create form, external AES-GCM journal, atomic/fsynced stages, exclusive lock and ownership recovery | NOT EXECUTED |
+| CREATE | Exact proposal arguments and zero mutation before confirmation; one correct persisted record required | NOT EXECUTED |
+| READ | Run-specific date/name request, unique selection, UI/persistence checks and no writes | NOT EXECUTED |
+| RESCHEDULE | Same-day alternative verified slot, exact proposal, unchanged original until confirm, same booking afterward | NOT EXECUTED |
+| CANCEL | Explicit proposal/confirm, cancelled state and preserved creation/reschedule/cancellation audit events | NOT EXECUTED |
+| IDEMPOTENCY | Duplicate UI clicks, already-executed RPC rejection and no extra booking/audit; interrupted runs cleanup-only | NOT EXECUTED |
+| TENANT ISOLATION | Optional second QA-owner browser login; exact run-owned patient/booking probes under other tenant RLS | BLOCKED / not executed here |
+| CLEANUP | Exact ownership including creation-audit actor; cancel active booking, inactive patient, pending expiry checks, repeat twice | PASS only with local controlled services; remote NOT VERIFIED |
+| NOTIFICATION ISOLATION | Current email readiness, scheduler and safe calendar projection supported; deployment-bound WhatsApp identity absent | BLOCKED |
+
+Local results: UNIT TESTS 269 PASS / 0 FAIL; BROWSER TESTS 14 PASS / 0 FAIL. LIVE TESTS: 0 executed, 6 lifecycle scenarios BLOCKED (LIVE-001 through LIVE-006). Counts are per level and must not be summed as equivalent scenarios.
+
+READY FOR CONTROLLED LIVE EXECUTION: NO
 
 QA AUTOMATION STATUS: PARTIAL
 

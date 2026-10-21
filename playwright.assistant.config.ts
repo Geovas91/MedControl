@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 
 const chrome = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 export default defineConfig({
-  testDir: './tests/browser', testMatch: 'appointment-assistant.spec.ts',
+  testDir: './tests/browser', testMatch: ['appointment-assistant.spec.ts', 'appointment-assistant-lifecycle.spec.ts'],
   workers: 1, retries: 0, timeout: 30_000,
   outputDir: 'test-results/assistant-component',
   use: {

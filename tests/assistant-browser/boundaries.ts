@@ -24,14 +24,16 @@ export const state = {
   mutations: 0, confirmations: 0, pending: new Map<string, Pending>(), appointments: [] as Appointment[],
   context: null as AssistantConversationContext | null,
   reads: [] as Array<{ name: string; input: Record<string, unknown> }>,
-  events: [] as Array<{ event: string; metadata: Record<string, unknown> }>
+  events: [] as Array<{ event: string; metadata: Record<string, unknown> }>,
+  fixturePatient: null as { id: string; name: string; status: string; createdAt: string; phone: string } | null,
+  audit: [] as string[]
 };
 function times(date: string, time: string, duration: number) {
   const start = new Date(`${date}T${time}:00-06:00`);
   return { starts_at: start.toISOString(), ends_at: new Date(start.getTime() + duration * 60_000).toISOString() };
 }
 export function seedAppointment(input = { date: '2030-10-22', startTime: '10:00', durationMinutes: 30 }) {
-  state.appointments.push({ appointment_id: ids.appointment, patient_id: ids.patient, patient_display_name: 'QA Patient Norte', professional_id: ids.professional, professional_display_name: 'QA Doctor Norte', ...times(input.date, input.startTime, input.durationMinutes), status: 'scheduled', clinic_id: ids.norte });
+  state.appointments.push({ appointment_id: ids.appointment, patient_id: state.fixturePatient?.id ?? ids.patient, patient_display_name: state.fixturePatient?.name ?? 'QA Patient Norte', professional_id: ids.professional, professional_display_name: 'QA Doctor Norte', ...times(input.date, input.startTime, input.durationMinutes), status: 'scheduled', clinic_id: ids.norte });
 }
 const denied = () => ({ ok: false as const, error: { code: 'forbidden', safeMessage: 'Debes iniciar sesión o usar una referencia autorizada.' } });
 const ready = <T,>(data: T) => ({ ok: true as const, data });
@@ -44,7 +46,7 @@ export function revalidatePath() {}
 export function redirect() { throw new Error('Unexpected redirect in component harness'); }
 export async function saveAppointmentAssistantSettingsForActiveTenant() { throw new Error('Settings not supported in component harness'); }
 export async function openAiPlannerProvider() { throw new Error('Real provider forbidden in component harness'); }
-export async function isPatientAvailableForActiveTenant(ref: string) { return state.authenticated && ref === (state.clinic === ids.norte ? ids.patient : ids.otherPatient); }
+export async function isPatientAvailableForActiveTenant(ref: string) { return state.authenticated && (ref === (state.clinic === ids.norte ? ids.patient : ids.otherPatient) || state.clinic === ids.norte && ref === state.fixturePatient?.id && state.fixturePatient.status === 'active'); }
 export async function isPatientEligibleForSchedulingWithProfessionalActiveTenant(patient: string, professional: string) {
   return await isPatientAvailableForActiveTenant(patient) && professional === (state.clinic === ids.norte ? ids.professional : ids.otherProfessional);
 }
@@ -52,7 +54,7 @@ export async function getPatientEligibleProfessionalIdsForSchedulingActiveTenant
   return { state: 'ready', ids: await isPatientAvailableForActiveTenant(patient) ? [state.clinic === ids.norte ? ids.professional : ids.otherProfessional] : [] };
 }
 export async function searchAssistantPatientNamesForActiveTenant(query: string) {
-  const rows = state.authenticated ? [{ id: state.clinic === ids.norte ? ids.patient : ids.otherPatient, name: state.clinic === ids.norte ? 'QA Patient Norte' : 'QA Patient Sur' }] : [];
+  const rows = state.authenticated ? [{ id: state.clinic === ids.norte ? ids.patient : ids.otherPatient, name: state.clinic === ids.norte ? 'QA Patient Norte' : 'QA Patient Sur' }, ...(state.clinic === ids.norte && state.fixturePatient?.status === 'active' ? [state.fixturePatient] : [])] : [];
   return { state: 'ready', data: { patients: rows.filter(row => row.name.toLowerCase().includes(query.toLowerCase())), hasMore: false } };
 }
 export async function executeAssistantReadTool(name: string, input: Record<string, unknown> = {}): Promise<{ ok: true; data: unknown } | ReturnType<typeof denied>> {
@@ -78,7 +80,7 @@ export async function executeAssistantReadTool(name: string, input: Record<strin
   }
   throw new Error(`Unsupported test boundary: ${name}`);
 }
-export async function getCreateAppointmentProposalPresentation() { return ready({ patient: 'QA Patient Norte', professional: 'QA Doctor Norte' }); }
+export async function getCreateAppointmentProposalPresentation() { return ready({ patient: state.fixturePatient?.name ?? 'QA Patient Norte', professional: 'QA Doctor Norte' }); }
 export async function prepareAssistantMutation(tool: string, input: Record<string, unknown>) {
   if (!state.authenticated) return denied();
   const actionId = `66666666-6666-4666-8666-${String(state.pending.size + 1).padStart(12, '0')}`;
@@ -91,6 +93,7 @@ export async function executeConfirmedAssistantAction(actionId: string) {
   if (!state.authenticated || !pending || pending.clinic !== state.clinic || pending.status !== 'pending') return denied();
   pending.status = 'executed';
   state.mutations++;
+  state.audit.push(pending.tool === 'create_appointment' ? 'created' : pending.tool === 'reschedule_appointment' ? 'rescheduled' : 'cancelled');
   if (pending.tool === 'create_appointment') seedAppointment({ date: String(pending.input.date), startTime: String(pending.input.startTime), durationMinutes: Number(pending.input.durationMinutes) });
   else {
     const row = state.appointments.find(row => row.appointment_id === pending.input.appointmentId && row.clinic_id === state.clinic);

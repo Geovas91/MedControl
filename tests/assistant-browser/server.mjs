@@ -17,6 +17,8 @@ const compiler = webpack({
     extensions: ['.tsx', '.ts', '.js'],
     alias: {
       '@/app/dashboard/bot/actions$': path.join(root, 'tests/assistant-browser/actions.ts'),
+      '@/app/dashboard/patients/new/actions$': path.join(root, 'tests/assistant-browser/patient-actions.ts'),
+      '@/app/dashboard/patients/[id]/edit/actions$': path.join(root, 'tests/assistant-browser/patient-actions.ts'),
       '@/lib/assistant/tools/registry$': mock,
       '@/lib/server/patients$': mock,
       '@/lib/server/appointment-assistant$': mock,
@@ -49,7 +51,7 @@ try {
   createServer((request, response) => {
     response.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'none'");
     if (request.url === '/bundle.js') { response.setHeader('Content-Type', 'text/javascript'); response.end(bundle); }
-    else if (request.url === '/') { response.setHeader('Content-Type', 'text/html'); response.end(html); }
+    else if (request.url === '/' || /^\/dashboard\/(?:bot|patients\/new|patients\/[a-f0-9-]+(?:\/edit)?)(?:\?.*)?$/.test(request.url)) { response.setHeader('Content-Type', 'text/html'); response.end(html); }
     else { response.statusCode = 404; response.end(); }
   }).listen(3117, '127.0.0.1', () => console.log('Isolated assistant harness ready on 127.0.0.1:3117'));
 } catch (error) {
