@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { createRequire, registerHooks } from "node:module";
+import { PassThrough } from "node:stream";
 import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
@@ -23,9 +24,9 @@ const require = createRequire(import.meta.url);
 const appointmentId = "33333333-3333-4333-8333-333333333333";
 const fixture = { appointment_id: appointmentId, patient_display_name: "QA Patient", professional_display_name: "QA Doctor", starts_at: "2026-10-21T22:00:00Z", ends_at: "2026-10-21T22:30:00Z", status: "scheduled" };
 
-function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolean; readError?: boolean } = {}) {
+function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolean; readError?: boolean; patientValidation?: "unavailable" | "error"; professionalValidation?: "unavailable" | "error" | "exception"; appointmentStatus?: string } = {}) {
   const reads: Array<{ name: string; input: any }> = [];
-  const diagnostics: unknown[] = [];
+  const diagnostics: Array<[string, Record<string, unknown>]> = [];
   const mocks: Record<string, unknown> = {
     "@/lib/assistant/orchestration/context": context,
     "@/lib/assistant/orchestration/conversation": conversation,
@@ -43,7 +44,13 @@ function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolea
         : { ok: true, data: { userId: actorId, clinicId, role: "assistant", isProfessional: false, timeZone } },
       executeAssistantReadTool: async (name: string, input: unknown) => {
         reads.push({ name, input });
-        if (name === "get_appointment") return { ok: true, data: { status: "scheduled" } };
+        if (name === "get_professionals") {
+          if (options.professionalValidation === "exception") throw new Error("PRIVATE_LOOKUP_EXCEPTION");
+          return options.professionalValidation === "error"
+            ? { ok: false, error: { code: "generic", safeMessage: "PRIVATE_LOOKUP_ERROR" } }
+            : { ok: true, data: [] };
+        }
+        if (name === "get_appointment") return { ok: true, data: { status: options.appointmentStatus ?? "scheduled" } };
         assert.equal(name, "search_appointments");
         if (options.readError) return { ok: false, error: { code: "generic", safeMessage: "No fue posible consultar la agenda. Intenta de nuevo." } };
         const filter = (input as { timeFilter?: timeFilter.AssistantTimeFilter }).timeFilter;
@@ -57,8 +64,12 @@ function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolea
     },
     "@/lib/assistant/llm/gated-planner": { runGatedAssistantPlanner: () => assert.fail("Unexpected provider call") },
     "@/lib/assistant/llm/provider": { openAiPlannerProvider: () => assert.fail("Unexpected provider call") },
-    "@/lib/server/patients": { isPatientAvailableForActiveTenant: () => assert.fail("No patient was selected") },
-    "@/lib/logger": { logger: { info: (...args: unknown[]) => diagnostics.push(args) } }
+    "@/lib/server/patients": { isPatientAvailableForActiveTenant: () => {
+      if (options.patientValidation === "unavailable") return false;
+      if (options.patientValidation === "error") throw new Error("PRIVATE_VALIDATOR_ERROR");
+      assert.fail("No patient was selected");
+    } },
+    "@/lib/logger": { logger: { info: (event: string, details: Record<string, unknown>) => diagnostics.push([event, details]) } }
   };
   const actions: Record<string, (...args: any[]) => Promise<any>> = {};
   const source = ts.transpileModule(readFileSync("app/dashboard/bot/actions.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -206,4 +217,75 @@ test("a temporary agenda query failure stays an error and preserves the previous
   assert.equal(result.context.localDate, prior.localDate);
   assert.deepEqual(result.context.timeFilter, prior.timeFilter);
   assert.doesNotMatch(result.response.message, /selección anterior/);
+});
+
+test("React Flight response and action-argument transport preserve an empty agenda's context across three turns", async () => {
+  // Use the installed Next codecs; only the server codec needs the react-server React build.
+  const hooks = registerHooks({ resolve(specifier, parent, next) {
+    return next(specifier === "react" && parent.parentURL?.includes("react-server-dom-webpack-server.node.production")
+      ? "next/dist/compiled/react/react.react-server.js" : specifier, parent);
+  } });
+  let server;
+  try { server = require("next/dist/compiled/react-server-dom-webpack/cjs/react-server-dom-webpack-server.node.production.js"); }
+  finally { hooks.deregister(); }
+  const client = require("next/dist/compiled/react-server-dom-webpack/cjs/react-server-dom-webpack-client.node.production.js");
+  const fromServer = async (value: unknown) => {
+    const stream = new PassThrough();
+    server.renderToPipeableStream(value, {}).pipe(stream);
+    return await client.createFromNodeStream(stream, { moduleMap: {}, serverModuleMap: {}, moduleLoading: null });
+  };
+  const toServer = async (value: unknown) => await server.decodeReply(await client.encodeReply(value), {});
+  const { actions, reads } = loadActions();
+  const first = conversation.resolveConversationInput(null, "Muéstrame mi agenda de mañana después de las 15:00.", today);
+  if (first.state !== "parsed" || first.result.state !== "intent") assert.fail("Expected agenda");
+  let reply = await fromServer(await actions.submitAssistantIntentWithContextAction(...await toServer([first.result.intent, null])));
+  for (const message of ["Mejor antes de las 12:00.", "Después de las 15:00."]) {
+    const planned = await fromServer(await actions.planAssistantConversationWithContextAction(...await toServer([message, reply.context])));
+    assert.equal(planned.resolved.result.state, "intent");
+    reply = await fromServer(await actions.submitAssistantIntentWithContextAction(...await toServer([planned.resolved.result.intent, planned.context])));
+    assert.equal(reply.response.state, "appointments");
+    assert.equal(reply.context.activeIntent, "search_appointments");
+    assert.equal(reply.context.localDate, "2026-10-21");
+    assert.equal(reply.context.focusedAppointmentRef, undefined);
+  }
+  assert.equal(reads.length, 3);
+});
+
+for (const result of ["unavailable", "error"] as const) test(`invalidation diagnostics identify patient validation ${result} without exposing its reference or exception`, async () => {
+  const { actions, diagnostics, reads } = loadActions([], { patientValidation: result });
+  const prior = { ...context.newAssistantConversationContext({ actorId, clinicId }), activeIntent: "search_appointments", focusedPatientRef: appointmentId, localDate: "2026-10-21" };
+  await actions.submitAssistantIntentWithContextAction({ type: "search_appointments", localDate: "2026-10-21" }, prior);
+  const invalidation = diagnostics.find(([event]) => event === "assistant_context_invalidated");
+  assert.ok(invalidation);
+  assert.equal(invalidation[1].reference_category, "patient");
+  assert.equal(invalidation[1].validation_result, result);
+  assert.equal(invalidation[1].transition_type, "load");
+  assert.equal(invalidation[1].reason_code, result === "error" ? "validation_exception" : "reference_unavailable");
+  for (const privateValue of [actorId, clinicId, appointmentId, "PRIVATE_VALIDATOR_ERROR"]) assert.equal(JSON.stringify(diagnostics).includes(privateValue), false);
+  assert.equal(reads.length, 0, "failed revalidation never reaches the agenda read");
+});
+
+test("post-read invalidation identifies a newly focused cancelled appointment without logging its data", async () => {
+  const { actions, diagnostics } = loadActions([fixture], { appointmentStatus: "cancelled" });
+  const submitted = await actions.submitAssistantIntentWithContextAction({ type: "search_appointments", localDate: "2026-10-21" }, null);
+  assert.equal(submitted.response.state, "message", "the existing reference validation remains fail-closed");
+  const invalidation = diagnostics.find(([event]) => event === "assistant_context_invalidated");
+  assert.ok(invalidation);
+  assert.equal(invalidation[1].reference_category, "appointment");
+  assert.equal(invalidation[1].validation_result, "unavailable");
+  assert.equal(invalidation[1].transition_type, "after_read");
+  for (const value of [appointmentId, actorId, clinicId, fixture.patient_display_name, fixture.professional_display_name]) assert.equal(JSON.stringify(diagnostics).includes(value), false);
+});
+
+for (const result of ["unavailable", "error", "exception"] as const) test(`professional validation distinguishes ${result} from other failure categories`, async () => {
+  const { actions, diagnostics, reads } = loadActions([], { professionalValidation: result });
+  const prior = { ...context.newAssistantConversationContext({ actorId, clinicId }), activeIntent: "check_availability", focusedProfessionalRef: appointmentId, localDate: "2026-10-21" };
+  await actions.submitAssistantIntentWithContextAction(context.intentFromAssistantContext(prior as context.AssistantConversationContext), prior);
+  const invalidation = diagnostics.find(([event]) => event === "assistant_context_invalidated");
+  assert.ok(invalidation);
+  assert.equal(invalidation[1].reference_category, "professional");
+  assert.equal(invalidation[1].validation_result, result === "unavailable" ? "unavailable" : "error");
+  assert.equal(invalidation[1].reason_code, result === "unavailable" ? "reference_unavailable" : result === "error" ? "reference_lookup_error" : "validation_exception");
+  assert.deepEqual(reads.map((read) => read.name), ["get_professionals"]);
+  for (const value of [actorId, clinicId, appointmentId, "PRIVATE_LOOKUP_ERROR", "PRIVATE_LOOKUP_EXCEPTION"]) assert.equal(JSON.stringify(diagnostics).includes(value), false);
 });

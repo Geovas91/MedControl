@@ -386,31 +386,58 @@ async function loadAssistantContext(raw: unknown) {
   const actor = await getAssistantToolContext();
   if (!actor.ok) return { ok: false as const, message: actor.error.safeMessage, context: null };
   const scope = { actorId: actor.data.userId, clinicId: actor.data.clinicId };
+  type ReferenceCategory = "context" | "patient" | "professional" | "appointment" | "slot";
+  let validationFailure: { reason_code: "reference_unavailable" | "reference_lookup_error" | "validation_exception"; reference_category: ReferenceCategory; validation_result: "unavailable" | "error" } | undefined;
+  const validate = async <T,>(category: ReferenceCategory, operation: () => Promise<T>): Promise<T> => {
+    try {
+      const result = await operation();
+      if (!result) validationFailure ??= { reason_code: "reference_unavailable", reference_category: category, validation_result: "unavailable" };
+      return result;
+    } catch (error) {
+      validationFailure = { reason_code: "validation_exception", reference_category: category, validation_result: "error" };
+      throw error;
+    }
+  };
   const validators = {
-    patient: isPatientAvailableForActiveTenant,
-    professional: async (ref: string) => {
+    patient: (ref: string) => validate("patient", () => isPatientAvailableForActiveTenant(ref)),
+    professional: (ref: string) => validate("professional", async () => {
       const result = await executeAssistantReadTool("get_professionals", {});
-      if (!result.ok || !Array.isArray(result.data)) return null;
+      if (!result.ok || !Array.isArray(result.data)) {
+        validationFailure ??= { reason_code: "reference_lookup_error", reference_category: "professional", validation_result: "error" };
+        return null;
+      }
       const row = result.data.find((value) => value && typeof value === "object" && (value as Record<string, unknown>).professional_clinic_member_id === ref) as Record<string, unknown> | undefined;
       return row && typeof row.professional_user_id === "string" ? { userId: row.professional_user_id } : null;
-    },
-    appointment: async (ref: string) => {
+    }),
+    appointment: (ref: string) => validate("appointment", async () => {
       const result = await executeAssistantReadTool("get_appointment", { appointmentId: ref });
-      if (!result.ok || !result.data || typeof result.data !== "object") return null;
+      if (!result.ok) {
+        validationFailure ??= { reason_code: result.error.code === "not_found" || result.error.code === "forbidden" ? "reference_unavailable" : "reference_lookup_error", reference_category: "appointment", validation_result: result.error.code === "not_found" || result.error.code === "forbidden" ? "unavailable" : "error" };
+        return null;
+      }
+      if (!result.data || typeof result.data !== "object") return null;
       const status = (result.data as Record<string, unknown>).status;
+      if (status === "cancelled") validationFailure ??= { reason_code: "reference_unavailable", reference_category: "appointment", validation_result: "unavailable" };
       return typeof status === "string" ? { status } : null;
-    },
-    slot: async (slot: NonNullable<AssistantConversationContext["selectedSlot"]>) => {
+    }),
+    slot: (slot: NonNullable<AssistantConversationContext["selectedSlot"]>) => validate("slot", async () => {
       const result = await executeAssistantReadTool("get_available_slots", { professionalClinicMemberId: slot.professionalRef, date: slot.localDate, durationMinutes: slot.durationMinutes });
+      if (!result.ok || !Array.isArray(result.data)) validationFailure ??= { reason_code: "reference_lookup_error", reference_category: "slot", validation_result: "error" };
       return result.ok && Array.isArray(result.data) && result.data.some((value) => value && typeof value === "object" && (value as Record<string, unknown>).local_start === slot.startTime);
-    }
+    })
   };
   const ttl = assistantContextTtlSeconds(process.env.APPOINTMENT_ASSISTANT_CONTEXT_TTL_SECONDS);
   let checked;
   try { checked = await revalidateAssistantConversationContext(raw, scope, validators, Date.now(), ttl); }
-  catch { checked = { context: newAssistantConversationContext(scope), reason: "invalidated" as const }; }
-  if (checked.reason !== "continued") logger.info(`assistant_context_${checked.reason === "created" ? "created" : checked.reason === "expired" ? "expired" : "invalidated"}`, { reason_code: checked.reason });
-  return { ok: true as const, context: checked.context, reason: checked.reason, scope, validators, timeZone: actor.data.timeZone, today: getClinicDayRange(actor.data.timeZone).localDate, ttl };
+  catch {
+    validationFailure ??= { reason_code: "validation_exception", reference_category: "context", validation_result: "error" };
+    checked = { context: newAssistantConversationContext(scope), reason: "invalidated" as const };
+  }
+  const diagnoseContext = (reason: string, transition: "load" | "after_read" | "after_selection") => {
+    if (reason !== "continued") logger.info(`assistant_context_${reason === "created" ? "created" : reason === "expired" ? "expired" : "invalidated"}`, { reason_code: reason, transition_type: transition, ...validationFailure });
+  };
+  diagnoseContext(checked.reason, "load");
+  return { ok: true as const, context: checked.context, reason: checked.reason, scope, validators, diagnoseContext, timeZone: actor.data.timeZone, today: getClinicDayRange(actor.data.timeZone).localDate, ttl };
 }
 
 /** A read-only, bounded name lookup for the current patient-selection step. */
@@ -582,6 +609,7 @@ export async function submitAssistantIntentWithContextAction(input: unknown, raw
   const intent = isAssistantIntent(input) ? input : null;
   const next = updateAssistantConversationContext(loaded.context, intent, response, loaded.timeZone);
   const checked = await revalidateAssistantConversationContext(next, loaded.scope, loaded.validators, Date.now(), loaded.ttl);
+  loaded.diagnoseContext(checked.reason, "after_read");
   if (checked.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: checked.context };
   return { response, context: checked.context };
 }
@@ -606,6 +634,7 @@ export async function selectAssistantResultWithContextAction(choice: unknown, ra
   if (selected && response.state !== "error" && response.state !== "proposal_terminal") next = applyVerifiedAssistantChoiceToContext(next, selected);
   next = updateAssistantConversationContext(next, pending, response, loaded.timeZone);
   const checked = await revalidateAssistantConversationContext(next, loaded.scope, loaded.validators, Date.now(), loaded.ttl);
+  loaded.diagnoseContext(checked.reason, "after_selection");
   if (checked.reason === "invalidated") return { response: { state: "message", message: CONTEXT_CHANGED_REPLY } as AssistantUiResponse, context: checked.context };
   return { response, context: checked.context };
 }
