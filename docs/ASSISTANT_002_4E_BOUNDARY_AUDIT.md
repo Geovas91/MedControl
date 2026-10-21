@@ -1,4 +1,46 @@
-# ASSISTANT-002.4E — lifecycle boundary inventory
+# ASSISTANT-002.4E / 002.4F — lifecycle boundary inventory
+
+## 002.4F source audit and runtime limits (2026-10-21)
+
+Scope: source at `c893be6da9ac5496ca3fdf3a27570d82f26b8119`, plus the operator-only observer/tests/docs in this change. No deployed process, secret, database setting or server configuration was read. Repository absence findings apply only to this source tree.
+
+| Path / boundary | Inspected behavior | Runtime conclusion |
+| --- | --- | --- |
+| `lib/server/whatsapp/meta-whatsapp-cloud-provider.ts` | Only provider implementation found. `sendTemplateMessage` rejects both disabled and enabled cases; no HTTP transport. Webhook verification returns false; parser returns empty events. | Source cannot send; deployed transport UNKNOWN |
+| `lib/server/whatsapp/config.ts`, `lib/whatsapp/config.ts` | Only exact string `true` enables readiness branch; it still returns unavailable. Meta credentials/provider/version/encryption keys are server-only configuration names. | Initial environment presence does not attest effective config |
+| `lib/server/appointment-automation-runner.ts` | `reminder_whatsapp` jobs finish skipped (`provider_not_enabled`) before delivery; email jobs call Resend. | Source runner does not send WhatsApp; deployed/independent runners UNKNOWN |
+| `app/api/internal/appointment-automations/run/route.ts` | Bearer cron secret checked before loading service-role runner; POST claims/finishes jobs and can send emails. | Never invoke it for evidence collection |
+| `supabase/migrations/0031_appointment_automation_jobs.sql`, `0033_whatsapp_notifications_v1_foundations.sql` and later migrations | SQL queue/lease/domain foundation, consent/provider account/template/delivery tables; reviewed enqueue produces email/review jobs, no implemented WhatsApp provider call. No `pg_cron`/`cron.schedule`/HTTP sender definition found in migrations. | Existing remote jobs, triggers/functions or external consumers UNKNOWN; no DB change/read performed |
+| `lib/whatsapp/{types,template-registry,consent,e164}.ts` | Contracts, template/consent/number validation only. | No transport |
+| `app/api/**` | No WhatsApp webhook route in current route inventory; PayPal webhook is separate. | Hosted Edge functions/other services not established by repo inventory |
+| `config/contact.ts`, `app/page.tsx` | Configured public sales link uses `wa.me` with fixed sales message; user navigation to WhatsApp, not automatic server delivery. | Potential user-initiated channel; not proof of global isolation |
+| `app/dashboard/directory/actions.ts`, `lib/server/directory.ts` | WhatsApp directory field storage; no sending function found. Bot page feature labels are informational only. | UI state cannot verify isolation |
+| `lib/server/appointment-calendar-email.ts`, `lib/email/resend-provider.ts`, automation runner | Immediate booking invitation/update/cancellation emails and queued reminder/review emails use Resend. Invitations are independent of reminder flags. | Runtime email readiness and all entry points need verification |
+| `lib/server/appointment-google-calendar.ts`, `google-calendar-provider.ts` | Connected-calendar refresh and event create/update/delete transport, independently gated by membership/integration. | Safe owner projection plus runtime identity needed |
+| Assistant OpenAI provider, PayPal endpoints, support notification service | Additional network/API/email capabilities outside WhatsApp. | Not claimed globally isolated; do not exercise during collection |
+| DonWeb runbooks, `next.config.mjs`, `/api/health`, `/api/ready` | Mutable build directory, PM2 or panel-managed Node, reverse proxy; no process-bound artifact attestation. | Checkout SHA/build label/health alone insufficient |
+
+Search scope included `app`, `lib`, `config`, `scripts`, all migrations and API route inventory for WhatsApp/Meta/Twilio/send functions and scheduler/HTTP definitions. No independent WhatsApp worker/SDK transport or queue consumer was found in this checkout. PM2 applications under other users, cron/systemd, containers, external services and Supabase deployed functions remain outside source visibility.
+
+`scripts/qa/assistant-runtime-evidence.ts` reads Git HEAD, hashes selected build files, and projects Linux `/proc` state/cwd/initial environment/child metadata. It never imports app code, calls PM2, contacts a provider or changes files/settings. It does not emit raw environment, process names/arguments, exception messages, paths, build labels or secret digests. No observer field is accepted as a lifecycle authorization input. Read the operator procedure and immutable-release/startup-receipt prerequisite in `ASSISTANT_002_4_LIVE_PREPARATION.md` before collection.
+
+DEPLOYMENT IDENTITY: UNKNOWN
+
+WHATSAPP ISOLATION: UNKNOWN
+
+OTHER OUTBOUND CHANNELS: present in source; runtime isolation UNKNOWN
+
+BACKGROUND WORKERS: UNKNOWN
+
+RUNTIME EVIDENCE: NOT COLLECTED
+
+UNVERIFIED CONDITIONS: serving artifact provenance, proxy/listener/process binding, effective configuration and complete sender/scheduler inventory
+
+REQUIRED OPERATOR COMMANDS: reviewed observer streamed over existing SSH; status-code-only health/readiness GETs; existing read-only management views (see live preparation)
+
+READY FOR READ-ONLY PREFLIGHT: YES (procedure prepared, remote evidence pending)
+
+READY FOR LIVE MUTATIONS: NO
 
 This is a source/contract audit at PR #93 head 46fc2ea and the subsequent QA-only changes. Current remote fixture state, deployed code identity and process configuration were not inspected: the read-only lifecycle CLI stopped at its explicit opt-in gate. The user's reported authenticated-browser and OpenAI Staging PASS are retained separately from this task's local evidence.
 

@@ -1,4 +1,32 @@
-# ASSISTANT-002.4 / 002.4B / 002.4E — QA execution report
+# ASSISTANT-002.4 / 002.4B / 002.4E / 002.4F — QA execution report
+
+## 002.4F runtime verification preparation (2026-10-21)
+
+Starting head: `c893be6da9ac5496ca3fdf3a27570d82f26b8119`; same branch and draft PR #93. This increment adds only an operator-side read-only observer, focused tests and documentation. Application code, lifecycle gates, permissions, provider activation, dependencies, PM2 settings and migrations are unchanged.
+
+DEPLOYMENT IDENTITY: UNKNOWN — no DonWeb evidence collected; HEAD, build artifacts and loaded process cannot currently be independently bound
+
+WHATSAPP ISOLATION: UNKNOWN — inspected provider rejects and runner skips WhatsApp, but deployed code and independent senders are unverified
+
+OTHER OUTBOUND CHANNELS: email / Google Calendar / OpenAI / PayPal exist in source; effective isolation UNKNOWN
+
+BACKGROUND WORKERS: UNKNOWN — complete supervisor/scheduler/container/external inventory not available
+
+RUNTIME EVIDENCE: NOT COLLECTED — observer/procedure prepared, no remote server session or commands executed
+
+UNVERIFIED CONDITIONS: immutable artifact provenance, startup/process receipt, proxy/listener binding, effective environment and complete sender/worker coverage
+
+REQUIRED OPERATOR COMMANDS: reviewed collector via existing SSH and status-code-only health/readiness GETs; private read-only management review; exact procedure in `ASSISTANT_002_4_LIVE_PREPARATION.md`
+
+READY FOR READ-ONLY PREFLIGHT: YES (procedure prepared; runtime acceptance pending)
+
+READY FOR LIVE MUTATIONS: NO
+
+The observer records collection interval and explicit sources; outputs allowlisted environment presence and kernel metadata, hashes selected build artifacts and paths without exposing values, raw process/environment/configuration or exceptions. No report, flag or user-supplied SHA can authorize lifecycle operations. It always returns UNKNOWN runtime attestation and `readyForLiveMutations=false`, including when local observations match. Existing `staging-reads.ts` continues to return UNKNOWN for deployment/WhatsApp. Minimal future immutable-release/startup-receipt and trusted verifier requirements are documented, not deployed.
+
+Local validation for this increment: 273 unit/integration PASS (4 new observer tests); 14 browser PASS against simulated persistence. The observer tests cover secret-safe projection, malformed/unavailable process input, absent artifacts/processes, and matching process/build observations that remain UNKNOWN. They use temporary local fixtures, not Linux/PM2/DonWeb runtime evidence. Windows stdin smoke parsed the streaming command and correctly exited 2 before collection on unsupported OS. Initial TypeScript/build validation found a missing required `NODE_ENV` in the observer's deliberately minimal Git subprocess environment; corrected to a constant without inheriting secrets. Final lint, TypeScript (`npx tsc --noEmit --incremental false --pretty false`), production build and `git diff --check`: PASS. Existing module-type/color and LF/CRLF warnings are non-failing. Remote checks are absent, not CI PASS.
+
+No server collection, live login, provider request, patient/appointment mutation, deployment, restart, configuration change, migration or merge was performed in 002.4F. Original conversational incident: NOT VERIFIED / not declared resolved. Historical results below retain their original scope.
 
 ## Baseline and scope
 

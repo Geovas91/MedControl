@@ -1,4 +1,71 @@
-# ASSISTANT-002.4B / 002.4E — controlled live preparation
+# ASSISTANT-002.4B / 002.4E / 002.4F — controlled live preparation
+
+## 002.4F — read-only DonWeb runtime evidence procedure
+
+This procedure is prepared, NOT executed on DonWeb. No SSH session, runtime report, worker inventory or deployment receipt was available in this task. Source audit baseline: `c893be6da9ac5496ca3fdf3a27570d82f26b8119`. Local collection time is embedded in each report; source-review execution date: 2026-10-21. Source observations below do not attest Staging.
+
+DEPLOYMENT IDENTITY: UNKNOWN
+
+WHATSAPP ISOLATION: UNKNOWN (inspected source has no sending transport; deployed code and independent senders unverified)
+
+OTHER OUTBOUND CHANNELS: email, Google Calendar, OpenAI and PayPal exist; effective runtime isolation UNKNOWN
+
+BACKGROUND WORKERS: UNKNOWN
+
+RUNTIME EVIDENCE: NOT COLLECTED; the new collector emits observations, never a verification credential
+
+UNVERIFIED CONDITIONS: artifact provenance, loaded code, proxy/listener mapping, effective environment, every worker/scheduler/host and outbound egress
+
+READY FOR READ-ONLY PREFLIGHT: YES — operator procedure and local observer prepared; runtime acceptance pending
+
+READY FOR LIVE MUTATIONS: NO
+
+### Required operator commands and collection boundaries
+
+Run only on the existing Staging server, as the existing application owner, through the authorized administrative session. Confirm Staging host/site and the exact application directory in CloudPanel first; never infer it from the example path in the deployment runbook. Do not use production. Keep raw management screens/configuration private. Do not share environment dumps, process command lines, logs, Nginx configuration, crontab bodies or provider responses. Those can contain tokens, URLs with credentials, messages and patient information.
+
+1. Obtain a **reviewed copy** of `scripts/qa/assistant-runtime-evidence.ts` from this PR on the operator workstation. Verify its SHA-256 against the reviewed file, then stream it to an existing authorized SSH session as below. This does not install code or modify the deployed checkout. Do not run `npm install`, build, Git checkout/pull, PM2 commands or any application module on the server. The observer uses only Node builtins and read-only Git `rev-parse`; it opens no network connection and does not use Supabase. The streaming procedure requires an already installed Node 24 supporting `--input-type=module-typescript`. If absent, STOP/UNKNOWN: do not install or upgrade Node during collection.
+
+2. From CloudPanel's existing process management view, identify the PM2 application named `clinicontrol-staging`, its PM2 ID, owner, current status, PID, configured working directory and restart/start timestamp. Record only those metadata and UTC collection time in a private evidence record. If there is no existing read-only PM2 view, mark PM2 identity UNKNOWN. Do not start PM2 to inspect it. In particular `pm2 jlist`, `pm2 describe`, `pm2 env` and `pm2 report` are not recommended collection commands: they can expose environment/arguments, and the CLI may start a daemon if one is absent. A stale `dump.pm2` or PID file is not current process evidence.
+
+3. Substitute the verified absolute Staging directory and the **numeric current PID** below (the named SSH host is the operator's already configured Staging alias). Do not paste credentials in commands. Run from the reviewed workstation checkout:
+
+```powershell
+Get-FileHash scripts/qa/assistant-runtime-evidence.ts -Algorithm SHA256
+Get-Content -Raw scripts/qa/assistant-runtime-evidence.ts | ssh STAGING_ALIAS 'node --experimental-strip-types --input-type=module-typescript - /VERIFIED/STAGING/ROOT 12345'
+```
+
+The observer CLI also supports `node --experimental-strip-types /ALREADY/REVIEWED/observer.ts /VERIFIED/STAGING/ROOT 12345` if the file is already present outside the application. It does not create a report file; capture only sanitized stdout using the operator's approved evidence storage. No copy into the app, upload, deployment, service restart or configuration change is needed. On unsupported OS, unavailable scope or bad arguments it exits 2 with a fixed error. A JSON report means collection completed, **not PASS**. Missing fields remain null/UNKNOWN.
+
+4. The PM2 PID may be an `npm start` wrapper. Inspect `directChildren` in the report, then collect again for each descendant until the actual Next server/listener is identified. Every report has PID, parent PID, kernel start ticks, state, cwd equality/hash and collection time. A cwd hash can be compared with the known operator directory hash; the observer deliberately does not print directory names or command lines. Have the operator privately map the proxy's upstream port/socket to its owning PID using the existing CloudPanel/network management view; record only match/mismatch, PID, source and time. Do not run `nginx -T`, `ss -p` with unfiltered output or publish command lines. If listener ownership/proxy routing cannot be established, keep it UNKNOWN. Parent-child correlation alone is insufficient.
+
+5. Check the two process stability observations and repeated build hashes. PID disappearance/reuse, mismatched cwd, zombie/dead state, changing build or incomplete artifacts invalidate the observation. Repeat collection after investigation without restarting anything. A stable PID plus unchanged hashes is still **not** proof of the loaded artifact. `/proc/PID/environ` describes initial environment, may omit Next/dotenv-loaded values and cannot attest effective configuration. The report outputs only allowlisted SET / NOT_SET / UNKNOWN classifications, never values or secret hashes. A configured key is not proof of a working provider; a missing key there is not proof it is unavailable to application code. Do not inspect `.env*` by printing or sourcing them.
+
+6. Collect only public health **status codes**, not bodies or arbitrary endpoints, from the operator workstation:
+
+```powershell
+(Get-Date).ToUniversalTime().ToString('o')
+curl.exe --silent --output NUL --write-out 'health_http=%{http_code}\n' --max-time 10 https://staging.clinicontrol.mx/api/health
+curl.exe --silent --output NUL --write-out 'ready_http=%{http_code}\n' --max-time 10 https://staging.clinicontrol.mx/api/ready
+```
+
+Do not follow redirects or attach auth/cookies. Health/readiness success establishes availability only; neither endpoint returns artifact/process provenance. Existing authenticated lifecycle preflight may separately read the safe readiness email classification, QA tenant scheduler flags and calendar projection under its existing opt-in. It still stops before fixtures on UNKNOWN deployment/WhatsApp gates.
+
+7. In existing read-only infrastructure consoles, inventory **all** PM2 applications/owners/homes, CloudPanel sites, system and user systemd services/timers, all users' cron/anacron jobs, container workloads, external schedulers/CI jobs, and Supabase cron/Edge functions/webhooks. Do not execute a job, invoke `/api/internal/appointment-automations/run`, fetch database payloads, edit/disable schedules or install inspection tools. An administrator should inspect definitions privately and issue a sanitized table: workload alias, supervisor kind, owner alias, PID/build digest if applicable, active/scheduled state, outbound capability, review UTC time/source, coverage limitations. Use opaque aliases for private names and omit arguments entirely; do not hash credentials or private payloads. Record unavailable permissions as UNKNOWN; the collector's direct child list is not a host-wide inventory. Inspect effective configuration privately through the existing authorized manager and report only predicates (e.g. staging origin/project match, required LLM flags remain disabled, provider isolation demonstrated), never raw values. Do not alter any variable, including `APPOINTMENT_ASSISTANT_LLM_ENABLED` and `APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED`.
+
+8. Independently review the resulting source/build/process observations, proxy mapping, worker inventory and outbound policy evidence. Record operator identity using an approved non-sensitive alias, host alias, UTC interval, reviewed PR SHA, collector file digest, scope, source of each assertion and explicit unknowns. Retain private evidence securely; do not commit it. No real WhatsApp/email/calendar test is part of collection. No egress probe should call a provider's send endpoint.
+
+### What existing architecture can and cannot establish
+
+The DonWeb runbooks describe Git checkout → `next build` in a mutable directory → PM2 `npm start` → reverse proxy. `next.config.mjs` has no custom build provenance or runtime identity endpoint. The collector distinguishes checkout HEAD, four artifact hashes (including hashed `.next/BUILD_ID`) and kernel process identity. BUILD_ID is a build label, not a commit receipt. These four hashes are samples, not a digest of the entire deployable tree. Dirty source, build-time public environment, rebuilding in place, mixed replicas and an old process retaining loaded modules all break SHA-only reasoning. Process start time preceding artifact modification can disprove a relationship; the reverse cannot prove it. No on-disk timestamp/hash can establish which modules were loaded earlier. No current PM2 name or health response fixes this gap.
+
+The smallest credible future mechanism needs a **separately reviewed operational/deployment change**: build a versioned immutable release with trusted provenance binding commit, dependency lock digest and complete deployable-artifact digest; launch from that release; produce a startup receipt binding that digest/BUILD_ID to boot/process identity and effective non-secret configuration predicates. Expose only an authenticated minimal identity/nonce response from the serving process, then independently bind reverse proxy/listener and every replica/worker to it. Authenticate evidence through a trusted operator/collector channel with freshness, scope, integrity and anti-replay checks. A manifest written beside a mutable build, a caller-provided SHA/flag, PM2 environment variable or unsigned uploaded JSON is insufficient. Do not add/deploy this mechanism in 002.4F.
+
+For WhatsApp, either establish the attested artifact has only the reviewed rejection paths **and** a complete inventory excludes independent senders, or obtain independently verifiable process-wide egress isolation covering app, workers, containers and external schedulers. Existing network policy may be reviewed read-only; installing/changing a policy requires separate authorization. Absence of a Meta key, disabled UI/tenant toggles or an empty queue is not global isolation. Other channels require their own evidence; email invitations run independently of reminder toggles.
+
+### Lifecycle evidence integration
+
+The observer report is deliberately **not consumed** by `staging-reads.ts`; both runtime gates remain UNKNOWN. There is no new opt-in, evidence-file path, approval boolean, CLI override or environment shortcut. Local collector tests and source-only rejection paths cannot turn either gate VERIFIED. Future integration requires separate review of a trusted verifier and provenance/receipt infrastructure, verifying expected Staging origin/project/release, actual serving and worker identities, freshness, inventory coverage and outbound policy before each mutation/cleanup step. Missing/invalid/stale/inconsistent evidence must block. Even independently reviewed reports in this task do not enable live mutations with the current implementation.
 
 ## Commands and current support
 
