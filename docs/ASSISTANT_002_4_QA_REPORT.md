@@ -1,80 +1,110 @@
-# ASSISTANT-002.4 — Automated Appointment Assistant QA Bundle
+# ASSISTANT-002.4 / 002.4B — QA execution report
 
-## Scope and baseline
+## Baseline and scope
 
-- Baseline: `eec7274b108394664f98daff52da03488a0ffe55` on `main`.
-- This branch adds a reusable local command: `npm run test:assistant:qa`.
-- The bundle uses the Node.js test runner and mocks authentication, provider and protected-data boundaries. It neither calls Staging nor performs real mutations.
-- It does not modify production assistant behavior, migrations, RLS, authorization rules, environment variables or external integrations.
+Baseline `eec7274b108394664f98daff52da03488a0ffe55`; 002.4A head `27731c32a7c8a61932825e0a197784544b3d4163`. Continue only branch `codex/assistant-002-4-qa-automation` and draft PR #93.
 
-## Execution levels
+Production component, actions, parser, orchestration, authorization, RLS and migrations are unchanged. This replaces the earlier broad scenario totals with independent execution levels and bounded evidence. A mock confirmation does not establish Supabase persistence or database atomicity.
 
-| Level | Status | Evidence |
+## Inventory and architecture
+
+The existing Playwright config starts Next on port 3100; QA browser accounts authenticate through `/login` using Email/Contraseña and `Iniciar sesión`. No Assistant browser suite existed at baseline. Baseline QA scripts manage persistent RBAC, patient-scope and availability datasets; none provides exact temporary appointment-lifecycle cleanup.
+
+`playwright.assistant.config.ts` starts a standalone HTTP server bound only to `127.0.0.1:3117`. `tests/assistant-browser/server.mjs` builds into OS temp using Webpack bundled with pinned Next 16.3.3, then removes that exact temporary build directory. No dependencies or application routes are added. The default Playwright config ignores the dedicated suite to prevent running it against the application server.
+
+The harness mounts actual `AppointmentAssistant` through React DOM. Tests type/click accessible labels/buttons, including actual structured-choice and confirmation handlers. It bundles actual action/orchestration source, replacing auth/tool registry, patient/settings services, timezone, logger, provider and Next cache/navigation boundaries. Actions are ordinary functions here: this does not exercise Next server-action HTTP/Flight, real session validation, SQL locks, RLS or provider calls. The fixed day is 2030-10-21 in America/Mexico_City.
+
+Each test uses a fresh browser context and synthetic Norte/Sur data. Counters observe reads, mock proposals and mock mutations; returned contexts/diagnostic events are recorded. React hooks are real. The harness uses literal test environment settings, never the host environment. CSP disallows connections and Playwright aborts requests outside loopback. Traces/video/screenshots are off. No live data/sessions enter this harness.
+
+## Independent execution counts
+
+| Level | PASS | FAIL | BLOCKED | NOT RUN | Evidence |
+| --- | ---: | ---: | ---: | ---: | --- |
+| UNIT / INTEGRATION | 242 tests | 0 | 0 | 0 | `npm run test:assistant:qa`; previous 234 + 8 gate/provider-observer tests; no skips |
+| BROWSER COMPONENT INTEGRATION | 12 tests | 0 | 0 | 0 | `npm run test:assistant:qa:browser`; headless Chrome, real React/actions, simulated services |
+| AUTHENTICATED BROWSER E2E | 0 | 0 | 1 smoke | 0 | Live command BLOCKED before browser launch (`opt_in_required`) |
+| LIVE STAGING lifecycle | 0 | 0 | 1 suite | 0 | Temporary fixtures/current outbound isolation/exact cleanup unverified; mutation runner unsupported |
+| OPENAI LIVE | 0 | 0 | 1 smoke | 0 | OpenAI command BLOCKED (`opt_in_required`); 0 requests |
+
+Statuses are exclusive: an unexecuted level with an identified gate is BLOCKED rather than NOT RUN. Unit tests, browser tests and acceptance scenarios are different units. No combined PASS total is claimed.
+
+## Browser evidence
+
+| Test | Executed assertions |
+| --- | --- |
+| BROWSER-001 | Incomplete natural create request yields create intent/missing-patient question, zero mutations |
+| BROWSER-002 | Patient-list helper/button retain authorized mock patient; Sur patient not shown |
+| BROWSER-003 | Professional helper/button retain patient/professional; Sur professional not shown |
+| BROWSER-004 | Future slots shown; structured slot sets 10:00/tomorrow in context; zero mutations |
+| BROWSER-005 | Verified proposal patient/professional/time; proposed date/time/duration; no mock appointment before confirm |
+| BROWSER-006 | Two immediate DOM confirm clicks yield one action, one mock mutation/appointment with correct duration; success UI |
+| BROWSER-007 | Date search selects/revalidates appointment; focused reference retained; no mutation |
+| BROWSER-008 | Reschedule proposal leaves mock original untouched; confirm changes time on same mock appointment |
+| BROWSER-009 | Cancellation proposal leaves scheduled status; only confirmation changes mock status |
+| BROWSER-010 | Exact three requested turns preserve tomorrow, replace exclusive bounds, execute 3 empty reads and emit no invalidation |
+| BROWSER-011 | Failed read stays error, date survives and retry executes after recovery; zero mutations |
+| BROWSER-012 | Simulated missing session blocks read and confirmation; mock clinic switch and missing reference reject old visible choice; zero mutations |
+
+These security assertions test component/action reactions to simulated protected-service results, not deployed authorization or Supabase isolation. Duplicate UI-click suppression is distinct from the mocked concurrent claim test and from real database concurrency.
+
+## QA-001 through QA-030 traceability
+
+`U` = executed Node tests with mocked boundaries; `B` = executed browser component integration. Every live lifecycle acceptance remains unverified despite passing local assertions.
+
+| QA | Local evidence | Boundary / remaining gap |
 | --- | --- | --- |
-| Unit/integration | Executed locally | `npm run test:assistant:qa`; mocked server boundaries and real orchestration/contracts |
-| Browser E2E | NOT RUN | No dedicated Appointment Assistant Playwright workflow, authenticated QA browser credentials, or isolated lifecycle fixture were available. Existing browser suites do not cover this component. |
-| Live Staging smoke | BLOCKED | No explicit live-QA flag, QA browser credentials, Supabase QA credentials, verified isolated temporary fixture, or approved cleanup evidence was available locally. No remote read/write was attempted. |
-| OpenAI provider | BLOCKED | No explicit live-provider flag or API key was available. Provider behavior is covered only with mocks. |
+| 001 incomplete creation | U: qa-bundle, conversation; B:001 | Missing-field UI; no live mutation |
+| 002 patient selection | U: patient-autocomplete; B:002 | Authorized mock list only |
+| 003 professional selection | U: patient-autocomplete; B:003 | Mock clinic only |
+| 004 availability | U: read-tools, time-filters; B:004 | Mock slot results, not real occupied-slot lookup |
+| 005 creation proposal | U: confirm-eligibility; B:005 | Actual action proposal, mocked storage |
+| 006 confirm creation | U: confirm-eligibility; B:006 | Mock persistence only; Supabase persistence BLOCKED |
+| 007 duplicate confirmation | U: confirm-eligibility; B:006 | UI guard + simulated claim; database atomicity unverified |
+| 008 appointment search | U: read-tools; B:007 | Date read with mock appointment |
+| 009 upcoming appointments | U: read-tools, llm-planner | Mock upcoming read; browser upcoming NOT RUN |
+| 010 appointment selection | U: structured-selection; B:007 | Actual handler, mock fresh lookup |
+| 011 reschedule proposal | U: tools/proposal-amendments (includes source checks); B:008 | Runtime action observed in browser; mock storage |
+| 012 confirm reschedule | U: confirm-eligibility; B:008 | One mock row updated; live persistence BLOCKED |
+| 013 cancellation | U: confirm-eligibility; B:009 | Actual UI; mock cancellation |
+| 014 three turns | U: context-reliability; B:010 | Real React/orchestration; no HTTP Flight in harness |
+| 015 empty continuity | U: context-reliability; B:010 | Three empty queries, no artificial invalidation |
+| 016 selection continuity | U: structured-selection/context-reliability; B:007–009 | Mock reference revalidation |
+| 017 draft correction | U: qa-bundle/flexible-context/proposal-amendments | Some source checks; browser amendment NOT RUN |
+| 018 context isolation | U: qa-bundle/ephemeral-context; B:012 | Simulated clinic change; real sessions BLOCKED |
+| 019 classification | U: llm-planner/parser | Mock provider + deterministic typed classification |
+| 020 real LLM | U: live-gates observer tests use fake HTTP only | Real smoke BLOCKED, 0 requests |
+| 021 provider failure | U: llm-planner/live-gates | Timeout/HTTP/invalid JSON/schema; one fake request maximum |
+| 022 LLM safety | U: domain-gate/qa-bundle | Injection/domain/typed-ID restrictions with mocks |
+| 023 tenant isolation | U: patient-autocomplete/read-tools; B:002–003/012 | Mock scope; Norte/Sur RLS BLOCKED |
+| 024 authentication | U: context-reliability/confirm-eligibility; B:012 | Simulated rejection; real login/unauthenticated HTTP NOT RUN |
+| 025 confirmation required | U: tools/confirm-eligibility; B:005/008/009 | No mock mutation before each confirm |
+| 026 stale references | U: structured-selection/context-reliability; B:012 | Missing mock reference and mock clinic change |
+| 027 concurrency | U: confirm-eligibility | Concurrent calls against claim double; database concurrency BLOCKED |
+| 028 unavailable slot | U: confirm-eligibility/tools | Mock validation; real occupied slot NOT RUN |
+| 029 read failure | U: context-reliability; B:011 | Safe error/retry, no false empty success |
+| 030 expired context | U: qa-bundle/ephemeral-context | Expired reset; browser expiry NOT RUN |
 
-## Test architecture
+## Validation and failure analysis
 
-`scripts/test-appointment-assistant-qa.mjs` discovers every `tests/unit/appointment-assistant-*.test.ts` file deterministically and invokes the project’s registered TypeScript loader. The focused suites exercise the actual parser, context orchestration, domain gate, planner contracts, read/mutation registry and UI component with controlled mock boundaries.
+- Unit/integration: 242 PASS, 0 FAIL, 0 SKIP.
+- Browser component: 12 PASS, 0 FAIL, 0 SKIP.
+- Staging command: exit 2 BLOCKED, no remote operation.
+- OpenAI command: exit 2 BLOCKED, 0 requests.
+- `npm run lint`: PASS.
+- `npx tsc --noEmit --incremental false --pretty false`: PASS.
+- `npm run build`: PASS (Next 16.3.3, 31 static pages; unchanged route inventory).
+- `git diff --check`: PASS.
 
-`tests/unit/appointment-assistant-qa-bundle.test.ts` is a compact acceptance layer for incomplete creation/amendment, scope and expiry isolation, structured-reference shape validation, deterministic provider fallback and domain-gate rejection. It complements rather than replaces the specialized suites.
+During harness bring-up, Webpack exposed DefinePlugin as `webpack.DefinePlugin` and browser imports needed a literal process-environment shim. Those infrastructure failures were corrected. No production defect was established and no application fix was made. Existing module-type and NO_COLOR/FORCE_COLOR warnings are not failures.
 
-## Scenario evidence
+## Cleanup and recommendation
 
-| Scenario | Level executed | Status | Evidence |
-| --- | --- | --- | --- |
-| QA-001 incomplete creation | Unit | PASS | `appointment-assistant-qa-bundle.test.ts` |
-| QA-002 patient selection | Unit | PASS | `appointment-assistant-patient-autocomplete.test.ts` |
-| QA-003 professional selection | Unit | PASS | `appointment-assistant-patient-autocomplete.test.ts` |
-| QA-004 availability | Unit | PASS | `appointment-assistant-time-filters.test.ts`, `appointment-assistant-read-tools.test.ts` |
-| QA-005 creation proposal | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts` |
-| QA-006 confirm creation | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts` |
-| QA-007 duplicate confirmation | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts` |
-| QA-008 date search | Unit | PASS | `appointment-assistant-read-tools.test.ts` |
-| QA-009 upcoming appointments | Unit | PASS | `appointment-assistant-llm-planner.test.ts` |
-| QA-010 appointment selection | Unit | PASS | `appointment-assistant-qa-bundle.test.ts`, `appointment-assistant-structured-selection.test.ts` |
-| QA-011 reschedule proposal | Unit | PASS | `appointment-assistant-tools.test.ts`, `appointment-assistant-proposal-amendments.test.ts` |
-| QA-012 confirm rescheduling | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts` |
-| QA-013 cancellation confirmation | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts` |
-| QA-014 three turns | Unit | PASS | `appointment-assistant-context-reliability.test.ts` |
-| QA-015 empty-result continuity | Unit | PASS | `appointment-assistant-context-reliability.test.ts` |
-| QA-016 selection continuity | Unit | PASS | `appointment-assistant-structured-selection.test.ts`, `appointment-assistant-context-reliability.test.ts` |
-| QA-017 correction of draft | Unit | PASS | `appointment-assistant-qa-bundle.test.ts`, `appointment-assistant-proposal-amendments.test.ts` |
-| QA-018 context isolation | Unit | PASS | `appointment-assistant-qa-bundle.test.ts`, `appointment-assistant-ephemeral-context.test.ts` |
-| QA-019 natural-language classification | Unit | PASS | `appointment-assistant-llm-planner.test.ts` |
-| QA-020 real provider request | Live provider | BLOCKED | Explicit live-provider flag and configured key absent; no paid request was made. |
-| QA-021 provider fallback | Unit | PASS | `appointment-assistant-qa-bundle.test.ts`, `appointment-assistant-llm-planner.test.ts` |
-| QA-022 LLM safety boundaries | Unit | PASS | `appointment-assistant-qa-bundle.test.ts`, `appointment-assistant-domain-gate.test.ts` |
-| QA-023 tenant isolation | Unit | PASS | `appointment-assistant-patient-autocomplete.test.ts`, `appointment-assistant-read-tools.test.ts` |
-| QA-024 authentication enforcement | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts`, `appointment-assistant-context-reliability.test.ts` |
-| QA-025 confirmation required | Unit | PASS | `appointment-assistant-tools.test.ts`, `appointment-assistant-confirm-eligibility.test.ts` |
-| QA-026 stale references | Unit | PASS | `appointment-assistant-qa-bundle.test.ts`, `appointment-assistant-context-reliability.test.ts` |
-| QA-027 concurrent confirmation | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts` |
-| QA-028 unavailable slot | Unit | PASS | `appointment-assistant-confirm-eligibility.test.ts`, `appointment-assistant-tools.test.ts` |
-| QA-029 temporary read failure | Unit | PASS | `appointment-assistant-context-reliability.test.ts` |
-| QA-030 expired context | Unit | PASS | `appointment-assistant-qa-bundle.test.ts`, `appointment-assistant-ephemeral-context.test.ts` |
+Each browser test clears its in-memory appointments/proposals, verifies zero remaining records, repeats cleanup for idempotency and closes its browser context. The harness removes its exact OS-temp build. No real fixture was created, no baseline fixture changed and no remote cleanup was needed. Real fixture cleanup is NOT VERIFIED.
 
-## Results and limits
+See `ASSISTANT_002_4_LIVE_PREPARATION.md` for environment-only opt-in of supported read/provider smokes, safe output semantics and the outstanding lifecycle isolation/ownership/cleanup gate. Mutation mode cannot be enabled by a flag. No Staging LLM key/flags/model or other configuration was changed.
 
-Executed locally: `npm run test:assistant:qa` — 234 passed, 0 failed, 0 skipped. Scenario results in this table mean unit/integration execution only; they are not browser or Staging claims.
+ASSISTANT-003 recommendation: NOT READY for a full lifecycle release. Authenticated HTTP actions, Supabase/RLS/persistence, real provider success, real outbound isolation and cleanup remain unverified. The original conversational incident is not declared resolved.
 
-- PASS: 29 unit/integration scenarios.
-- FAIL: 0.
-- BLOCKED: 1 scenario (QA-020) at the live-provider level.
-- NOT RUN: Browser E2E and the live Staging lifecycle.
-- Fixture cleanup: NOT APPLICABLE locally; no fixture was created.
+QA AUTOMATION STATUS: PARTIAL
 
-The existing QA seed and cleanup utilities operate on persistent QA datasets and are not used by this bundle. They cannot satisfy the temporary-fixture requirement without a dedicated isolated lifecycle fixture and an exact, idempotent cleanup contract that preserves pre-existing baseline records.
-
-## Security and remaining risks
-
-The local suite covers authorization rejection, tenant scoping, one-shot claims, confirmation-only mutation flow, expired/stale context handling, protected reference shape validation, provider fallback, prompt injection and medical-domain rejection. It does not prove real browser authentication, RLS behavior against Staging, provider success, external notification isolation or cleanup against a remote database.
-
-No root cause for a new functional defect was established. The original conversational-context incident remains outside the scope of this QA infrastructure change and is not claimed resolved.
-
-## Recommendation for ASSISTANT-003
-
-Do not approve a full lifecycle release based solely on this bundle. First provision a dedicated disposable QA clinic and account, an exact cleanup mechanism for newly created appointment records, isolated notification/calendar channels, browser credentials, and an explicit live-provider opt-in. Then execute the browser and Staging levels and record their results separately.
+RELEASE RECOMMENDATION: NOT READY
