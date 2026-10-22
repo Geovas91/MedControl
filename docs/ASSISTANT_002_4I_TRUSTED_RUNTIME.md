@@ -1,5 +1,7 @@
 # ASSISTANT-002.4I — trusted runtime verification
 
+See the [final security and operational review](ASSISTANT_002_4I_SECURITY_REVIEW.md) for corrected dispatch-time expiry/continuity/recovery checks and the unresolved privilege-separation and timing prerequisites. The reported service account also has administrative sudo permissions; non-root UID alone is not sufficient independence. No collector provisioning or runtime PASS is implied.
+
 ## Current decision
 
 **DEPLOYMENT IDENTITY: UNKNOWN. WHATSAPP ISOLATION: UNKNOWN. READY FOR LIVE MUTATIONS: NO.**
@@ -26,7 +28,7 @@ Times are UTC Unix milliseconds. Evidence must be issued no more than 30 seconds
 
 Coverage must include all six fixed scopes: all-user PM2, systemd and Cron, containers, Supabase schedulers and external senders. Workload IDs/kinds/states must exactly equal the reviewed inventory; missing, duplicate or extra workers fail. Unknown source coverage, independent senders, isolation failure or restart prevents verification. Digests identify the authority's retained collection records; they are not unauthenticated fingerprints accepted as authorization.
 
-`assessSignedRuntimeEvidence` returns informative JSON only. Only zero-argument `acquireTrustedRuntimeProof`, using the source-fixed policy and fresh authority request, can mint an opaque in-memory proof registered in a private WeakMap. `runtimeVerificationBoundary` cannot recreate it from JSON, flags, receipts or assessments. The proof additionally requires current isolated/disabled readiness observations. Both gates verify together only when all requirements pass. Proof expiry is checked at the boundary and again by the lifecycle blocker check; expiration does not inherit the ordinary 60-second preflight lifetime. Functional tenant/auth/availability/eligibility/cleanup checks remain intact.
+`assessSignedRuntimeEvidence` returns informative JSON only. Only zero-argument `acquireTrustedRuntimeProof`, using the source-fixed policy and fresh authority request, can mint an opaque in-memory proof registered in a private WeakMap. `runtimeVerificationBoundary` cannot recreate it from JSON, flags, receipts or assessments. The proof additionally requires current isolated/disabled readiness observations. Both gates verify together only when all requirements pass. Proof expiry is checked at the boundary, by lifecycle blockers, and at dashboard HTTP write dispatch using a private permit with wall-clock and monotonic bounds. Functional controls and scope are freshly rechecked before actions; changed process/control binding latches the current session closed. Expiration does not inherit the ordinary 60-second preflight lifetime. Read-only reconciliation retains ownership references even when authorization is unavailable; cleanup writes stay blocked. Functional tenant/auth/availability/eligibility/cleanup checks remain intact.
 
 ## Operational prerequisite — not implemented or provisioned here
 

@@ -64,8 +64,8 @@ test('unprovisioned real authority performs no network and cannot be enabled by 
 
 // Execute real verifier/boundary code with ONLY the policy and authority HTTP
 // replaced by ephemeral test fixtures. Production has no injection parameters.
-function authorityHarness(response?: () => Response | Promise<Response>) {
-  const f = runtimeEvidenceFixture(); let clock = f.now, calls = 0;
+function authorityHarness(response?: () => Response | Promise<Response>, fresh = true) {
+  const f = runtimeEvidenceFixture(); let clock = f.now, monotonic = 0, calls = 0;
   const native = createRequire(import.meta.url);
   const modules: Record<string, any> = {};
   function load(file: string) {
@@ -75,8 +75,10 @@ function authorityHarness(response?: () => Response | Promise<Response>) {
       fetch: async (url: URL, options: RequestInit) => {
         calls++; assert.equal(url.origin, new URL(f.policy.endpoint).origin); assert.equal(options.redirect, 'error'); assert.equal(options.cache, 'no-store');
         if (response) return response();
-        return Response.json(f.seal({ ...f.evidence, nonce: url.searchParams.get('nonce') }));
+        const requestedAt = clock; clock += 1500;
+        return Response.json(f.seal({ ...f.evidence, ...(fresh ? { issuedAt: requestedAt, sampledAt: [requestedAt, requestedAt + 1000] } : {}), nonce: url.searchParams.get('nonce') }));
       }, require: (name: string) => {
+        if (name === 'node:perf_hooks') return { performance: { now: () => monotonic } };
         if (name.includes('runtime-trust-policy')) return { runtimeTrustPolicy: f.policy, expectedRuntimeScope };
         if (name.includes('signed-runtime-evidence')) return modules.signed;
         if (name.includes('contracts')) return { STAGING };
@@ -86,7 +88,7 @@ function authorityHarness(response?: () => Response | Promise<Response>) {
   }
   modules.signed = load('scripts/qa/lifecycle/signed-runtime-evidence.ts');
   const boundary = load('scripts/qa/lifecycle/runtime-verification.ts');
-  return { f, signed: modules.signed, boundary, calls: () => calls, advance: (ms: number) => { clock += ms; } };
+  return { f, signed: modules.signed, boundary, calls: () => calls, advance: (ms: number) => { clock += ms; }, advanceMonotonic: (ms: number) => { monotonic += ms; } };
 }
 
 test('only live fixed-policy acquisition mints a proof that verifies both runtime gates; copy/replay/expiry fail closed', async () => {
@@ -110,4 +112,52 @@ test('authority transport failure and oversized responses return sanitized failu
   assert.equal(result.proof, undefined); assert.ok(!JSON.stringify(result).includes('secret'));
   const huge = authorityHarness(() => new Response('x'.repeat(32769)));
   assert.equal((await huge.signed.acquireTrustedRuntimeProof()).reason, 'evidence_size_rejected');
+});
+
+test('runtime session rejects JSON permits, clock rollback, expiry and inaccessible authority', async () => {
+  const h = authorityHarness(), session = new h.signed.RuntimeSession();
+  const obtained = await h.signed.acquireTrustedRuntimeProof();
+  assert.equal(session.observe(JSON.parse(JSON.stringify(obtained.proof))), 'unavailable');
+  assert.equal(session.authorize(), false);
+  assert.equal(session.observe(obtained.proof), 'observed'); assert.equal(session.authorize(), true);
+  h.advance(-1); assert.equal(session.valid(), false); h.advance(1);
+  assert.equal(session.valid(), false); // Rejected proof cannot revive when clocks recover.
+  h.advance(30_000); assert.equal(session.valid(), false);
+  assert.equal(session.observe(undefined), 'unavailable'); assert.equal(session.authorize(), false);
+});
+
+test('monotonic expiration cannot be extended by a stalled wall clock', async () => {
+  const h = authorityHarness(), session = new h.signed.RuntimeSession();
+  const obtained = await h.signed.acquireTrustedRuntimeProof();
+  session.observe(obtained.proof); assert.equal(session.authorize(), true);
+  h.advanceMonotonic(30_000); assert.equal(session.valid(), false);
+});
+
+test('a fresh signature/nonce cannot authorize an observation issued before the challenge', async () => {
+  const h = authorityHarness(undefined, false);
+  const obtained = await h.signed.acquireTrustedRuntimeProof();
+  assert.equal(obtained.proof, undefined); assert.equal(obtained.reason, 'evidence_expired');
+});
+
+test('session latches restart/control changes and only a new explicit session can bind the reviewed new process', async () => {
+  const h = authorityHarness(), session = new h.signed.RuntimeSession();
+  const initial = await h.signed.acquireTrustedRuntimeProof();
+  assert.equal(session.observe(initial.proof), 'observed'); assert.equal(session.authorize(), true);
+  h.f.evidence.before.startTicks = h.f.evidence.after.startTicks = '999999';
+  const restarted = await h.signed.acquireTrustedRuntimeProof();
+  assert.ok(restarted.proof); assert.equal(session.observe(restarted.proof), 'changed'); assert.equal(session.valid(), false);
+  assert.equal(session.observe(initial.proof), 'changed'); assert.equal(session.authorize(), false);
+  const recovery = new h.signed.RuntimeSession();
+  assert.equal(recovery.observe(restarted.proof), 'observed'); assert.equal(recovery.authorize(), true);
+});
+
+test('binding is deterministic across source evidence refresh/order but changes for serving configuration', () => {
+  const f = runtimeEvidenceFixture();
+  const before = assessSignedRuntimeEvidence(f.seal(), f.evidence.nonce, f.policy, f.now).binding;
+  f.evidence.workloads.reverse(); f.evidence.workloads[0].source = 'd'.repeat(64);
+  f.evidence.before = Object.fromEntries(Object.entries(f.evidence.before).reverse()) as typeof f.evidence.before;
+  const same = assessSignedRuntimeEvidence(f.seal(), f.evidence.nonce, f.policy, f.now);
+  assert.equal(same.state, 'verified'); assert.equal(same.binding, before);
+  f.evidence.before.uid = f.evidence.after.uid = 1002;
+  assert.notEqual(assessSignedRuntimeEvidence(f.seal(), f.evidence.nonce, f.policy, f.now).binding, before);
 });

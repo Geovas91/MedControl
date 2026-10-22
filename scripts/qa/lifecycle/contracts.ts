@@ -41,4 +41,7 @@ export interface LifecycleAdapter {
   isolation?(journal: Journal): Promise<boolean>;
 }
 export class QaError extends Error { readonly code: string; constructor(code: string) { super(code); this.code = code; } }
+// Raised only by the browser's authorization step before any click/dispatch.
+// Transport timeouts/aborted requests must NEVER be classified this way.
+export class MutationNotDispatched extends QaError { constructor() { super('mutation_not_dispatched'); } }
 export function requireQa(condition: unknown, code: string): asserts condition { if (!condition) throw new QaError(code); }

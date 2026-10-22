@@ -1,4 +1,5 @@
-import { createPublicKey, randomBytes, verify } from 'node:crypto';
+import { createHash, createPublicKey, randomBytes, verify } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { expectedRuntimeScope, runtimeTrustPolicy } from './runtime-trust-policy.ts';
 
 export const evidenceDomain = 'clinicontrol-independent-runtime-v1\0';
@@ -20,9 +21,9 @@ export type RuntimeTrustPolicy = {
   origin: string; project: string; host: string; release: Release; cwd: string; launcher: string; proxyConfig: string; isolationPolicy: string; inventory: string;
   workloads: { id: string; kind: Workload['kind']; state: Workload['state'] }[];
 };
-export type EvidenceAssessment = { state: 'verified' | 'rejected'; reason: string; expiresAt?: number };
+export type EvidenceAssessment = { state: 'verified' | 'rejected'; reason: string; expiresAt?: number; binding?: string };
 type RuntimeProof = Readonly<{ readonly kind: 'independent-runtime-proof' }>;
-const proofs = new WeakMap<object, { origin: string; project: string; expiresAt: number }>();
+const proofs = new WeakMap<object, { origin: string; project: string; expiresAt: number; acquiredAt: number; monotonicDeadline: number; binding: string }>();
 const hex = (value: unknown, length = 64) => typeof value === 'string' && new RegExp(`^[a-f0-9]{${length}}$`).test(value);
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const exact = (value: unknown, keys: string) => object(value) && Object.keys(value).sort().join(',') === keys.split(',').sort().join(',');
@@ -47,7 +48,7 @@ function validPolicy(policy: RuntimeTrustPolicy, now: number) {
 /** Pure cryptographic/semantic assessment. Its returned JSON NEVER authorizes a
  * gate. Only the private proof minted by the fixed-policy acquisition path can.
  */
-export function assessSignedRuntimeEvidence(envelope: unknown, nonce: string, policy: RuntimeTrustPolicy, now = Date.now()): EvidenceAssessment {
+export function assessSignedRuntimeEvidence(envelope: unknown, nonce: string, policy: RuntimeTrustPolicy, now = Date.now(), requestedAt = now - 30_000): EvidenceAssessment {
   try {
     if (!validPolicy(policy, now)) return fail('trust_policy_invalid');
     if (!/^[a-f0-9]{64}$/.test(nonce) || !exact(envelope, 'keyId,payload,signature')) return fail('envelope_invalid');
@@ -61,7 +62,7 @@ export function assessSignedRuntimeEvidence(envelope: unknown, nonce: string, po
     if (JSON.stringify(raw) !== text || !exact(raw, 'schema,nonce,audience,origin,project,host,issuedAt,expiresAt,release,before,after,sampledAt,pm2,listener,proxy,isolation,inventory,coverage,workloads')) return fail('evidence_schema_invalid');
     const e = raw as unknown as RuntimeEvidence;
     if (e.schema !== 1 || e.nonce !== nonce || e.audience !== 'assistant-lifecycle' || e.origin !== policy.origin || e.project !== policy.project || e.host !== policy.host) return fail('evidence_scope_mismatch');
-    if (![e.issuedAt, e.expiresAt].every(Number.isSafeInteger) || e.issuedAt > now || now - e.issuedAt > 30_000 || e.expiresAt <= now || e.expiresAt - e.issuedAt > 30_000 || e.expiresAt > policy.keyNotAfter) return fail('evidence_expired');
+    if (![requestedAt, e.issuedAt, e.expiresAt].every(Number.isSafeInteger) || e.issuedAt < requestedAt || e.issuedAt > now || now - e.issuedAt > 30_000 || e.expiresAt <= now || e.expiresAt - e.issuedAt > 30_000 || e.expiresAt > policy.keyNotAfter) return fail('evidence_expired');
     if (!exact(e.release, 'commit,artifact,build,node,provenance') || Object.entries(policy.release).some(([key, value]) => e.release[key as keyof Release] !== value)) return fail('release_mismatch');
     const processKeys = 'pid,uid,startTicks,boot,cwd,artifact,node,launcher';
     if (!exact(e.before, processKeys) || !exact(e.after, processKeys) || Object.keys(e.before).some(key => e.before[key as keyof ProcessIdentity] !== e.after[key as keyof ProcessIdentity]) ||
@@ -83,7 +84,12 @@ export function assessSignedRuntimeEvidence(envelope: unknown, nonce: string, po
           workload.kind === 'app' && workload.pid !== e.before.pid) return fail('sender_isolation_unverified');
       } else if (!['paused', 'stopped'].includes(workload.state) || workload.pid !== 0 || workload.artifact !== 'none' || workload.mode !== 'none' || workload.whatsapp !== 'none') return fail('sender_isolation_unverified');
     }
-    return { state: 'verified', reason: 'independent_signed_runtime_evidence', expiresAt: e.expiresAt };
+    // Exclude per-request timestamps/source digests, retain every serving and
+    // sender identity/control. A restart or changed control breaks continuity.
+    const binding = createHash('sha256').update(JSON.stringify([e.host, e.release, e.before, e.pm2, e.listener, e.proxy, e.isolation.policy, e.inventory,
+      e.workloads.map(item => Object.fromEntries(Object.entries(item).filter(([key]) => key !== 'source'))).sort((a, b) => String(a.id).localeCompare(String(b.id)))],
+    (_key, value) => object(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : value)).digest('hex');
+    return { state: 'verified', reason: 'independent_signed_runtime_evidence', expiresAt: e.expiresAt, binding };
   } catch { return fail('evidence_invalid'); }
 }
 
@@ -96,16 +102,18 @@ export async function acquireTrustedRuntimeProof(): Promise<{ proof?: RuntimePro
   if (!policy) return { reason: 'independent_authority_not_provisioned' };
   if (!validPolicy(policy, Date.now())) return { reason: 'trust_policy_invalid' };
   try {
+    const requestedAt = Date.now();
     const nonce = randomBytes(32).toString('hex'), url = new URL(policy.endpoint);
     url.searchParams.set('nonce', nonce);
     const response = await fetch(url, { redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(5000), headers: { Accept: 'application/json' } });
     if (!response.ok || !response.body) return { reason: 'independent_authority_unavailable' };
     const reader = response.body.getReader(); let bytes = 0; const chunks: Uint8Array[] = [];
     while (true) { const part = await reader.read(); if (part.done) break; bytes += part.value.length; if (bytes > 32768) { await reader.cancel(); return { reason: 'evidence_size_rejected' }; } chunks.push(part.value); }
-    const assessment = assessSignedRuntimeEvidence(JSON.parse(Buffer.concat(chunks).toString('utf8')), nonce, policy);
-    if (assessment.state !== 'verified' || assessment.expiresAt === undefined) return { reason: assessment.reason };
+    const assessment = assessSignedRuntimeEvidence(JSON.parse(Buffer.concat(chunks).toString('utf8')), nonce, policy, Date.now(), requestedAt);
+    if (assessment.state !== 'verified' || assessment.expiresAt === undefined || !assessment.binding) return { reason: assessment.reason };
     const proof: RuntimeProof = Object.freeze({ kind: 'independent-runtime-proof' });
-    proofs.set(proof, { origin: policy.origin, project: policy.project, expiresAt: assessment.expiresAt });
+    const acquiredAt = Date.now();
+    proofs.set(proof, { origin: policy.origin, project: policy.project, expiresAt: assessment.expiresAt, acquiredAt, monotonicDeadline: performance.now() + assessment.expiresAt - acquiredAt, binding: assessment.binding });
     return { proof, reason: assessment.reason };
   } catch { return { reason: 'independent_authority_unavailable' }; }
 }
@@ -117,5 +125,35 @@ export function authenticRuntimeProof(proof: unknown, origin: string): boolean {
 export function runtimeProofDeadline(proof: unknown, origin: string): number | undefined {
   if (!object(proof)) return undefined;
   const entry = proofs.get(proof);
-  return entry && entry.origin === origin && entry.project === expectedRuntimeScope.project && entry.expiresAt > Date.now() ? entry.expiresAt : undefined;
+  const now = Date.now();
+  if (!entry || entry.origin !== origin || entry.project !== expectedRuntimeScope.project) return undefined;
+  if (now < entry.acquiredAt || entry.expiresAt <= now || performance.now() >= entry.monotonicDeadline) { proofs.delete(proof); return undefined; }
+  return entry.expiresAt;
+}
+
+export function runtimeProofBinding(proof: unknown, origin: string): string | undefined {
+  return runtimeProofDeadline(proof, origin) !== undefined ? proofs.get(proof as object)?.binding : undefined;
+}
+
+/** A session never silently rebinds to a new process/control set. No JSON or
+ * assessment can populate its private permit; only an acquired live proof can.
+ * New explicit recovery starts a new session, retaining the durable journal.
+ */
+export class RuntimeSession {
+  #binding?: string;
+  #changed = false;
+  #latest?: unknown;
+  #permit?: unknown;
+  clear() { this.#latest = undefined; this.#permit = undefined; }
+  observe(proof: unknown): 'observed' | 'unavailable' | 'changed' {
+    this.clear();
+    if (this.#changed) return 'changed';
+    const binding = runtimeProofBinding(proof, expectedRuntimeScope.origin);
+    if (!binding) return 'unavailable';
+    if (this.#binding && this.#binding !== binding) { this.#changed = true; return 'changed'; }
+    this.#binding ??= binding; this.#latest = proof;
+    return 'observed';
+  }
+  authorize() { this.#permit = this.#latest; return this.valid(); }
+  valid() { return runtimeProofDeadline(this.#permit, expectedRuntimeScope.origin) !== undefined; }
 }

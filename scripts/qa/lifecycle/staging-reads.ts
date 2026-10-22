@@ -2,11 +2,11 @@ import { createServerClient } from '@supabase/ssr';
 import type { BrowserContext, Page } from '@playwright/test';
 import { getPlanEntitlements } from '../../../config/plans.ts';
 import { getClinicDayRange } from '../../../lib/dashboard/timezone.ts';
-import { PROJECT, STAGING, requireQa, type Appointment, type Gate, type Journal, type Patient, type Preflight, type Proposal, type Scope, type Slot } from './contracts.ts';
+import { PROJECT, STAGING, blockers, requireQa, type Appointment, type Gate, type Journal, type Patient, type Preflight, type Proposal, type Scope, type Slot } from './contracts.ts';
 import type { LifecycleReads } from './browser.ts';
 import { canonicalSlots, discoverSchedule, futureDates, qaProfessionals } from './discovery.ts';
 import { runtimeVerificationBoundary } from './runtime-verification.ts';
-import { acquireTrustedRuntimeProof } from './signed-runtime-evidence.ts';
+import { acquireTrustedRuntimeProof, RuntimeSession } from './signed-runtime-evidence.ts';
 
 type Row = Record<string, unknown>;
 export function publicKeyOnly(key: string) {
@@ -78,9 +78,11 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
       return { id: String(row.id), clinic: String(row.clinic_id), actor: String(row.actor_user_id), kind: row.tool_name === 'create_appointment' ? 'create' : row.tool_name === 'reschedule_appointment' ? 'reschedule' : 'cancel', status: row.status === 'pending' && Date.parse(String(row.expires_at)) <= Date.now() ? 'expired' : String(row.status), mutationExecuted: row.mutation_executed_at !== null, patient: args.patient_id as string | undefined, appointment: args.appointment_id as string | undefined, professional: args.professional_clinic_member_id as string | undefined, date: args.local_date as string | undefined, time: args.local_time as string | undefined, duration: args.duration_minutes as number | undefined };
     });
   };
-  return {
+  const runtimeSession = new RuntimeSession();
+  const reads: LifecycleReads = {
     patients, appointments, proposals,
     async preflight(patient) {
+      runtimeSession.clear();
       const freshUser = await client.auth.getUser();
       requireQa(!freshUser.error && freshUser.data.user?.id === scope.actor, 'session_changed');
       const active = await rows('clinic_members', 'id,clinic_id,role,status', { user_id: scope.actor, status: 'active' });
@@ -99,6 +101,7 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
       const formResponse = await page.request.get(`${STAGING}/dashboard/patients/${patient ? `${patient}/edit` : 'new'}`);
       const form = formResponse.ok() && new URL(formResponse.url()).origin === STAGING ? await formResponse.text() : '';
       const independent = await acquireTrustedRuntimeProof();
+      requireQa(runtimeSession.observe(independent.proof) !== 'changed', 'runtime_identity_changed');
       const runtime = runtimeVerificationBoundary(new URL(page.url()).origin, ready, independent.proof);
       return {
         origin: new URL(page.url()).origin, project: PROJECT, scope, slots, checkedAt: Date.now(), runtime: runtime.observations,
@@ -118,9 +121,21 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
         }
       } satisfies Preflight;
     },
+    async authorizeMutation(journal, cleanupMode) {
+      const flight = await reads.preflight(journal.patient);
+      const failed = blockers(flight).filter(key => !(key === 'patientEligibility' && !journal.patient) && (!cleanupMode || !['availability', 'patientEligibility', 'slots'].includes(key)));
+      requireQa(failed.length === 0, 'preflight_blocked');
+      requireQa(JSON.stringify(flight.scope) === JSON.stringify(journal.scope), 'scope_changed');
+      requireQa(runtimeSession.authorize(), 'runtime_mutation_permit_expired_or_missing');
+      reads.assertMutationLease!();
+    },
+    assertMutationLease() {
+      requireQa(runtimeSession.valid(), 'runtime_mutation_permit_expired_or_missing');
+    },
     async audit(journal, appointment) { return (await rows('appointment_events', 'event_type', { clinic_id: journal.scope.clinic, appointment_id: appointment })).map(row => String(row.event_type)); },
     async assertOneShot(journal, proposal) {
       requireQa(proposal.clinic === journal.scope.clinic && proposal.actor === journal.scope.actor && proposal.status === 'executed' && proposal.mutationExecuted, 'duplicate_test_scope_invalid');
+      await reads.authorizeMutation!(journal, false); reads.assertMutationLease!();
       const result = await client.rpc('execute_claimed_assistant_pending_action_for_current_user', { p_action_id: proposal.id });
       requireQa(result.error?.code === '42501', 'duplicate_execution_not_rejected');
     },
@@ -154,4 +169,5 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
       } finally { await other.clearCookies().catch(() => {}); await other.close().catch(() => {}); }
     }
   };
+  return reads;
 }
