@@ -4,6 +4,7 @@ import { getPlanEntitlements } from '../../../config/plans.ts';
 import { getClinicDayRange } from '../../../lib/dashboard/timezone.ts';
 import { PROJECT, STAGING, requireQa, type Appointment, type Gate, type Journal, type Patient, type Preflight, type Proposal, type Scope, type Slot } from './contracts.ts';
 import type { LifecycleReads } from './browser.ts';
+import { canonicalSlots, discoverSchedule, futureDates, qaProfessionals } from './discovery.ts';
 
 type Row = Record<string, unknown>;
 export function publicKeyOnly(key: string) {
@@ -16,7 +17,7 @@ const check = (condition: unknown, source: string): Gate => ({ state: condition 
 /** Normal browser session -> read-only PostgREST verification. No service role,
  * table writes or synthetic JWT. Only the one-shot negative test uses the same
  * authorized mutation RPC as the application, after a verified execution. */
-export async function stagingReads(page: Page, context: BrowserContext, env: Record<string, string | undefined>): Promise<LifecycleReads> {
+export async function stagingReads(page: Page, context: BrowserContext, env: Record<string, string | undefined>, recovery?: Scope): Promise<LifecycleReads> {
   requireQa(env.ASSISTANT_QA_SUPABASE_URL === PROJECT && publicKeyOnly(env.ASSISTANT_QA_PUBLISHABLE_KEY ?? ''), 'approved_public_supabase_configuration_required');
   const client = createServerClient(PROJECT, env.ASSISTANT_QA_PUBLISHABLE_KEY!, {
     cookies: {
@@ -42,9 +43,15 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
   requireQa(memberships.length === 1 && memberships[0].role === 'owner', 'single_qa_owner_membership_required');
   const clinic = await rows('clinics', 'id,name,timezone,tenant_type', { id: String(memberships[0].clinic_id) });
   requireQa(clinic.length === 1 && clinic[0].tenant_type === 'qa' && clinic[0].name === env.ASSISTANT_QA_CLINIC, 'qa_tenant_type_required');
+  requireQa(!recovery || recovery.actor === actor.data.user.id && recovery.clinic === clinic[0].id, 'recovery_scope_mismatch');
   const professionals = await rpc('list_clinic_members_for_current_user', { target_clinic_id: clinic[0].id }) as Row[];
-  const professional = professionals.find(row => row.id === env.ASSISTANT_QA_PROFESSIONAL_MEMBER && row.status === 'active' && row.is_professional === true && typeof row.full_name === 'string' && row.full_name.startsWith('QA '));
-  requireQa(professional, 'valid_qa_professional_required');
+  // The engine steps from each working window's start (which need not be :00).
+  // Preserve one-minute enumeration, then select only canonical :00/:30 slots.
+  const readSlots = async (member: string, date: string) => await rpc('get_professional_available_slots', { p_clinic_id: clinic[0].id, p_clinic_member_id: member, p_local_date: date, p_duration_minutes: 30, p_slot_interval_minutes: 1, p_buffer_before_minutes: 0, p_buffer_after_minutes: 0 }) as Row[];
+  const candidates = qaProfessionals(professionals, recovery?.professional ?? env.ASSISTANT_QA_PROFESSIONAL_MEMBER);
+  const dates = futureDates(getClinicDayRange(String(clinic[0].timezone)).localDate, recovery ? undefined : env.ASSISTANT_QA_DATE);
+  const discovered = recovery ? { professional: candidates[0], date: dates[0] } : await discoverSchedule(candidates, dates, readSlots);
+  const professional = discovered.professional;
   const scope: Scope = { actor: actor.data.user.id, clinic: String(clinic[0].id), professional: String(professional.id), professionalUser: String(professional.user_id), professionalName: String(professional.full_name), clinicName: String(clinic[0].name), timeZone: String(clinic[0].timezone) };
   const patients = async (journal: Journal): Promise<Patient[]> => (await rows('patients', 'id,clinic_id,full_name,created_by,created_at,status', { clinic_id: journal.scope.clinic, full_name: journal.patientName })).map(row => ({ id: String(row.id), clinic: String(row.clinic_id), name: String(row.full_name), createdBy: String(row.created_by), createdAt: String(row.created_at), status: String(row.status) }));
   const appointments = async (journal: Journal): Promise<Appointment[]> => {
@@ -82,10 +89,9 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
       const members = await rpc('list_clinic_members_for_current_user', { target_clinic_id: scope.clinic }) as Row[];
       const scheduler = await rpc('get_appointment_automation_scheduler_status_for_current_user', { p_clinic_id: scope.clinic }) as Row[];
       const calendars = await rpc('list_google_calendar_integration_status_for_current_user', { p_clinic_id: scope.clinic }) as Row[];
-      const date = env.ASSISTANT_QA_DATE ?? '';
+      const date = discovered.date;
       const futureDate = /^\d{4}-\d{2}-\d{2}$/.test(date) && date > getClinicDayRange(scope.timeZone).localDate;
-      const rawSlots = futureDate ? await rpc('get_professional_available_slots', { p_clinic_id: scope.clinic, p_clinic_member_id: scope.professional, p_local_date: date, p_duration_minutes: 30, p_slot_interval_minutes: 1, p_buffer_before_minutes: 0, p_buffer_after_minutes: 0 }) as Row[] : [];
-      const slots: Slot[] = rawSlots.filter(row => /^(?:[01]\d|2[0-3]):(?:00|30)$/.test(String(row.local_start))).map(row => ({ date, time: String(row.local_start), startsAt: String(row.start_at), endsAt: String(row.end_at) }));
+      const slots: Slot[] = futureDate ? canonicalSlots(await readSlots(scope.professional, date), date).slice(0, 2) : [];
       const readyResponse = await page.request.get(`${STAGING}/api/ready`);
       const ready = readyResponse.ok() ? await readyResponse.json() : null;
       const formResponse = await page.request.get(`${STAGING}/dashboard/patients/${patient ? `${patient}/edit` : 'new'}`);

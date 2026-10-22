@@ -1,4 +1,16 @@
-# ASSISTANT-002.4B / 002.4E / 002.4F — controlled live preparation
+# ASSISTANT-002.4B / 002.4E / 002.4F / 002.4G — controlled live preparation
+
+## 002.4G current execution package
+
+Use `ASSISTANT_002_4G_OPERATOR.md` for the ordered backup/deployment/isolation/verification/preflight/recovery session. The earlier 002.4F procedure remains historical read-only collection guidance; its Node-24 streaming observer is separate from the new Node-22-compatible file-based release helper. Preserve the **current** Staging OpenAI configuration and behavior; any historical requirement to disable LLM flags is superseded.
+
+[Outbound protection PR #94](https://github.com/Geovas91/MedControl/pull/94) adds actual Resend/Calendar/WhatsApp boundary protection and an early Cron stop; PR #93 retains QA-only discovery and release-witness tooling. Neither is deployed. New runs discover a protected QA professional and two real future slots; no internal UUID/date is required. Recovery pins the encrypted journal's professional and verifies the authenticated actor/clinic. Runtime deployment/WhatsApp gates remain UNKNOWN: receipts or readiness fields alone cannot authorize writes. A trusted verifier integration is still a separate reviewed prerequisite, explicitly described in the operator package.
+
+READY FOR READ-ONLY PREFLIGHT: YES
+
+READY FOR CONTROLLED STAGING DEPLOYMENT: YES (reviewed integrated candidate/operator prerequisites required)
+
+READY FOR LIVE MUTATIONS: NO
 
 ## 002.4F — read-only DonWeb runtime evidence procedure
 
@@ -51,7 +63,7 @@ curl.exe --silent --output NUL --write-out 'ready_http=%{http_code}\n' --max-tim
 
 Do not follow redirects or attach auth/cookies. Health/readiness success establishes availability only; neither endpoint returns artifact/process provenance. Existing authenticated lifecycle preflight may separately read the safe readiness email classification, QA tenant scheduler flags and calendar projection under its existing opt-in. It still stops before fixtures on UNKNOWN deployment/WhatsApp gates.
 
-7. In existing read-only infrastructure consoles, inventory **all** PM2 applications/owners/homes, CloudPanel sites, system and user systemd services/timers, all users' cron/anacron jobs, container workloads, external schedulers/CI jobs, and Supabase cron/Edge functions/webhooks. Do not execute a job, invoke `/api/internal/appointment-automations/run`, fetch database payloads, edit/disable schedules or install inspection tools. An administrator should inspect definitions privately and issue a sanitized table: workload alias, supervisor kind, owner alias, PID/build digest if applicable, active/scheduled state, outbound capability, review UTC time/source, coverage limitations. Use opaque aliases for private names and omit arguments entirely; do not hash credentials or private payloads. Record unavailable permissions as UNKNOWN; the collector's direct child list is not a host-wide inventory. Inspect effective configuration privately through the existing authorized manager and report only predicates (e.g. staging origin/project match, required LLM flags remain disabled, provider isolation demonstrated), never raw values. Do not alter any variable, including `APPOINTMENT_ASSISTANT_LLM_ENABLED` and `APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED`.
+7. In existing read-only infrastructure consoles, inventory **all** PM2 applications/owners/homes, CloudPanel sites, system and user systemd services/timers, all users' cron/anacron jobs, container workloads, external schedulers/CI jobs, and Supabase cron/Edge functions/webhooks. Do not execute a job, invoke `/api/internal/appointment-automations/run`, fetch database payloads, edit/disable schedules or install inspection tools. An administrator should inspect definitions privately and issue a sanitized table: workload alias, supervisor kind, owner alias, PID/build digest if applicable, active/scheduled state, outbound capability, review UTC time/source, coverage limitations. Use opaque aliases for private names and omit arguments entirely; do not hash credentials or private payloads. Record unavailable permissions as UNKNOWN; the collector's direct child list is not a host-wide inventory. Inspect effective configuration privately through the existing authorized manager and report only predicates (e.g. staging origin/project match, current OpenAI configuration remains unchanged, provider isolation demonstrated), never raw values. Do not alter any variable, including `APPOINTMENT_ASSISTANT_LLM_ENABLED` and `APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED`.
 
 8. Independently review the resulting source/build/process observations, proxy mapping, worker inventory and outbound policy evidence. Record operator identity using an approved non-sensitive alias, host alias, UTC interval, reviewed PR SHA, collector file digest, scope, source of each assertion and explicit unknowns. Retain private evidence securely; do not commit it. No real WhatsApp/email/calendar test is part of collection. No egress probe should call a provider's send endpoint.
 
@@ -133,8 +145,8 @@ For read-only preflight, configure the invoking process securely:
 - Existing `ASSISTANT_QA_EMAIL`, `ASSISTANT_QA_PASSWORD`, `ASSISTANT_QA_CLINIC`. This stricter runner supports normal `qa.owner.norte` / `qa.owner.sur` accounts only, to verify clinic-wide safe projections and patient retirement permissions. No password guessing/reset.
 - `ASSISTANT_QA_SUPABASE_URL=https://fnknctihnrryntkjqxeo.supabase.co` (exact approved Staging project).
 - `ASSISTANT_QA_PUBLISHABLE_KEY`: public publishable/anon key only. Secret/service-role keys are rejected. Queries reuse cookies from the actual application login, never service-role impersonation.
-- `ASSISTANT_QA_PROFESSIONAL_MEMBER`: exact authorized active QA professional's clinic-member reference, supplied privately.
-- `ASSISTANT_QA_DATE`: actual future clinic-local ISO date with at least two distinct 30-minute half-hour slots on the same day. Gates re-run before writes, so availability can still block later stages.
+- Optional `ASSISTANT_QA_PROFESSIONAL_MEMBER`: restrict discovery to this protected active QA member. Invalid explicit values block; they never broaden the search. Recovery uses the encrypted journal's existing professional.
+- Optional `ASSISTANT_QA_DATE`: restrict discovery to one valid future clinic-local ISO date. Otherwise search the next fourteen days, at most five protected QA professionals and two canonical 30-minute half-hour slots on the same day. Gates refresh before writes, so availability may still block later stages.
 
 Run `npm run test:assistant:qa:lifecycle -- --preflight`. Output is a static gate/status summary, never scope IDs, fixture names, cookies, prompts or database/provider errors. This checks authenticated membership, QA tenant type, subscription, professional, slots, current email readiness, scheduler settings, safe calendar status and supported patient form. Before patient creation, actual eligibility is explicitly deferred; it must pass the canonical RPC immediately after creation and before any appointment proposal.
 

@@ -1,5 +1,13 @@
 # ASSISTANT-002.4E / 002.4F — lifecycle boundary inventory
 
+## 002.4G current boundaries
+
+[PR #94](https://github.com/Geovas91/MedControl/pull/94), branch `codex/staging-outbound-guard`, is a separate application-code dependency of QA PR #93. Its shared policy guards the actual Resend transport and Google exchange/refresh/revoke/create/update/delete transports; WhatsApp still rejects. Its Cron runner stops before an admin client/claim when isolated and rejects malformed configuration. All Resend callers, including immediate emails, reminders/review invitations and support notifications, share the guard. OpenAI and PayPal are outside the appointment communications switch. Normal production defaults are preserved; explicit Staging mode/scope is required. No new provider-success simulation or bypass exists.
+
+PR #93 contains only QA tooling/docs: bounded professional/date/slot discovery through existing authorized RPCs; recovery pinned to encrypted journal scope; and optional full build fingerprint/check/start witness. The latter is not a trusted attestation endpoint: unsigned/app-written receipts cannot authorize mutations. POSIX ownership/mode/symlink checks are implemented; ACL/mount/privileged-writer policy, actual launch/proxy binding, worker inventory and target Linux/Node-22 execution remain operational prerequisites. Existing runtime gates deliberately remain UNKNOWN until a separately reviewed trusted verifier exists.
+
+The operator supplied checkout `eec7274`, `/var/www/clinicontrol`, a historical listener PID/port/proxy match, 200 health/readiness, stable sampled artifacts, one localhost Cron and email readiness ready. These improve the inventory but do not prove outbound isolation or the reviewed artifact is loaded. No fresh remote collection occurred here. See `ASSISTANT_002_4G_OPERATOR.md` for the ten-step execution package and explicit modifying-command boundaries. No application authorization/RLS/appointment-confirmation change, migration, remote configuration, deployment, provider call or fixture mutation occurred during this task.
+
 ## 002.4F source audit and runtime limits (2026-10-21)
 
 Scope: source at `c893be6da9ac5496ca3fdf3a27570d82f26b8119`, plus the operator-only observer/tests/docs in this change. No deployed process, secret, database setting or server configuration was read. Repository absence findings apply only to this source tree.

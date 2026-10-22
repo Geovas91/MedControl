@@ -17,6 +17,9 @@ try {
   requireQa(/^qa\.owner\.(norte|sur)@clinicontrol\.mx$/.test(process.env.ASSISTANT_QA_EMAIL ?? '') && Boolean(process.env.ASSISTANT_QA_PASSWORD), 'qa_owner_credentials_required');
   requireQa(process.env.ASSISTANT_QA_CLINIC === `CliniControl QA ${process.env.ASSISTANT_QA_EMAIL!.includes('.norte@') ? 'Norte' : 'Sur'}`, 'qa_clinic_mismatch');
   if (mode !== '--preflight') requireQa(process.env.ASSISTANT_QA_LIFECYCLE_MUTATIONS === '1' && Boolean(process.env.ASSISTANT_QA_JOURNAL_KEY), 'mutation_opt_in_and_private_journal_required');
+  // Recovery is bound to its authenticated encrypted journal, never rediscovered
+  // onto another professional/date because today's availability changed.
+  if (mode === '--recover') journal = openJournal({ directory: process.env.ASSISTANT_QA_JOURNAL_DIRECTORY, key: process.env.ASSISTANT_QA_JOURNAL_KEY!, run: args[1] });
   const chrome = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
   browser = await chromium.launch({ headless: true, ...(existsSync(chrome) ? { executablePath: chrome } : {}) });
   const context = await browser.newContext({ serviceWorkers: 'block' });
@@ -28,7 +31,7 @@ try {
   await page.getByLabel('Contraseña', { exact: true }).fill(process.env.ASSISTANT_QA_PASSWORD!);
   await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
   await page.waitForURL(`${STAGING}/dashboard**`);
-  const reads = await stagingReads(page, context, process.env);
+  const reads = await stagingReads(page, context, process.env, journal?.read().scope);
   const adapter = new BrowserLifecycleAdapter(page, reads, STAGING);
   const flight = await adapter.preflight();
   const failed = blockers(flight).filter(key => key !== 'patientEligibility' && (mode !== '--recover' || !['availability', 'slots'].includes(key)));
@@ -36,7 +39,7 @@ try {
     console.log(JSON.stringify({ status: failed.length ? 'BLOCKED' : 'READY_FOR_FIXTURE_STAGE', gates: flight.gates, blockers: failed, patientEligibility: 'DEFERRED_UNTIL_CREATION', mutations: 0 }));
     process.exitCode = failed.length ? 2 : 0;
   } else {
-    journal = openJournal({ directory: process.env.ASSISTANT_QA_JOURNAL_DIRECTORY, key: process.env.ASSISTANT_QA_JOURNAL_KEY!, ...(mode === '--recover' ? { run: args[1] } : { initial: newJournal(flight.scope) }) });
+    journal ??= openJournal({ directory: process.env.ASSISTANT_QA_JOURNAL_DIRECTORY, key: process.env.ASSISTANT_QA_JOURNAL_KEY!, initial: newJournal(flight.scope) });
     if (mode === '--recover') {
       await cleanup(adapter, journal); await cleanup(adapter, journal);
       console.log(JSON.stringify({ status: 'PASS', operation: 'exact_cleanup', activeAppointments: 0 }));

@@ -1,5 +1,46 @@
 # ASSISTANT-002.4 / 002.4B / 002.4E / 002.4F — QA execution report
 
+## 002.4G secure readiness results
+
+QA branch `codex/assistant-002-4-qa-automation` continues PR #93. [PR #94](https://github.com/Geovas91/MedControl/pull/94) (`codex/staging-outbound-guard`, `7db560e`) isolates application transport changes; neither PR is merged or deployed. QA adds bounded protected schedule discovery (up to five active synthetic professionals, fourteen future clinic dates and two real same-day half-hour slots), journal-bound recovery selection and an optional build/check/start witness. No UUID copy is required for new-run professional/date discovery. Explicit invalid filters block. No fixture is created by preflight.
+
+The dependency guards actual email/Calendar/WhatsApp boundaries and stops Cron before admin/queue access. Seven new tests verify isolated/invalid configuration, every protected transport, Cron, email readiness, unchanged production defaults and the real OpenAI transport under isolation against a synthetic HTTP double. OpenAI code/key/model/flags are unchanged. Environment mode/readiness alone remains insufficient evidence of runtime isolation.
+
+| Local validation | Result / scope |
+| --- | --- |
+| `npm run test:assistant:qa` on QA branch | 279 PASS / 0 FAIL / 0 SKIP; includes 4 discovery + 2 receipt tests |
+| `npm run test:assistant:qa:browser` on QA branch | 14 PASS / 0 FAIL; actual forms/component, simulated persistence |
+| Focused dependency tests: outbound, plan authority and Calendar | 71 PASS / 0 FAIL / 0 SKIP, including 7 new protection tests |
+| Full dependency unit suite | 765 PASS / 2 FAIL / 0 SKIP (767 total); not full-suite PASS |
+| Baseline recheck on unchanged QA/base files | The same two source-regex assertions fail in `professional-capability.test.ts` and `rbac-alignment.test.ts`; 6 PASS / 2 FAIL in those two suites. Their source/tests have no diff from main. Not modified to hide the failures. |
+| Lint, `npx tsc --noEmit --incremental false --pretty false`, `npm run build`, `git diff --check` | PASS on both branches |
+| Target Linux/Node 22 startup / actual isolation | NOT RUN; local Node 24 filesystem/network doubles only |
+| Remote CI | No remote checks reported; not CI PASS |
+
+During validation the existing runner VM harness needed the new policy import; adapted to load the real policy. A synthetic OpenAI fixture initially omitted required usage fields; corrected to exercise the real transport contract. The first worktree build failed on a dependency junction outside Turbopack's root; worktree-local locked dependencies resolved it. No dependency/lockfile changed. Existing module-type/color warnings and missing Supabase configuration messages during the isolated worktree build are not remote runtime evidence.
+
+DEPLOYMENT IDENTITY: UNKNOWN binding; operator-supplied checkout/listener/proxy observations are retained, not independently recollected here
+
+WHATSAPP ISOLATION: UNKNOWN remotely; local protected paths tested
+
+OTHER OUTBOUND CHANNELS: Resend/Calendar protected locally; runtime and independent senders UNKNOWN; OpenAI intentionally preserved
+
+BACKGROUND WORKERS: one reported Cron; complete inventory UNKNOWN
+
+RUNTIME EVIDENCE: previous operator report only; new witness/guard not deployed
+
+UNVERIFIED CONDITIONS: actual serving protected release, effective configuration/all workers, target startup, and trusted runtime-evidence integration
+
+REQUIRED OPERATOR COMMANDS: see `ASSISTANT_002_4G_OPERATOR.md` for read-only vs separately authorized modifying commands, exact prerequisites, rollback and recovery
+
+READY FOR READ-ONLY PREFLIGHT: YES
+
+READY FOR CONTROLLED STAGING DEPLOYMENT: YES (reviewed integrated candidate and operator prerequisites required)
+
+READY FOR LIVE LIFECYCLE EXECUTION: NO
+
+Remaining blockers in order: review both drafts; deploy/validate the isolated integrated candidate through the authorized operator; establish current process/build/origin and all-worker evidence; implement/review the trusted evidence bridge without an override; resolve any remaining conservative preflight gates before separately authorizing mutations. Receipts are never uploaded as approvals. No deployment, PM2 operation, remote configuration, migration, real fixture, provider request or live lifecycle was executed. Original incident remains NOT VERIFIED. Historical results follow below.
+
 ## 002.4F runtime verification preparation (2026-10-21)
 
 Starting head: `c893be6da9ac5496ca3fdf3a27570d82f26b8119`; same branch and draft PR #93. This increment adds only an operator-side read-only observer, focused tests and documentation. Application code, lifecycle gates, permissions, provider activation, dependencies, PM2 settings and migrations are unchanged.
