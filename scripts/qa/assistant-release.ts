@@ -30,7 +30,7 @@ export function artifactFingerprint(root: string, immutable = false, entries = r
     if (immutable && ((stat.mode & 0o022) !== 0 || stat.uid === process.getuid?.())) throw new Error('release_mutable_by_app');
     if (stat.isDirectory()) {
       for (const name of readdirSync(full).sort()) {
-        if (relative === 'node_modules' && name === '.bin') continue; // CLI shims are not runtime imports.
+        if (name === '.bin' && (relative === 'node_modules' || (relative.startsWith('node_modules/') && relative.endsWith('/node_modules')))) continue; // npm shims only at dependency boundaries.
         if (relative === '.next' && ['cache', 'dev', 'diagnostics', 'trace', 'trace-build', 'qa-release-receipt.json'].includes(name)) continue;
         visit(`${relative}/${name}`);
       }

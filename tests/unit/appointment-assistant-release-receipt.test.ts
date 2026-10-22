@@ -1,11 +1,62 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { artifactFingerprint, safeReceipt, verifyReceipt, type ReleaseReceipt } from '../../scripts/qa/assistant-release.ts';
+
+// Junctions exercise the same isSymbolicLink rejection on Windows without
+// requiring developer-mode file-symlink privileges; Linux uses npm-style files.
+function fixtureLink(root: string, relative: string) {
+  const target = path.join(root, 'target');
+  mkdirSync(target, { recursive: true });
+  writeFileSync(path.join(target, 'runtime.js'), 'synthetic');
+  const link = path.join(root, relative);
+  mkdirSync(path.dirname(link), { recursive: true });
+  symlinkSync(process.platform === 'win32' ? target : path.join(target, 'runtime.js'), link, process.platform === 'win32' ? 'junction' : 'file');
+}
+
+test('release excludes top-level and nested npm .bin symlinks deterministically while hashing runtime dependencies', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'qa-release-shims-'));
+  try {
+    mkdirSync(path.join(dir, 'node_modules'), { recursive: true });
+    writeFileSync(path.join(dir, 'node_modules', 'runtime.js'), 'covered');
+    const baseline = artifactFingerprint(dir, false, ['node_modules']);
+    for (const relative of [
+      'node_modules/.bin/top',
+      'node_modules/eslint-config-next/node_modules/.bin/semver',
+      'node_modules/postcss-import/node_modules/.bin/resolve',
+      'node_modules/tsconfig-paths/node_modules/.bin/json5',
+      'node_modules/node-exports-info/node_modules/.bin/semver',
+      'node_modules/tailwindcss/node_modules/.bin/resolve',
+      'node_modules/@babel/core/node_modules/.bin/semver',
+      'node_modules/@babel/helper-compilation-targets/node_modules/.bin/semver'
+    ]) fixtureLink(dir, relative);
+    assert.deepEqual(artifactFingerprint(dir, false, ['node_modules']), baseline);
+    assert.deepEqual(artifactFingerprint(dir, false, ['node_modules']), baseline);
+    writeFileSync(path.join(dir, 'node_modules', 'runtime.js'), 'changed-runtime');
+    assert.notEqual(artifactFingerprint(dir, false, ['node_modules']).artifact, baseline.artifact);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('release rejects symlinks outside npm shim boundaries, including runtime dependencies and application artifacts', () => {
+  for (const relative of [
+    'node_modules/pkg/runtime.js',
+    'node_modules/pkg/node_modules/dependency/runtime.js',
+    'node_modules/pkg/.bin/runtime.js',
+    'node_modules/pkg/not_node_modules/.bin/runtime.js',
+    '.next/server/runtime.js',
+    'public/node_modules/.bin/runtime.js'
+  ]) {
+    const dir = mkdtempSync(path.join(tmpdir(), 'qa-release-symlink-'));
+    try {
+      fixtureLink(dir, relative);
+      assert.throws(() => artifactFingerprint(dir, false, [relative.split('/')[0]]), /release_symlink/, relative);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  }
+});
 
 test('release dotenv loader works with Node CommonJS interop and preserves existing OpenAI settings', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'qa-release-env-'));
