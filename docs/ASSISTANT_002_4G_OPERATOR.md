@@ -1,5 +1,7 @@
 # ASSISTANT-002.4G — controlled Staging session
 
+Successor: [002.4I trusted runtime verification](ASSISTANT_002_4I_TRUSTED_RUNTIME.md) documents the implemented QA verifier and the still-required independent collector, trust root and inventory. No operational authority is provisioned; live lifecycle remains blocked. The observations and commands below retain their original collection context.
+
 Prepared locally; **none of the remote/modifying commands below was executed**. Do not merge/deploy or execute fixtures from this document without separate authorization. [QA PR #93](https://github.com/Geovas91/MedControl/pull/93) and [outbound protection PR #94](https://github.com/Geovas91/MedControl/pull/94) must first be independently reviewed. Use a reviewed integrated commit containing both changes, not either branch alone.
 
 ## Current evidence and prerequisites

@@ -1,9 +1,9 @@
 import { chromium } from '@playwright/test';
 import { existsSync } from 'node:fs';
-import { BrowserLifecycleAdapter } from './lifecycle/browser.ts';
+import { BrowserLifecycleAdapter, guardLifecycleWrite, type LifecycleReads } from './lifecycle/browser.ts';
 import { blockers, PROJECT, STAGING, requireQa, QaError } from './lifecycle/contracts.ts';
 import { newJournal, openJournal } from './lifecycle/journal.ts';
-import { cleanup, runLifecycle } from './lifecycle/runner.ts';
+import { cleanup, recoverOwned, runLifecycle } from './lifecycle/runner.ts';
 import { publicKeyOnly, stagingReads } from './lifecycle/staging-reads.ts';
 
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
@@ -23,7 +23,8 @@ try {
   const chrome = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ?? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
   browser = await chromium.launch({ headless: true, ...(existsSync(chrome) ? { executablePath: chrome } : {}) });
   const context = await browser.newContext({ serviceWorkers: 'block' });
-  await context.route('**/*', route => [STAGING, PROJECT].includes(new URL(route.request().url()).origin) ? route.continue() : route.abort());
+  let activeReads: LifecycleReads | undefined;
+  await context.route('**/*', route => [STAGING, PROJECT].includes(new URL(route.request().url()).origin) ? guardLifecycleWrite(route, activeReads) : route.abort());
   const page = await context.newPage(); page.setDefaultTimeout(20_000);
   await page.goto(`${STAGING}/login`);
   requireQa(new URL(page.url()).origin === STAGING, 'unexpected_origin');
@@ -32,9 +33,13 @@ try {
   await page.getByRole('button', { name: 'Iniciar sesión', exact: true }).click();
   await page.waitForURL(`${STAGING}/dashboard**`);
   const reads = await stagingReads(page, context, process.env, journal?.read().scope);
+  activeReads = reads;
   const adapter = new BrowserLifecycleAdapter(page, reads, STAGING);
   const flight = await adapter.preflight();
   const failed = blockers(flight).filter(key => key !== 'patientEligibility' && (mode !== '--recover' || !['availability', 'slots'].includes(key)));
+  // Failed runtime authorization must not suppress read-only reconciliation of
+  // the encrypted journal. It never grants cleanup permission or replays writes.
+  if (mode === '--recover' && failed.length) await recoverOwned(adapter, journal!);
   if (mode === '--preflight' || failed.length) {
     console.log(JSON.stringify({ status: failed.length ? 'BLOCKED' : 'READY_FOR_FIXTURE_STAGE', gates: flight.gates, runtime: flight.runtime, blockers: failed, patientEligibility: 'DEFERRED_UNTIL_CREATION', mutations: 0 }));
     process.exitCode = failed.length ? 2 : 0;

@@ -1,4 +1,4 @@
-import { blockers, QaError, requireQa, type Appointment, type Journal, type JournalStore, type LifecycleAdapter, type Proposal, type Slot } from './contracts.ts';
+import { blockers, MutationNotDispatched, QaError, requireQa, type Appointment, type Journal, type JournalStore, type LifecycleAdapter, type Proposal, type Slot } from './contracts.ts';
 
 function write(store: JournalStore, patch: Partial<Journal>) { const prior = store.read(); store.save({ ...prior, ...patch, revision: prior.revision + 1 }); }
 async function gate(adapter: LifecycleAdapter, journal: Journal, cleanupMode = false) {
@@ -49,21 +49,22 @@ async function proposal(adapter: LifecycleAdapter, store: JournalStore, kind: Pr
   return fresh[0];
 }
 export async function cleanup(adapter: LifecycleAdapter, store: JournalStore) {
-  // Every cleanup attempt re-establishes scope/isolation. A cleanup failure must
-  // never be masked by a prior lifecycle success.
-  await gate(adapter, store.read(), true);
+  // Discover exact owned resources read-only even if runtime evidence is down.
+  // Authorization is still mandatory before every cleanup write.
   await recoverOwned(adapter, store);
+  await gate(adapter, store.read(), true);
   let journal = store.read();
   if (journal.patient) {
     for (const pending of await adapter.proposals(journal)) if (pending.status === 'pending') {
+      await gate(adapter, store.read(), true);
       write(store, { step: 'cleanup_pending_proposal' });
       await adapter.cancelProposal(store.read(), pending);
     }
     for (const row of owned(journal, await adapter.appointments(journal))) if (row.status !== 'cancelled') {
       requireQa(journal.appointments.length === 1, 'cleanup_multiple_appointments_requires_review');
       await proposal(adapter, store, 'cancel');
-      write(store, { step: 'cleanup_confirm_cancel' });
       await gate(adapter, store.read(), true);
+      write(store, { step: 'cleanup_confirm_cancel' });
       await adapter.confirm(store.read());
     }
     journal = store.read();
@@ -85,6 +86,7 @@ export async function runLifecycle(adapter: LifecycleAdapter, store: JournalStor
   try {
     const flight = await gate(adapter, store.read());
     requireQa((await adapter.findPatients(store.read())).length === 0, 'fixture_preexists');
+    await gate(adapter, store.read());
     write(store, { step: 'create_patient' });
     await adapter.createPatient(store.read());
     await recoverOwned(adapter, store);
@@ -92,8 +94,8 @@ export async function runLifecycle(adapter: LifecycleAdapter, store: JournalStor
     await gate(adapter, store.read());
     requireQa((await adapter.appointments(store.read())).length === 0, 'fixture_appointments_preexist');
     const creation = await proposal(adapter, store, 'create', flight.slots[0]);
-    write(store, { step: 'confirm_create' });
     await gate(adapter, store.read());
+    write(store, { step: 'confirm_create' });
     await adapter.confirm(store.read(), true);
     await recoverOwned(adapter, store);
     let rows = owned(store.read(), await adapter.appointments(store.read()));
@@ -111,14 +113,14 @@ export async function runLifecycle(adapter: LifecycleAdapter, store: JournalStor
     requireQa(JSON.stringify(await adapter.audit(store.read(), rows[0].id)) === beforeReadAudit, 'read_changed_audit');
     passed.push('LIVE-002');
     await proposal(adapter, store, 'reschedule', flight.slots[1]);
-    write(store, { step: 'confirm_reschedule' });
-    await gate(adapter, store.read()); await adapter.confirm(store.read());
+    await gate(adapter, store.read());
+    write(store, { step: 'confirm_reschedule' }); await adapter.confirm(store.read());
     rows = owned(store.read(), await adapter.appointments(store.read()));
     requireQa(rows.length === 1 && rows[0].id === store.read().appointments[0] && matches(rows[0], flight.slots[1]), 'reschedule_persistence_mismatch');
     passed.push('LIVE-003');
     await proposal(adapter, store, 'cancel');
-    write(store, { step: 'confirm_cancel' });
-    await gate(adapter, store.read()); await adapter.confirm(store.read());
+    await gate(adapter, store.read());
+    write(store, { step: 'confirm_cancel' }); await adapter.confirm(store.read());
     rows = owned(store.read(), await adapter.appointments(store.read()));
     requireQa(rows.length === 1 && rows[0].status === 'cancelled', 'cancel_persistence_mismatch');
     const audit = await adapter.audit(store.read(), rows[0].id);
@@ -129,6 +131,9 @@ export async function runLifecycle(adapter: LifecycleAdapter, store: JournalStor
     await cleanup(adapter, store); await cleanup(adapter, store);
     return { status: isolation ? 'PASS' : 'PARTIAL', passed, blocked: isolation ? [] : ['LIVE-006'], cleanup: 'PASS' };
   } catch (error) {
+    if (error instanceof MutationNotDispatched && ['create_patient', 'confirm_create'].includes(store.read().step)) {
+      write(store, { step: `blocked_before_${store.read().step}` });
+    }
     write(store, { state: 'failed' });
     // Never retry an ambiguous mutation. Discover exact owned resources and
     // attempt guarded cleanup; retain the journal if evidence is incomplete.

@@ -1,5 +1,7 @@
 # ASSISTANT-002.4H — integrated Staging candidate
 
+Successor: [002.4I trusted runtime verification](ASSISTANT_002_4I_TRUSTED_RUNTIME.md) adds a signed independent-evidence verifier to the QA client. Its authority/policy remain unprovisioned, so the runtime blockers below still apply. This H document retains its historical candidate results and operator procedure.
+
 Integration branch: `codex/assistant-002-4h-integration`, based on main `eec7274b108394664f98daff52da03488a0ffe55`. It contains exact reviewed heads #94 `7db560edcef4310ae5c90e64716aa4970ec69ff3` and #93 `a8c8c206c29cf08d492ab54c6d6777a5133a0584`, with no merge conflicts. Both original branches/PRs and main remain untouched. **Pin the exact integrated SHA in the final delivery report**, not a moving branch name. The final report is the deployment package's revision pin; this source document cannot embed its own future commit SHA.
 
 ## Local validation / limits
