@@ -1,4 +1,5 @@
 import "server-only";
+import { appointmentOutboundPolicy } from "@/lib/outbound-policy";
 
 import { isWhatsAppOutboundEnabled } from "@/lib/server/whatsapp/config";
 import type {
@@ -19,6 +20,7 @@ const providerStatusMap: Record<string, WhatsAppDeliveryStatus> = {
 
 export class MetaWhatsAppCloudProvider implements WhatsAppProvider {
   getReadiness(): WhatsAppProviderReadiness {
+    if (appointmentOutboundPolicy() !== "normal") return { state: "disabled", code: "provider_not_enabled" };
     if (!isWhatsAppOutboundEnabled()) return { state: "disabled", code: "provider_not_enabled" };
     return { state: "unavailable", code: "provider_not_configured" };
   }

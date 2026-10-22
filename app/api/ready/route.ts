@@ -3,6 +3,7 @@ import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
 import { getEmailProviderReadiness } from "@/lib/email/provider";
+import { appointmentOutboundPolicy } from "@/lib/outbound-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,10 @@ function response(body: unknown, status: number) {
 export async function GET() {
   const configuration = hasSupabaseConfig();
   const email = getEmailProviderReadiness();
+  const outbound = appointmentOutboundPolicy();
+  if (outbound === "blocked") return response({ status: "not_ready", checks: { configuration: false, database: false, email, outbound } }, 503);
   if (!configuration) {
-    return response({ status: "not_ready", checks: { configuration: false, database: false, email } }, 503);
+    return response({ status: "not_ready", checks: { configuration: false, database: false, email, outbound } }, 503);
   }
 
   try {
@@ -26,11 +29,11 @@ export async function GET() {
     const { error } = await supabase.from("clinics").select("id", { head: true }).limit(1);
     if (error) throw error;
     if (email === "required_unavailable") {
-      return response({ status: "not_ready", checks: { configuration: true, database: true, email } }, 503);
+      return response({ status: "not_ready", checks: { configuration: true, database: true, email, outbound } }, 503);
     }
-    return response({ status: "ready", checks: { configuration: true, database: true, email } }, 200);
+    return response({ status: "ready", checks: { configuration: true, database: true, email, outbound } }, 200);
   } catch {
     logger.error("Readiness database check failed", { component: "readiness", status: "database_unavailable" });
-    return response({ status: "not_ready", checks: { configuration: true, database: false, email } }, 503);
+    return response({ status: "not_ready", checks: { configuration: true, database: false, email, outbound } }, 503);
   }
 }
