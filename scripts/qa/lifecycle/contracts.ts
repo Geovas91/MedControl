@@ -3,7 +3,7 @@ export const PROJECT = 'https://fnknctihnrryntkjqxeo.supabase.co';
 export type Gate = { state: 'verified' | 'blocked' | 'unknown'; source: string };
 export type Slot = { date: string; time: string; startsAt: string; endsAt: string };
 export type Scope = { actor: string; clinic: string; professional: string; professionalUser: string; professionalName: string; clinicName: string; timeZone: string };
-export type Preflight = { origin: string; project: string; scope: Scope; slots: Slot[]; checkedAt: number; gates: Record<string, Gate> };
+export type Preflight = { origin: string; project: string; scope: Scope; slots: Slot[]; checkedAt: number; gates: Record<string, Gate>; runtime?: import('./runtime-verification.ts').RuntimeObservations };
 export const requiredGates = ['authenticatedQa', 'qaTenant', 'permissions', 'professional', 'patientEligibility', 'availability', 'email', 'automations', 'calendar', 'whatsapp', 'cleanup', 'deployment'] as const;
 export function blockers(flight: Preflight, now = Date.now()) {
   return [

@@ -1,5 +1,20 @@
 # ASSISTANT-002.4 / 002.4B / 002.4E / 002.4F — QA execution report
 
+## 002.4H integrated validation
+
+`codex/assistant-002-4h-integration` starts at latest main `eec7274b108394664f98daff52da03488a0ffe55` and integrates exact reviewed #94 `7db560edcef4310ae5c90e64716aa4970ec69ff3` then #93 `a8c8c206c29cf08d492ab54c6d6777a5133a0584`, without conflicts. Original PRs/branches/main remain unchanged. The final delivery report supplies the exact integrated revision pin.
+
+- Integrated full unit suite under Node 22.23.2: **821 PASS / 0 FAIL / 0 SKIP**.
+- Integrated Assistant QA under Node 22.23.2: **290 PASS / 0 FAIL / 0 SKIP**.
+- Integrated browser component suite under Node 22.23.2: **14 PASS / 0 FAIL** (actual React/forms, simulated persistence).
+- Outbound protection: **7 PASS / 0 FAIL**; included in the above unit counts, not additive.
+- Lint, explicit TypeScript, production build and diff check: PASS. Node-22-specific dotenv regression included.
+- Linux target startup/PM2/permissions/actual process binding and real lifecycle: UNKNOWN / NOT EXECUTED.
+
+The two historical failing test cases remain, with stronger semantic assertions instead of obsolete direct-membership-query/ternary syntax expectations. A shared VM fixture executes the actual selectors and enforces protected member RPC use, correct member-vs-user IDs, tenant/active/professional filtering and doctor's own identity. No application authorization code was changed to satisfy tests. The actual Node 22 runtime exposed an undefined named ESM export from CommonJS `@next/env`; the release helper now uses `createRequire`, covered by a subprocess test preserving the existing OpenAI setting.
+
+The trusted runtime integration boundary separates ready-endpoint observations from independently authenticated reviewed-release/process/origin/worker evidence. Arbitrary approval JSON, flags and receipts do not verify gates; unknown trust stays blocked. No new public endpoint, approval parser, migration, dependency, remote configuration or production change was added. See `ASSISTANT_002_4H_STAGING.md` for the ten-step operator package, target-host check and rollback. STAGING DEPLOYMENT: READY for controlled validation with prerequisites; LIVE LIFECYCLE: BLOCKED. Historical results below retain their original scope.
+
 ## 002.4G secure readiness results
 
 QA branch `codex/assistant-002-4-qa-automation` continues PR #93. [PR #94](https://github.com/Geovas91/MedControl/pull/94) (`codex/staging-outbound-guard`, `7db560e`) isolates application transport changes; neither PR is merged or deployed. QA adds bounded protected schedule discovery (up to five active synthetic professionals, fourteen future clinic dates and two real same-day half-hour slots), journal-bound recovery selection and an optional build/check/start witness. No UUID copy is required for new-run professional/date discovery. Explicit invalid filters block. No fixture is created by preflight.

@@ -5,6 +5,7 @@ import { getClinicDayRange } from '../../../lib/dashboard/timezone.ts';
 import { PROJECT, STAGING, requireQa, type Appointment, type Gate, type Journal, type Patient, type Preflight, type Proposal, type Scope, type Slot } from './contracts.ts';
 import type { LifecycleReads } from './browser.ts';
 import { canonicalSlots, discoverSchedule, futureDates, qaProfessionals } from './discovery.ts';
+import { runtimeVerificationBoundary } from './runtime-verification.ts';
 
 type Row = Record<string, unknown>;
 export function publicKeyOnly(key: string) {
@@ -94,10 +95,11 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
       const slots: Slot[] = futureDate ? canonicalSlots(await readSlots(scope.professional, date), date).slice(0, 2) : [];
       const readyResponse = await page.request.get(`${STAGING}/api/ready`);
       const ready = readyResponse.ok() ? await readyResponse.json() : null;
+      const runtime = runtimeVerificationBoundary(new URL(page.url()).origin, ready);
       const formResponse = await page.request.get(`${STAGING}/dashboard/patients/${patient ? `${patient}/edit` : 'new'}`);
       const form = formResponse.ok() && new URL(formResponse.url()).origin === STAGING ? await formResponse.text() : '';
       return {
-        origin: new URL(page.url()).origin, project: PROJECT, scope, slots, checkedAt: Date.now(),
+        origin: new URL(page.url()).origin, project: PROJECT, scope, slots, checkedAt: Date.now(), runtime: runtime.observations,
         gates: {
           authenticatedQa: pass('auth.getUser_verified_email'),
           qaTenant: check(activeClinic.length === 1 && activeClinic[0].tenant_type === 'qa' && activeClinic[0].name === scope.clinicName, 'RLS_clinics_tenant_type'),
@@ -108,11 +110,8 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
           email: check(ready?.checks?.email === 'disabled', 'current_api_ready_email_configuration'),
           automations: check(scheduler.length === 1 && scheduler[0].assistant_enabled === false && scheduler[0].reminder_enabled === false && scheduler[0].review_request_enabled === false, 'current_scheduler_status_RPC'),
           calendar: check(!calendars.some(row => row.status === 'connected'), 'owner_safe_calendar_status_RPC'),
-          // No current deployment identity or process-wide WhatsApp isolation
-          // proof is exposed by the existing app. Static source is not proof
-          // of what a deployed process/worker executes. Flags cannot override.
-          whatsapp: { state: 'unknown', source: 'no_deployment_bound_outbound_verifier' },
-          deployment: { state: 'unknown', source: 'no_deployment_bound_source_verifier' },
+          whatsapp: runtime.whatsapp,
+          deployment: runtime.deployment,
           cleanup: check(form.includes('name="status"') && form.includes('value="inactive"') && (patient ? form.includes('Guardar cambios') : form.includes('Guardar y hacerlo después')), 'current_authorized_patient_form_and_inactive_option')
         }
       } satisfies Preflight;

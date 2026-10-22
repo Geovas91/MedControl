@@ -1,5 +1,9 @@
 # ASSISTANT-002.4B / 002.4E / 002.4F / 002.4G — controlled live preparation
 
+## 002.4H integrated candidate
+
+Use `ASSISTANT_002_4H_STAGING.md` and the exact integrated SHA in the delivery report. Both reviewed PR heads are integrated on `codex/assistant-002-4h-integration`; main and the original drafts are unchanged. Integrated Node 22.23.2 validation passes; the two obsolete source assertions are replaced by runtime semantic coverage. The new preflight runtime boundary exposes only safe readiness observations and keeps deployment/WhatsApp blocked pending independently authenticated operator evidence. It accepts no receipt/flag approvals. No remote deployment or lifecycle mutation occurred.
+
 ## 002.4G current execution package
 
 Use `ASSISTANT_002_4G_OPERATOR.md` for the ordered backup/deployment/isolation/verification/preflight/recovery session. The earlier 002.4F procedure remains historical read-only collection guidance; its Node-24 streaming observer is separate from the new Node-22-compatible file-based release helper. Preserve the **current** Staging OpenAI configuration and behavior; any historical requirement to disable LLM flags is superseded.

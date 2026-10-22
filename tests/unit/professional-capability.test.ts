@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canCreateClinicalNote, canViewClinicalRecord } from "../../lib/clinical-record/permissions.ts";
+import { professionalSelection } from '../helpers/professional-selection.ts';
 
 const migration = readFileSync(new URL("../../supabase/migrations/0048_professional_capability.sql", import.meta.url), "utf8");
 const appointmentService = readFileSync(new URL("../../lib/server/create-appointment.ts", import.meta.url), "utf8");
@@ -28,11 +29,17 @@ test("0048 enforces professional invariants and keeps tenant-safe scheduling", (
   assert.match(migration, /create_appointment_for_current_user[\s\S]+member\.is_professional/);
 });
 
-test("appointment and availability selectors use the canonical capability rather than public profiles or roles", () => {
-  assert.match(appointmentService, /from\("clinic_members"\)[\s\S]+eq\("is_professional", true\)/);
+test("appointment and availability selectors use protected active professional capabilities in their own clinic", async () => {
   assert.match(appointmentService, /listClinicMembersForClinic\(clinicId\)/);
   assert.match(appointmentService, /member\.clinic_id === clinicId && member\.user_id === input\.doctorId && member\.status === "active" && member\.is_professional/);
-  assert.match(availabilityService, /eq\("is_professional", true\)/);
+  const { availability, appointments, calls } = professionalSelection('owner');
+  const options = await appointments.getAppointmentCreationOptions();
+  assert.deepEqual(Array.from(options.data.doctors, (row: { id: string }) => row.id).sort(), ['doctor-1', 'doctor-2']);
+  const result = await availability.getProfessionalAvailability('foreign');
+  assert.equal(result.state, 'ready');
+  assert.deepEqual(Array.from(result.data.professionals, (row: { id: string }) => row.id), ['member-1', 'member-2']);
+  assert.equal(calls[0].args.p_clinic_id, 'clinic-north');
+  assert.equal(calls[0].args.p_clinic_member_id, 'member-1');
   assert.doesNotMatch(availabilityService, /\.in\("role", \["owner", "doctor"\]\)/);
 });
 

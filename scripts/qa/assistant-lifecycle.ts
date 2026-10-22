@@ -36,7 +36,7 @@ try {
   const flight = await adapter.preflight();
   const failed = blockers(flight).filter(key => key !== 'patientEligibility' && (mode !== '--recover' || !['availability', 'slots'].includes(key)));
   if (mode === '--preflight' || failed.length) {
-    console.log(JSON.stringify({ status: failed.length ? 'BLOCKED' : 'READY_FOR_FIXTURE_STAGE', gates: flight.gates, blockers: failed, patientEligibility: 'DEFERRED_UNTIL_CREATION', mutations: 0 }));
+    console.log(JSON.stringify({ status: failed.length ? 'BLOCKED' : 'READY_FOR_FIXTURE_STAGE', gates: flight.gates, runtime: flight.runtime, blockers: failed, patientEligibility: 'DEFERRED_UNTIL_CREATION', mutations: 0 }));
     process.exitCode = failed.length ? 2 : 0;
   } else {
     journal ??= openJournal({ directory: process.env.ASSISTANT_QA_JOURNAL_DIRECTORY, key: process.env.ASSISTANT_QA_JOURNAL_KEY!, initial: newJournal(flight.scope) });

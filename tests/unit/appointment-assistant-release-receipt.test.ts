@@ -4,7 +4,19 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { artifactFingerprint, safeReceipt, verifyReceipt, type ReleaseReceipt } from '../../scripts/qa/assistant-release.ts';
+
+test('release dotenv loader works with Node CommonJS interop and preserves existing OpenAI settings', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'qa-release-env-'));
+  try {
+    writeFileSync(path.join(dir, '.env.production'), 'APP_ENV=staging\nAPPOINTMENT_OUTBOUND_MODE=isolated\nAPPOINTMENT_ASSISTANT_LLM_ENABLED=false\n');
+    const moduleUrl = new URL('../../scripts/qa/assistant-release.ts', import.meta.url).href;
+    const code = `import { loadReleaseEnvironment } from ${JSON.stringify(moduleUrl)}; loadReleaseEnvironment(process.cwd()); console.log(JSON.stringify({staging:process.env.APP_ENV==='staging',isolated:process.env.APPOINTMENT_OUTBOUND_MODE==='isolated',plannerPreserved:process.env.APPOINTMENT_ASSISTANT_LLM_ENABLED==='true'}));`;
+    const output = execFileSync(process.execPath, ['--experimental-strip-types', '--input-type=module', '--eval', code], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: { PATH: process.env.PATH, NODE_ENV: 'production', APPOINTMENT_ASSISTANT_LLM_ENABLED: 'true' } });
+    assert.deepEqual(JSON.parse(output), { staging: true, isolated: true, plannerPreserved: true });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('release fingerprint detects modified and added runtime artifacts without emitting contents', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'qa-release-'));

@@ -4,6 +4,13 @@ import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+
+export function loadReleaseEnvironment(root: string) {
+  // @next/env is bundled CommonJS; Node 22 does not expose its named ESM exports.
+  const { loadEnvConfig } = createRequire(import.meta.url)('@next/env') as typeof import('@next/env');
+  loadEnvConfig(root, false, { info() {}, error() {} });
+}
 
 const roots = ['.next', 'node_modules', 'public', 'next.config.mjs', 'package.json', 'package-lock.json', 'scripts/qa/assistant-release.ts'];
 const hash = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
@@ -78,8 +85,7 @@ async function main() {
   if ([receiptStat, nextStat].some(stat => stat.isSymbolicLink() || stat.uid === process.getuid?.() || (stat.mode & 0o022) !== 0)) throw new Error('receipt_mutable');
   if (mode === 'check') { console.log(JSON.stringify({ operation: 'check', ...receipt, authorization: 'NONE' })); return; }
   // Same installed dotenv loader as Next; never source shell code or print values.
-  const { loadEnvConfig } = await import('@next/env');
-  loadEnvConfig(root, false, { info() {}, error() {} });
+  loadReleaseEnvironment(root);
   if (process.env.NODE_OPTIONS || process.env.APP_ENV !== 'staging' || process.env.APP_BASE_URL !== 'https://staging.clinicontrol.mx' || process.env.APPOINTMENT_OUTBOUND_MODE !== 'isolated') throw new Error('isolated_staging_process_environment_required');
   const procStat = readFileSync('/proc/self/stat', 'utf8');
   const witness = { operation: 'startup', ...receipt, pid: process.pid, parentPid: process.ppid, startTicks: procStat.slice(procStat.lastIndexOf(')') + 2).split(' ')[19], boot: hash(readFileSync('/proc/sys/kernel/random/boot_id')), nonce: randomUUID(), startedAt: new Date().toISOString(), directory: hash(root), authorization: 'NONE' };
