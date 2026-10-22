@@ -16,3 +16,5 @@ docs/screenshots/
 playwright-report/
 test-results/
 .DS_Store
+*.assistant-qa-journal*
+.clinicontrol-qa/

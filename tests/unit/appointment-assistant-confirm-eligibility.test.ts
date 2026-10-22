@@ -55,7 +55,8 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
           state.pendingStatus = "claimed";
           return { data: [{ tool_name: state.toolName, validated_arguments: state.pendingArguments, status: "claimed" }], error: null };
         }
-        return { data: [{ tool_name: state.toolName, validated_arguments: state.pendingArguments, status: state.pendingStatus }], error: null };
+        // 0059 distinguishes a prior caller's claim from the caller that acquired it.
+        return { data: [{ tool_name: state.toolName, validated_arguments: state.pendingArguments, status: state.pendingStatus === "claimed" ? "already_claimed" : state.pendingStatus }], error: null };
       }
       if (name === "execute_claimed_assistant_pending_action_for_current_user") {
         state.eligibilityCalls++;
@@ -134,6 +135,22 @@ test("eligibility lost between Proposal and Confirm fails the one-shot action be
   assert.deepEqual(state.finish, { outcome: "failed", errorCode: "forbidden" });
   assert.equal((await registry.executeConfirmedAssistantAction(actionId)).ok, false);
   assert.equal(state.mutationCalls, 0);
+});
+
+test("concurrent confirmations claim one pending action once and create one appointment", async () => {
+  const { registry, state } = mountRegistry();
+  const proposal = await registry.prepareAssistantMutation("create_appointment", input);
+  assert.equal(proposal.ok, true);
+
+  const outcomes = await Promise.all([
+    registry.executeConfirmedAssistantAction(actionId),
+    registry.executeConfirmedAssistantAction(actionId)
+  ]);
+
+  assert.equal(outcomes.filter((outcome) => outcome.ok).length, 1);
+  assert.equal(outcomes.filter((outcome) => !outcome.ok).length, 1);
+  assert.equal(state.mutationCalls, 1);
+  assert.equal(state.pendingStatus, "executed");
 });
 
 test("Assistant read, Proposal, and Confirm all request the same 30-minute cadence", async () => {
