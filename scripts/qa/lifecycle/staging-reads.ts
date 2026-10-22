@@ -6,6 +6,7 @@ import { PROJECT, STAGING, requireQa, type Appointment, type Gate, type Journal,
 import type { LifecycleReads } from './browser.ts';
 import { canonicalSlots, discoverSchedule, futureDates, qaProfessionals } from './discovery.ts';
 import { runtimeVerificationBoundary } from './runtime-verification.ts';
+import { acquireTrustedRuntimeProof } from './signed-runtime-evidence.ts';
 
 type Row = Record<string, unknown>;
 export function publicKeyOnly(key: string) {
@@ -95,9 +96,10 @@ export async function stagingReads(page: Page, context: BrowserContext, env: Rec
       const slots: Slot[] = futureDate ? canonicalSlots(await readSlots(scope.professional, date), date).slice(0, 2) : [];
       const readyResponse = await page.request.get(`${STAGING}/api/ready`);
       const ready = readyResponse.ok() ? await readyResponse.json() : null;
-      const runtime = runtimeVerificationBoundary(new URL(page.url()).origin, ready);
       const formResponse = await page.request.get(`${STAGING}/dashboard/patients/${patient ? `${patient}/edit` : 'new'}`);
       const form = formResponse.ok() && new URL(formResponse.url()).origin === STAGING ? await formResponse.text() : '';
+      const independent = await acquireTrustedRuntimeProof();
+      const runtime = runtimeVerificationBoundary(new URL(page.url()).origin, ready, independent.proof);
       return {
         origin: new URL(page.url()).origin, project: PROJECT, scope, slots, checkedAt: Date.now(), runtime: runtime.observations,
         gates: {
