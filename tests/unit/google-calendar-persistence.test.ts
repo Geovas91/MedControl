@@ -58,6 +58,8 @@ function loadSync(options: {
     "@/lib/supabase/server": { createClient: async () => ({ from: () => query }) }
   };
   runInNewContext(source, { exports, require: (name: string) => {
+    // Retained sync implementation with mocked providers, never a production override.
+    if (name === "@/lib/release-boundary") return { releaseAllows: () => true };
     if (Object.hasOwn(mocks, name)) return mocks[name];
     return require(name);
   } });

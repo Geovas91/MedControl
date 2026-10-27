@@ -18,11 +18,11 @@ test("commercial entitlements match the approved Basic Plus Pro matrix", () => {
   assert.equal(planIncludesFeature("plus", "additional_staff"), true);
   assert.equal(planIncludesFeature("pro", "additional_staff"), true);
   assert.equal(planIncludesFeature("basic", "appointment_assistant"), false);
-  assert.equal(planIncludesFeature("plus", "appointment_assistant"), true);
-  assert.equal(planIncludesFeature("pro", "appointment_assistant"), true);
+  assert.equal(planIncludesFeature("plus", "appointment_assistant"), false);
+  assert.equal(planIncludesFeature("pro", "appointment_assistant"), false);
   assert.equal(planIncludesFeature("basic", "google_calendar"), false);
-  assert.equal(planIncludesFeature("plus", "google_calendar"), true);
-  assert.equal(planIncludesFeature("pro", "google_calendar"), true);
+  assert.equal(planIncludesFeature("plus", "google_calendar"), false);
+  assert.equal(planIncludesFeature("pro", "google_calendar"), false);
   for (const plan of ["basic", "plus", "pro"] as const) {
     assert.equal(planIncludesFeature(plan, "service_bot_tier1"), true);
     assert.equal(planIncludesFeature(plan, "whatsapp_notifications"), false);
@@ -67,10 +67,11 @@ test("ICS consents Reviews and Service Bot remain independent from the Assistant
 
 test("marketing removes unsupported claims and publishes the approved matrix", () => {
   assert.doesNotMatch(plans, /Gestión avanzada de roles|Reportes básicos|Soporte prioritario|Soporte preferente/);
-  assert.match(landing, /Appointment Assistant/);
-  assert.match(landing, /WhatsApp outbound/);
-  assert.match(plans, /Sin Google Calendar/);
-  assert.match(plans, /Sin Appointment Assistant/);
+  assert.doesNotMatch(landing, /Appointment Assistant|WhatsApp outbound|Google Calendar/);
+  for (const plan of ["basic", "plus", "pro"] as const) {
+    assert.equal(planIncludesFeature(plan, "google_calendar"), false);
+    assert.equal(planIncludesFeature(plan, "appointment_assistant"), false);
+  }
 });
 
 

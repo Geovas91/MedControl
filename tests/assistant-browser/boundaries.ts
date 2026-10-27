@@ -113,3 +113,7 @@ export async function cancelAssistantPendingAction(actionId: string) {
   pending.status = 'cancelled';
   return ready({ status: 'cancelled' });
 }
+// Isolated browser fixture only, never imported by the application. The bundle
+// has no real protected services, credentials or outbound network access.
+export const releaseAllows = () => true;
+export const RELEASE_UNAVAILABLE_MESSAGE = 'Test-only future release';

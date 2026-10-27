@@ -2,10 +2,11 @@ import { pathToFileURL } from 'node:url';
 import { planAssistantConversation } from '../../lib/assistant/llm/planner.ts';
 import { requestOpenAiPlanner } from '../../lib/assistant/llm/transport.ts';
 import { logger } from '../../lib/logger.ts';
+import { releaseAllows } from '../../lib/release-boundary.ts';
 
 export type SmokeOutcome = {
   status: 'PASS' | 'BLOCKED' | 'FAIL';
-  reason: 'opt_in_required' | 'api_key_required' | 'provider_success' | 'provider_failure' | 'planner_fallback';
+  reason: 'opt_in_required' | 'api_key_required' | 'release_unavailable' | 'provider_success' | 'provider_failure' | 'planner_fallback';
   plannerInvoked: boolean; plannerSuccess: boolean; plannerFallback: boolean; providerFailure: boolean; requests: number;
 };
 
@@ -15,6 +16,7 @@ export async function runOpenAiSmoke(env: Record<string, string | undefined>, fe
   const outcome: SmokeOutcome = { status: 'BLOCKED', reason: 'opt_in_required', plannerInvoked: false, plannerSuccess: false, plannerFallback: false, providerFailure: false, requests: 0 };
   if (env.ASSISTANT_QA_OPENAI_LIVE !== '1') return outcome;
   if (!env.OPENAI_API_KEY) return { ...outcome, reason: 'api_key_required' };
+  if (!releaseAllows('experimental_llm')) return { ...outcome, reason: 'release_unavailable' };
   const originalInfo = logger.info;
   const observed = new Set<string>();
   logger.info = (event) => { observed.add(event); };

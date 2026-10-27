@@ -1,4 +1,5 @@
 import "server-only";
+import { releaseAllows } from "@/lib/release-boundary";
 
 import {
   buildGoogleCalendarEventId,
@@ -159,6 +160,7 @@ export async function syncAppointmentGoogleCalendar(input: {
   appointmentVersion: string;
   operation: "upsert" | "delete";
 }): Promise<GoogleCalendarSyncOutcome> {
+  if (!releaseAllows("google_calendar")) return "disabled";
   try {
     const context = await getActiveTenantContext();
     if (context.state !== "ready" || !["owner", "admin", "doctor"].includes(context.tenant.membership.role)) return "disabled";

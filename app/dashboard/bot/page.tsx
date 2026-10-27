@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, CalendarClock, CalendarDays, CheckCircle2, Mail, MessageSquareOff, Settings2 } from "lucide-react";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
+import { releaseAllows } from "@/lib/release-boundary";
 import { AppointmentAssistantSettings } from "@/components/bot/appointment-assistant-settings";
 import { AppointmentAssistant } from "@/components/bot/appointment-assistant";
 import { AppointmentAutomationLiveStatusPanel } from "@/components/bot/appointment-automation-live-status";
@@ -58,6 +59,7 @@ function Unavailable({ title, description }: { title: string; description: strin
 }
 
 export default async function BotPage({ searchParams }: { searchParams: Promise<AppointmentAssistantSearchParams> }) {
+  if (!releaseAllows("appointment_assistant")) notFound();
   const params = await searchParams;
   const result = await getAppointmentAssistantForActiveTenant(params);
 

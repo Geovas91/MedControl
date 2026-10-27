@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { releaseAllows } from "@/lib/release-boundary";
 import { getPublicAppOrigin } from "@/lib/auth/public-origin";
 import {
   buildGoogleCalendarSettingsRedirectPath,
@@ -27,6 +28,7 @@ function settingsRedirect(request: NextRequest, outcome: string) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!releaseAllows("google_calendar")) return NextResponse.json({ error: "feature_unavailable" }, { status: 403, headers: { "Cache-Control": "no-store" } });
   const requestUrl = new URL(request.url);
   if (requestUrl.searchParams.get("error")) return settingsRedirect(request, "cancelled");
   const state = requestUrl.searchParams.get("state");

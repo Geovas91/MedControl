@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { releaseAllows } from "@/lib/release-boundary";
 import { executeAppointmentAutomationEndpoint, isAuthorizedAutomationCron } from "@/lib/appointment-automations";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,9 @@ export async function POST(request: Request) {
   const provided = authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
   if (!isAuthorizedAutomationCron(provided, process.env.APPOINTMENT_AUTOMATION_CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+  if (!releaseAllows("appointment_automations")) {
+    return NextResponse.json({ error: "feature_unavailable" }, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
   // Load service-role code only after authenticating the caller.
   const { runAppointmentAutomations } = await import("@/lib/server/appointment-automation-runner");

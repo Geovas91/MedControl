@@ -1,4 +1,5 @@
 import "server-only";
+import { releaseAllows } from "@/lib/release-boundary";
 import { appointmentOutboundPolicy } from "@/lib/outbound-policy";
 
 import {
@@ -26,7 +27,7 @@ export async function exchangeGoogleCalendarAuthorizationCode(input: {
   redirectUri: string;
   fetchImplementation?: FetchImplementation;
 }) {
-  if (appointmentOutboundPolicy() !== "normal") return { ok: false as const, code: "outbound_disabled", refreshTokenToRevoke: null };
+  if (!releaseAllows("google_calendar") || appointmentOutboundPolicy() !== "normal") return { ok: false as const, code: "outbound_disabled", refreshTokenToRevoke: null };
   const request = input.fetchImplementation ?? fetch;
   let response: Response;
   try {
@@ -55,7 +56,7 @@ export async function refreshGoogleCalendarAccessToken(input: {
   clientSecret: string;
   fetchImplementation?: FetchImplementation;
 }) {
-  if (appointmentOutboundPolicy() !== "normal") return { ok: false as const, code: "outbound_disabled" };
+  if (!releaseAllows("google_calendar") || appointmentOutboundPolicy() !== "normal") return { ok: false as const, code: "outbound_disabled" };
   const request = input.fetchImplementation ?? fetch;
   let response: Response;
   try {
@@ -84,7 +85,7 @@ export async function refreshGoogleCalendarAccessToken(input: {
 }
 
 export async function revokeGoogleCalendarToken(refreshToken: string, fetchImplementation: FetchImplementation = fetch) {
-  if (appointmentOutboundPolicy() !== "normal") return false;
+  if (!releaseAllows("google_calendar") || appointmentOutboundPolicy() !== "normal") return false;
   try {
     const response = await fetchImplementation(GOOGLE_CALENDAR_REVOCATION_ENDPOINT, {
       method: "POST",
@@ -106,7 +107,7 @@ async function googleEventRequest(input: {
   payload?: GoogleCalendarEventPayload;
   fetchImplementation?: FetchImplementation;
 }) {
-  if (appointmentOutboundPolicy() !== "normal") return { ok: false as const, code: "outbound_disabled" as const };
+  if (!releaseAllows("google_calendar") || appointmentOutboundPolicy() !== "normal") return { ok: false as const, code: "outbound_disabled" as const };
   const request = input.fetchImplementation ?? fetch;
   const eventPath = input.eventId ? `/${encodeURIComponent(input.eventId)}` : "";
   const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events${eventPath}?sendUpdates=none`;

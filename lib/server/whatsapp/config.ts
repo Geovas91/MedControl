@@ -1,4 +1,5 @@
 import "server-only";
+import { releaseAllows } from "@/lib/release-boundary";
 
 import { parseWhatsAppOutboundEnabled } from "@/lib/whatsapp/config";
 
@@ -15,5 +16,5 @@ export const WHATSAPP_SERVER_ENV_KEYS = [
 ] as const;
 
 export function isWhatsAppOutboundEnabled(value = process.env.WHATSAPP_OUTBOUND_ENABLED) {
-  return parseWhatsAppOutboundEnabled(value);
+  return releaseAllows("automated_messaging") && parseWhatsAppOutboundEnabled(value);
 }

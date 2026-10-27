@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { releaseAllows } from "@/lib/release-boundary";
 import {
   GOOGLE_CALENDAR_OAUTH_STATE_TTL_MS,
   buildGoogleCalendarSettingsRedirectPath,
@@ -19,6 +20,7 @@ function settingsRedirect(request: NextRequest, outcome: string) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!releaseAllows("google_calendar")) return NextResponse.json({ error: "feature_unavailable" }, { status: 403, headers: { "Cache-Control": "no-store" } });
   const context = await getActiveTenantContext();
   if (context.state === "unauthenticated") {
     return NextResponse.redirect(new URL("/login", getPublicAppOrigin(request, getRuntimePublicSiteUrl())));

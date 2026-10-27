@@ -1,4 +1,5 @@
 import "server-only";
+import { releaseAllows } from "@/lib/release-boundary";
 
 import { decryptCalendarRefreshToken } from "@/lib/calendar/token-encryption";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
@@ -106,6 +107,7 @@ export async function getGoogleCalendarIntegrationPageData() {
 }
 
 export async function disconnectOwnGoogleCalendarIntegration() {
+  if (!releaseAllows("google_calendar")) return { state: "forbidden" as const };
   const context = await getActiveTenantContext();
   if (context.state !== "ready") return { state: context.state };
   if (!["owner", "admin", "doctor"].includes(context.tenant.membership.role)) return { state: "forbidden" as const };

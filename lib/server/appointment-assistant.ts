@@ -1,4 +1,5 @@
 import "server-only";
+import { releaseAllows } from "@/lib/release-boundary";
 
 import {
   APPOINTMENT_ASSISTANT_ACTIVITY_PAGE_SIZE,
@@ -131,7 +132,7 @@ export type AppointmentAssistantData = {
 
 export type AppointmentAssistantResult =
   | { state: "ready"; data: AppointmentAssistantData }
-  | { state: "unauthenticated" | "no_active_membership" | "subscription_missing" | "upgrade_required" | "forbidden" | "error"; data: null };
+  | { state: "unauthenticated" | "no_active_membership" | "release_unavailable" | "subscription_missing" | "upgrade_required" | "forbidden" | "error"; data: null };
 
 function patientName(relation: PatientRelation) {
   return Array.isArray(relation) ? relation[0]?.full_name ?? "Paciente" : relation?.full_name ?? "Paciente";
@@ -314,6 +315,7 @@ export type SaveAppointmentAssistantSettingsResult =
 export async function saveAppointmentAssistantSettingsForActiveTenant(
   input: AppointmentAssistantSettingsInput
 ): Promise<SaveAppointmentAssistantSettingsResult> {
+  if (!releaseAllows("appointment_assistant")) return { state: "forbidden" };
   const access = await getAppointmentAssistantAccess();
   const context = access.context;
   if (context.state !== "ready") return { state: context.state };

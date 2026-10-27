@@ -1,4 +1,5 @@
 import { CalendarClock, ClipboardList, Plug, UserRoundCog } from "lucide-react";
+import { releaseAllows } from "@/lib/release-boundary";
 import { ButtonLink } from "@/components/ui/button";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { getOnboardingStatus } from "@/lib/onboarding";
@@ -80,7 +81,7 @@ export default async function SettingsPage() {
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2">
-        {settings.map((item) => {
+        {settings.filter((item) => item.href !== "/dashboard/settings/integrations" || releaseAllows("google_calendar")).map((item) => {
           const Icon = item.icon;
 
           return (

@@ -106,6 +106,8 @@ test("missing pages show billing action and professional removal remains availab
   const header = ({ title }: { title: string }) => require("react").createElement("header", null, title);
   const buttonLink = ({ href, children }: { href: string; children: unknown }) => require("react").createElement("a", { href }, children);
   const bot = load("app/dashboard/bot/page.tsx", {
+    // Preserved subscription UI under a test-only future-release fixture.
+    "@/lib/release-boundary": { releaseAllows: () => true },
     "next/link": buttonLink,
     "next/navigation": { redirect: () => { throw Error("unexpected redirect"); } },
     "@/components/dashboard/page-header": { PageHeader: header },
@@ -118,6 +120,7 @@ test("missing pages show billing action and professional removal remains availab
   assert.doesNotMatch(botHtml, /Disponible en Plus y Pro|No fue posible cargar/);
 
   const integrations = load("app/dashboard/settings/integrations/page.tsx", {
+    "@/lib/release-boundary": { releaseAllows: () => true },
     "next/navigation": { redirect: () => { throw Error("unexpected redirect"); } },
     "@/components/dashboard/page-header": { PageHeader: header },
     "@/components/ui/badge": { Badge: ({ children }: { children: unknown }) => require("react").createElement("span", null, children) },

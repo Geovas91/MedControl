@@ -7,6 +7,7 @@ import ts from "typescript";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { canAddDoctorToPlan, getPlanById } from "../../config/plans.ts";
+import * as releaseBoundary from "../../lib/release-boundary.ts";
 
 const require = createRequire(import.meta.url);
 function load(path: string, mocks: Record<string, unknown> = {}) {
@@ -14,7 +15,7 @@ function load(path: string, mocks: Record<string, unknown> = {}) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX }
   }).outputText;
   const exports: Record<string, any> = {};
-  runInNewContext(source, { exports, require: (name: string) => Object.hasOwn(mocks, name) ? mocks[name] : require(name) });
+  runInNewContext(source, { exports, require: (name: string) => name === "@/lib/release-boundary" ? releaseBoundary : Object.hasOwn(mocks, name) ? mocks[name] : require(name) });
   return exports;
 }
 const wrap = ({ children }: { children: React.ReactNode }) => React.createElement("div", null, children);

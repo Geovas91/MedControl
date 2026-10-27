@@ -39,15 +39,15 @@ const store = readFileSync("lib/server/google-calendar-store.ts", "utf8");
 const entitlementsServer = readFileSync("lib/server/entitlements.ts", "utf8");
 const plans = readFileSync("config/plans.ts", "utf8");
 
-test("Google Calendar is a typed Basic false, Plus true, Pro true entitlement", () => {
+test("Google Calendar is excluded from every MVP plan without changing professional capacity", () => {
   assert.equal(planIncludesFeature("basic", "google_calendar"), false);
-  assert.equal(planIncludesFeature("plus", "google_calendar"), true);
-  assert.equal(planIncludesFeature("pro", "google_calendar"), true);
+  assert.equal(planIncludesFeature("plus", "google_calendar"), false);
+  assert.equal(planIncludesFeature("pro", "google_calendar"), false);
   assert.equal(getPlanEntitlements("basic").doctorLimit, 1);
   assert.equal(getPlanEntitlements("plus").doctorLimit, 5);
   assert.equal(getPlanEntitlements("pro").doctorLimit, null);
   assert.match(entitlementsServer, /canUseFeature[\s\S]+canCreateWithEntitlements[\s\S]+planIncludesFeature/);
-  assert.match(plans, /"Integración con Google Calendar"/);
+  assert.doesNotMatch(plans, /"Integración con Google Calendar"/);
 });
 
 test("OAuth state is unpredictable, one-way hashed and strictly validated", () => {

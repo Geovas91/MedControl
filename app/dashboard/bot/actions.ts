@@ -1,4 +1,5 @@
 "use server";
+import { releaseAllows, RELEASE_UNAVAILABLE_MESSAGE } from "@/lib/release-boundary";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -32,6 +33,7 @@ import { getPatientEligibleProfessionalIdsForSchedulingActiveTenant, isPatientAv
 import { ambiguousAppointmentRequest, applyVerifiedAssistantChoiceToContext, assistantContextTtlSeconds, contextualAppointmentCommand, contextualSchedulingFollowUp, intentFromAssistantContext, newAssistantConversationContext, parseSchedulingContextPatch, reconcileSchedulingContext, revalidateAssistantConversationContext, updateAssistantConversationContext, type AssistantConversationContext } from "@/lib/assistant/orchestration/context";
 
 export async function saveAppointmentAssistantSettingsAction(formData: FormData) {
+  if (!releaseAllows("appointment_assistant")) redirect("/dashboard");
   const input = parseAppointmentAssistantSettings(formData);
   if (!input) redirect("/dashboard/bot?settings_error=1");
 
@@ -53,6 +55,7 @@ export type AssistantUiResponse =
   | { state: "proposal_terminal"; status: "failed" | "expired" | "cancelled" | "executed" | "unavailable"; message: string };
 
 export async function planAssistantConversationAction(message: unknown, pending: unknown): Promise<ConversationInput> {
+  if (!releaseAllows("appointment_assistant")) return { state: "parsed", result: { state: "unsupported", message: RELEASE_UNAVAILABLE_MESSAGE } };
   const text = typeof message === "string" ? message : "";
   const context = await getAssistantToolContext();
   if (!context.ok) return { state: "parsed", result: { state: "unsupported", message: context.error.safeMessage } };
@@ -358,6 +361,7 @@ export async function selectAssistantResultAction(choice: unknown, pendingValue:
 }
 
 export async function confirmAssistantProposalAction(actionId: unknown): Promise<AssistantUiResponse> {
+  if (!releaseAllows("appointment_assistant")) return { state: "error", message: RELEASE_UNAVAILABLE_MESSAGE };
   if (typeof actionId !== "string" || !isCanonicalAppointmentUuid(actionId)) return { state: "error", message: "La propuesta no es válida." };
   const result = await executeConfirmedAssistantAction(actionId);
   if (!result.ok) {
