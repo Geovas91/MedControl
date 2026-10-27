@@ -1,10 +1,12 @@
 "use server";
+import { releaseAllows } from "@/lib/release-boundary";
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { disconnectOwnGoogleCalendarIntegration } from "@/lib/server/google-calendar-integration";
 
 export async function disconnectGoogleCalendarAction() {
+  if (!releaseAllows("google_calendar")) redirect("/dashboard/settings");
   const result = await disconnectOwnGoogleCalendarIntegration();
   if (result.state === "unauthenticated") redirect("/login");
   revalidatePath("/dashboard/settings/integrations");

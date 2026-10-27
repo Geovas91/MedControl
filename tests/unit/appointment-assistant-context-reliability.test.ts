@@ -80,6 +80,8 @@ function loadActions(rows: typeof fixture[] = [], options: { authorized?: boolea
   const actions: Record<string, (...args: any[]) => Promise<any>> = {};
   const source = ts.transpileModule(readFileSync("app/dashboard/bot/actions.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   runInNewContext(source, { exports: actions, Date, Intl, process: { env: { APPOINTMENT_ASSISTANT_LLM_ENABLED: "false" } }, require: (name: string) => {
+    // Retained implementation fixture only; real MVP denial has separate runtime tests.
+    if (name === "@/lib/release-boundary") return { releaseAllows: () => true };
     if (name in mocks) return mocks[name];
     if (["next/cache", "next/navigation", "@/lib/appointment-assistant", "@/lib/assistant/llm/rate-limit", "@/lib/server/appointment-assistant", "@/lib/server/entitlements"].includes(name)) return {};
     throw new Error(`Unexpected dependency: ${name}`);

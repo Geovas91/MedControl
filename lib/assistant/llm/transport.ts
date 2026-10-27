@@ -1,4 +1,5 @@
 import { plannerSchema, readPlannerSchema } from "./contracts";
+import { releaseAllows } from "@/lib/release-boundary";
 import { PlannerProviderError, type PlannerContext } from "./types";
 
 export type PlannerUsage = { inputTokens: number; outputTokens: number; totalTokens: number; cachedInputTokens: number };
@@ -34,6 +35,7 @@ async function httpError(response: Response): Promise<PlannerProviderError> {
 export async function requestOpenAiPlanner({ context, apiKey, model, readToolsEnabled = false, fetcher = fetch }: {
   context: PlannerContext; apiKey: string; model: string; readToolsEnabled?: boolean; fetcher?: typeof fetch;
 }): Promise<PlannerTransportResult> {
+  if (!releaseAllows("experimental_llm")) throw new PlannerProviderError("not_configured");
   let response: Response;
   try {
     response = await fetcher("https://api.openai.com/v1/responses", {

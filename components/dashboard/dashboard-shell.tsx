@@ -1,4 +1,5 @@
 "use client";
+import { releaseAllows } from "@/lib/release-boundary";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -48,7 +49,8 @@ export function DashboardShell({ children, footer, account, subscriptionNotice, 
 
   const open = drawerPath === pathname;
   const visibleNavItems = navItems.filter((item) =>
-    (appointmentAssistantAvailable || item.href !== "/dashboard/bot") &&
+    ((releaseAllows("appointment_assistant") && appointmentAssistantAvailable) || item.href !== "/dashboard/bot") &&
+    (releaseAllows("google_calendar") || item.href !== "/dashboard/settings/integrations") &&
     (clinicalPaymentsAvailable || item.href !== "/dashboard/payments")
   );
   const closeDrawer = () => setDrawerPath(null);

@@ -1,5 +1,6 @@
 import { CalendarDays, CircleAlert, CircleCheck, Link2Off, ShieldCheck } from "lucide-react";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
+import { releaseAllows } from "@/lib/release-boundary";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -30,6 +31,7 @@ function formatDate(value: string | null) {
 }
 
 export default async function IntegrationsPage({ searchParams }: { searchParams: Promise<{ google?: string | string[] }> }) {
+  if (!releaseAllows("google_calendar")) notFound();
   const [result, params] = await Promise.all([getGoogleCalendarIntegrationPageData(), searchParams]);
   if (result.state === "unauthenticated") redirect("/login");
   if (result.state === "no_active_membership") redirect("/onboarding");

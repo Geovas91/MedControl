@@ -10,6 +10,6 @@ clinical_content: false
 ---
 # Qué es el Asistente de agenda
 
-El [Asistente de agenda](/dashboard/bot) muestra estado operativo y automatizaciones relacionadas con citas, recordatorios y solicitudes verificadas de reseña.
+El Asistente de agenda y sus automatizaciones no están disponibles en CliniControl v1.0. Usa la [agenda manual](/dashboard/appointments) para crear, reprogramar y cancelar citas según tus permisos.
 
 No es el Service Bot de Ayuda y soporte y no procesa conversaciones de soporte.

@@ -9,7 +9,7 @@ import { appointmentOutboundPolicy } from '../../lib/outbound-policy.ts';
 
 const isolated = { APP_ENV: 'staging', APP_BASE_URL: 'https://staging.clinicontrol.mx', APPOINTMENT_OUTBOUND_MODE: 'isolated' };
 // Execute actual TS modules, substituting network/DB edges only. No credentials/network.
-function harness(env: Record<string, string> = isolated, networkResponse?: () => Response) {
+function harness(env: Record<string, string> = isolated, networkResponse?: () => Response, retainedImplementation = false) {
   let calls = 0;
   let database = 0;
   const cache = new Map<string, Record<string, any>>();
@@ -23,6 +23,8 @@ function harness(env: Record<string, string> = isolated, networkResponse?: () =>
       exports, Buffer, URL, URLSearchParams, AbortSignal, setTimeout, clearTimeout,
       process: { env }, fetch: async () => { calls++; return networkResponse ? networkResponse() : Response.json({ id: 'event1', access_token: 'test' }); },
       require: (name: string) => {
+        // Retained transport coverage only; default uses the real fixed MVP policy.
+        if (name === '@/lib/release-boundary' && retainedImplementation) return { releaseAllows: () => true };
         if (name === 'server-only') return {};
         if (name === 'resend') return { Resend: class { emails = { send: async () => { calls++; return { data: { id: 'email1' } }; } }; } };
         if (name === '@/lib/supabase/admin') return { createAdminClient: () => { database++; throw new Error('unexpected database'); } };
@@ -84,16 +86,16 @@ test('email readiness distinguishes intentional isolation from malformed configu
   assert.equal(harness({ ...isolated, APPOINTMENT_OUTBOUND_MODE: 'typo' }).load('lib/email/config.ts').getInvitationEmailConfiguration().state, 'required_unavailable');
 });
 
-test('production default still invokes actual transport adapters against network doubles', async () => {
+test('MVP preserves essential production email while excluding Google transport', async () => {
   const h = harness({ APP_ENV: 'production' });
   assert.equal((await h.load('lib/email/resend-provider.ts').sendWithResend({ apiKey: 'mock', from: 'test@example.test' }, { to: 'test@example.test', subject: '', html: '', text: '' })).ok, true);
-  assert.equal((await h.load('lib/server/google-calendar-provider.ts').deleteGoogleCalendarEvent({ accessToken: 'mock', eventId: 'event1' })).ok, true);
-  assert.equal(h.calls(), 2);
+  assert.equal((await h.load('lib/server/google-calendar-provider.ts').deleteGoogleCalendarEvent({ accessToken: 'mock', eventId: 'event1' })).ok, false);
+  assert.equal(h.calls(), 1);
 });
 
-test('OpenAI provider still executes its real transport under appointment isolation using a synthetic HTTP double', async () => {
+test('retained OpenAI transport under a test-only future-release fixture uses a synthetic HTTP double', async () => {
   const draft = { intent: 'search_appointments', patientQuery: null, professionalQuery: null, appointmentQuery: null, date: 'mañana', time: null, duration: null, dateRange: null, status: null };
-  const h = harness({ ...isolated, OPENAI_API_KEY: 'synthetic', APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED: 'true' }, () => Response.json({ status: 'completed', model: 'synthetic', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }, output: [{ content: [{ type: 'output_text', text: JSON.stringify(draft) }] }] }));
+  const h = harness({ ...isolated, OPENAI_API_KEY: 'synthetic', APPOINTMENT_ASSISTANT_LLM_READ_TOOLS_ENABLED: 'true' }, () => Response.json({ status: 'completed', model: 'synthetic', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }, output: [{ content: [{ type: 'output_text', text: JSON.stringify(draft) }] }] }), true);
   const result = await h.load('lib/assistant/llm/provider.ts').openAiPlannerProvider({ message: 'Citas mañana', today: '2030-01-01', activeIntent: null, resolvedSlots: [], missingSlots: [], role: 'owner', isProfessional: false, timeZone: 'America/Mexico_City' });
   assert.equal(result.intent, 'search_appointments');
   assert.equal(h.calls(), 1);

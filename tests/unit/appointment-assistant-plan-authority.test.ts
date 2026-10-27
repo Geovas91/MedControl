@@ -9,7 +9,8 @@ const require = createRequire(import.meta.url);
 function load(path: string, mocks: Record<string, unknown>) {
   const exports: Record<string, any> = {};
   const source = ts.transpileModule(readFileSync(path, "utf8"), { fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  runInNewContext(source, { exports, Date, process, require: (name: string) => Object.hasOwn(mocks, name) ? mocks[name] : name.startsWith("@/") || name === "server-only" ? {} : require(name) });
+  // Exercise preserved authorization/lease logic under a test-only future-release fixture.
+  runInNewContext(source, { exports, Date, process, require: (name: string) => name === "@/lib/release-boundary" ? { releaseAllows: () => true } : Object.hasOwn(mocks, name) ? mocks[name] : name.startsWith("@/") || name === "server-only" ? {} : require(name) });
   return exports;
 }
 

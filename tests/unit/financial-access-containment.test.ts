@@ -214,5 +214,5 @@ for (const visible of [false, true]) test(`financial navigation visibility=${vis
   const html = renderToStaticMarkup(React.createElement(Shell, { clinicalPaymentsAvailable: visible, appointmentAssistantAvailable: true }, "Synthetic content"));
   assert.equal(html.includes('href="/dashboard/payments"'), visible);
   assert.match(html, /href="\/dashboard\/billing"/); assert.match(html, /href="\/dashboard\/patients"/);
-  assert.match(html, /href="\/dashboard\/bot"/); assert.match(html, /Abrir navegación/);
+  assert.doesNotMatch(html, /href="\/dashboard\/bot"/); assert.match(html, /Abrir navegación/);
 });

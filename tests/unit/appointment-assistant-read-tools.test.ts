@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseAssistantIntentDraft } from "../../lib/assistant/llm/contracts.ts";
 import { planAssistantConversation } from "../../lib/assistant/llm/planner.ts";
-import { requestOpenAiPlanner } from "../../lib/assistant/llm/transport.ts";
+import { requestOpenAiPlanner } from "../helpers/retained-planner-transport.ts";
 import { isAssistantReadIntent, isValidAssistantReadIntent, orchestrateAssistantReadIntent, shouldOrchestrateAssistantReads } from "../../lib/assistant/orchestration/read-tools.ts";
 
 const today = "2026-09-23";

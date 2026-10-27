@@ -1,4 +1,5 @@
 import type { BillingProvider, DoctorPlanLimit, PlanId } from "@/types/subscriptions";
+import { releaseAllows } from "@/lib/release-boundary";
 
 export type BillingType = "subscription";
 export type BillingPeriod = "month";
@@ -102,8 +103,6 @@ export const commercialPlans = [
       "Invitaciones de calendario ICS por email",
       "Reseñas verificadas",
       "Service Bot Tier 1",
-      "Sin Google Calendar",
-      "Sin Appointment Assistant",
       "Registro y consulta de pagos",
       "Suscripción mensual vía PayPal",
       "Soporte por correo"
@@ -140,8 +139,6 @@ export const commercialPlans = [
       "Consentimientos personalizados por especialidad",
       "Registro y consulta de pagos",
       "Invitaciones de calendario ICS por email",
-      "Integración con Google Calendar",
-      "Appointment Assistant",
       "Reseñas verificadas",
       "Service Bot Tier 1",
       "Perfil público para cada médico",
@@ -176,8 +173,6 @@ export const commercialPlans = [
       "Plantillas basadas en especialidad",
       "Consentimientos personalizados por especialidad",
       "Invitaciones de calendario ICS por email",
-      "Integración con Google Calendar",
-      "Appointment Assistant",
       "Reseñas verificadas",
       "Service Bot Tier 1",
       "Registro y consulta de pagos",
@@ -244,7 +239,16 @@ export function getDoctorLimitForPlan(planId: PlanId): DoctorPlanLimit {
 }
 
 export function getPlanEntitlements(planId: PlanId): PlanEntitlements {
-  return planEntitlements[planId];
+  const plan = planEntitlements[planId];
+  return {
+    ...plan,
+    features: {
+      ...plan.features,
+      appointment_assistant: plan.features.appointment_assistant && releaseAllows("appointment_assistant"),
+      google_calendar: plan.features.google_calendar && releaseAllows("google_calendar"),
+      whatsapp_notifications: plan.features.whatsapp_notifications && releaseAllows("automated_messaging")
+    }
+  };
 }
 
 export function planIncludesFeature(planId: PlanId, feature: PlanFeature) {

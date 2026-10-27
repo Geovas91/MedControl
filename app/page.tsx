@@ -73,20 +73,8 @@ const comparison = [
     values: commercialPlans.map(() => "Incluidos")
   },
   {
-    feature: "Google Calendar",
-    values: ["No incluido", "Incluido", "Incluido"]
-  },
-  {
-    feature: "Appointment Assistant",
-    values: ["No incluido", "Incluido", "Incluido"]
-  },
-  {
     feature: "Service Bot Tier 1",
     values: commercialPlans.map(() => "Incluido")
-  },
-  {
-    feature: "WhatsApp outbound",
-    values: commercialPlans.map(() => "No incluido")
   },
   {
     feature: "Suscripción mensual vía PayPal",

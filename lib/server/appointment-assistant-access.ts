@@ -1,19 +1,22 @@
 import "server-only";
+import { releaseAllows, RELEASE_UNAVAILABLE_MESSAGE } from "@/lib/release-boundary";
 
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canUseFeature, getClinicEntitlements, planIncludesFeature, type ClinicEntitlementsResult } from "@/lib/server/entitlements";
 
-export type AssistantAccessState = "ready" | "upgrade_required" | "subscription_missing" | "subscription_read_only" | "forbidden" | "error";
+export type AssistantAccessState = "ready" | "release_unavailable" | "upgrade_required" | "subscription_missing" | "subscription_read_only" | "forbidden" | "error";
 
 export function resolveAssistantCommercialAccess(entitlements: ClinicEntitlementsResult): AssistantAccessState {
   if (entitlements.state === "missing") return "subscription_missing";
   if (entitlements.state === "error") return "error";
+  if (!releaseAllows("appointment_assistant")) return "release_unavailable";
   if (!planIncludesFeature(entitlements, "appointment_assistant")) return "upgrade_required";
   return canUseFeature(entitlements, "appointment_assistant") ? "ready" : "subscription_read_only";
 }
 
 export function getAssistantAccessMessage(state: AssistantAccessState) {
   const messages: Record<AssistantAccessState, string> = {
+    release_unavailable: RELEASE_UNAVAILABLE_MESSAGE,
     ready: "Appointment Assistant disponible.",
     upgrade_required: "Disponible en Plus y Pro. Revisa los planes para usar Appointment Assistant.",
     subscription_missing: "Sin plan configurado. Revisa facturación para configurar una suscripción.",

@@ -16,6 +16,8 @@ const compiler = webpack({
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
     alias: {
+      // Dormant component regression only; actual MVP policy has separate tests.
+      '@/lib/release-boundary$': mock,
       '@/app/dashboard/bot/actions$': path.join(root, 'tests/assistant-browser/actions.ts'),
       '@/app/dashboard/patients/new/actions$': path.join(root, 'tests/assistant-browser/patient-actions.ts'),
       '@/app/dashboard/patients/[id]/edit/actions$': path.join(root, 'tests/assistant-browser/patient-actions.ts'),

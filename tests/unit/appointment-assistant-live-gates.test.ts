@@ -27,14 +27,14 @@ const draft = { intent: 'search_appointments', patientQuery: null, professionalQ
 function response(value: unknown) {
   return new Response(JSON.stringify({ status: 'completed', model: 'unit-model', usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 }, output: [{ content: [{ type: 'output_text', text: JSON.stringify(value) }] }] }));
 }
-test('OpenAI smoke requires actual validated provider success and emits only safe summary fields', async () => {
+test('MVP OpenAI smoke cannot opt into the excluded provider even with a key', async () => {
   let calls = 0;
   const result = await runOpenAiSmoke(env, async () => { calls++; return response(draft); });
-  assert.deepEqual(result, { status: 'PASS', reason: 'provider_success', plannerInvoked: true, plannerSuccess: true, plannerFallback: false, providerFailure: false, requests: 1 });
-  assert.equal(calls, 1);
+  assert.deepEqual(result, { status: 'BLOCKED', reason: 'release_unavailable', plannerInvoked: false, plannerSuccess: false, plannerFallback: false, providerFailure: false, requests: 0 });
+  assert.equal(calls, 0);
   assert.equal(JSON.stringify(result).includes(env.OPENAI_API_KEY), false);
 });
-for (const kind of ['timeout', 'http_error', 'invalid_json', 'invalid_schema'] as const) test(`OpenAI smoke ${kind} is never reported as live success and is not retried`, async () => {
+for (const kind of ['timeout', 'http_error', 'invalid_json', 'invalid_schema'] as const) test(`MVP OpenAI smoke does not reach a ${kind} provider double`, async () => {
   let calls = 0;
   const result = await runOpenAiSmoke(env, async () => {
     calls++;
@@ -43,11 +43,12 @@ for (const kind of ['timeout', 'http_error', 'invalid_json', 'invalid_schema'] a
     if (kind === 'invalid_json') return new Response('{PRIVATE invalid');
     return response({ inventedPatientId: 'PRIVATE_REFERENCE' });
   });
-  assert.equal(calls, 1);
-  assert.equal(result.status, 'FAIL');
-  assert.equal(result.plannerInvoked, true);
+  assert.equal(calls, 0);
+  assert.equal(result.status, 'BLOCKED');
+  assert.equal(result.reason, 'release_unavailable');
+  assert.equal(result.plannerInvoked, false);
   assert.equal(result.plannerSuccess, false);
-  assert.equal(result.plannerFallback, true);
-  assert.equal(result.providerFailure, kind !== 'invalid_schema');
+  assert.equal(result.plannerFallback, false);
+  assert.equal(result.providerFailure, false);
   assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
 });

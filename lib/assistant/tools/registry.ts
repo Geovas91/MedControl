@@ -1,4 +1,5 @@
 import "server-only";
+import { releaseAllows, RELEASE_UNAVAILABLE_MESSAGE } from "@/lib/release-boundary";
 
 import { calculateAppointmentEnd, combineClinicDateTime, type AppointmentFormValues } from "@/lib/appointments/create";
 import { getClinicDayRange } from "@/lib/dashboard/timezone";
@@ -33,6 +34,7 @@ function logTool(event: "started" | "succeeded" | "failed", context: AssistantTo
 }
 
 export async function getAssistantToolContext(): Promise<AssistantToolResult<AssistantToolContext>> {
+  if (!releaseAllows("appointment_assistant")) return assistantToolError("forbidden", RELEASE_UNAVAILABLE_MESSAGE);
   const access = await getAppointmentAssistantAccess();
   if (access.state !== "ready") return assistantToolError(access.state === "error" ? "generic" : access.state === "forbidden" ? "forbidden" : "entitlement", getAssistantAccessMessage(access.state));
   const active = access.context;
@@ -225,6 +227,7 @@ function persistedArguments(toolName: AssistantToolName, input: Record<string, u
 
 
 export async function prepareAssistantMutation(name: string, rawInput: unknown): Promise<AssistantToolResult<AssistantProposal>> {
+  if (!releaseAllows("appointment_assistant")) return assistantToolError("forbidden", RELEASE_UNAVAILABLE_MESSAGE);
   const tool = getAssistantTool(name); if (!tool || !tool.mutation) return assistantToolError("validation_error", "La herramienta solicitada no admite una acción confirmable.");
   const context = await getAssistantToolContext(); if (!context.ok) return context;
   const input = tool.inputSchema.parse(rawInput); if (!input) return assistantToolError("validation_error", "Los datos de la acción no son válidos.");
@@ -244,6 +247,7 @@ export async function prepareAssistantMutation(name: string, rawInput: unknown):
 }
 
 export async function executeConfirmedAssistantAction(actionId: string): Promise<AssistantToolResult<unknown>> {
+  if (!releaseAllows("appointment_assistant")) return assistantToolError("forbidden", RELEASE_UNAVAILABLE_MESSAGE);
   const current = await getAssistantToolContext(); if (!current.ok) return current;
   const client = await createClient();
   const scoped = await client.from("assistant_pending_actions" as never).select("id" as never).eq("id", actionId).eq("clinic_id", current.data.clinicId).maybeSingle() as unknown as { data: { id: string } | null; error: { code?: string } | null };

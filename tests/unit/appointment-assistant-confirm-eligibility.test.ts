@@ -75,6 +75,8 @@ function mountRegistry(role: "owner" | "admin" | "assistant" | "doctor" = "assis
     }
   };
   const mocks: Record<string, unknown> = {
+    // Dormant implementation regression only; MVP denial is tested separately.
+    "@/lib/release-boundary": { releaseAllows: () => true },
     "server-only": {},
     "@/lib/server/appointment-assistant-access": {
       getAppointmentAssistantAccess: async () => ({ state: state.accessState, context: { state: "ready", user: { id: actorId }, tenant: { clinic: { id: clinicId, timezone: "America/Mexico_City" }, membership: { id: professionalId, role, is_professional: true } } } }),
