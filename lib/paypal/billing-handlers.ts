@@ -1,11 +1,12 @@
-import { BillingError, validateBillingIntent, validateProviderApproval } from "./billing-policy.ts";
+import { BillingError, billingErrorMessage, validateBillingIntent, validateProviderApproval } from "./billing-policy.ts";
 import type { BillingActor, BillingIntent, ProviderSubscription } from "./billing-policy.ts";
 
 type Dependencies = {
   authorize(): Promise<BillingActor>;
   plan(id: string): string | null;
   begin(actor: BillingActor, plan: string, providerPlan: string): Promise<BillingIntent>;
-  create(intent: BillingIntent): Promise<ProviderSubscription>;
+  claim(actor: BillingActor, intent: BillingIntent): Promise<boolean>;
+  create(intent: BillingIntent, claim: () => Promise<void>): Promise<ProviderSubscription>;
   bind(intent: BillingIntent, subscriptionId: string): Promise<void>;
   find(id: string): Promise<BillingIntent | null>;
   details(id: string): Promise<ProviderSubscription>;
@@ -15,8 +16,9 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const subscriptionIdPattern = /^I-[A-Z0-9]{6,64}$/;
 
 function failure(error: unknown) {
-  return Response.json({ error: "No se pudo completar la operación de facturación.", code: error instanceof BillingError ? error.message : "billing_unavailable" },
-    { status: error instanceof BillingError ? error.status : 503 });
+  const code = error instanceof BillingError ? error.message : "billing_unavailable";
+  return Response.json({ error: billingErrorMessage(code), code },
+    { status: error instanceof BillingError ? error.status : 503, headers: { "Cache-Control": "no-store" } });
 }
 async function payload(request: Request): Promise<Record<string, unknown>> {
   try {
@@ -36,15 +38,31 @@ export function createBillingHandlers(deps: Dependencies) {
         const providerPlan = deps.plan(plan);
         if (!providerPlan) throw new BillingError(400, "invalid_plan");
         const intent = await deps.begin(actor, plan, providerPlan);
+        // Missing migration/state must fail closed, never fall back to the old creator.
+        if (!Object.hasOwn(intent, "creation_dispatched_at")) throw new BillingError(503, "billing_unavailable");
+        if (intent.user_id !== actor.userId || intent.clinic_id !== actor.clinicId || intent.plan_id !== plan || intent.provider_plan_id !== providerPlan) throw new BillingError(403, "invalid_billing_intent");
+        if (!intent.provider_subscription_id && intent.creation_dispatched_at) throw new BillingError(409, "billing_creation_unknown");
+        const requireUnexpired = () => {
+          if (!(Date.parse(intent.expires_at) > Date.now())) throw new BillingError(409, "billing_reconciliation_required");
+        };
+        requireUnexpired();
         if (!intent.provider_subscription_id) {
-          const details = await deps.create(intent);
-          if (!subscriptionIdPattern.test(details.id) || details.plan_id !== intent.provider_plan_id || details.custom_id !== intent.id) {
+          const created = await deps.create(intent, async () => {
+            if (await deps.claim(actor, intent) !== true) throw new BillingError(409, "billing_creation_unknown");
+          });
+          if (!subscriptionIdPattern.test(created.id)) {
             throw new BillingError(503, "provider_subscription_mismatch");
           }
-          await deps.bind(intent, details.id);
-          intent.provider_subscription_id = details.id;
+          // Persist the ID before a subsequent provider GET can fail.
+          await deps.bind(intent, created.id);
+          intent.provider_subscription_id = created.id;
         }
-        return Response.json({ intentId: intent.id, subscriptionId: intent.provider_subscription_id });
+        const details = await deps.details(intent.provider_subscription_id);
+        if (details.id !== intent.provider_subscription_id || details.plan_id !== intent.provider_plan_id || details.custom_id !== intent.id) throw new BillingError(409, "provider_subscription_mismatch");
+        if (["ACTIVE", "APPROVED"].includes(details.status ?? "")) throw new BillingError(409, "billing_subscription_exists");
+        if (details.status !== "APPROVAL_PENDING") throw new BillingError(409, "billing_reconciliation_required");
+        requireUnexpired();
+        return Response.json({ intentId: intent.id, subscriptionId: intent.provider_subscription_id }, { headers: { "Cache-Control": "no-store" } });
       } catch (error) { return failure(error); }
     },
     async approve(request: Request) {

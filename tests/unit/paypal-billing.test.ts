@@ -10,7 +10,7 @@ const actor = { userId: "owner", clinicId: "clinic-a" };
 const owner = { userId: actor.userId, clinicId: actor.clinicId, membershipClinicId: actor.clinicId, membershipStatus: "active", role: "owner" };
 const request = (body: unknown) => new Request("http://localhost/api/paypal", { method: "POST", body: JSON.stringify(body) });
 const input = { intentId: id, subscriptionId: "I-SUBSCRIPTION1", planId: "basic", clinic_id: "untrusted-clinic" };
-const pending = (): BillingIntent => ({ id, user_id: actor.userId, clinic_id: actor.clinicId, plan_id: "basic", provider_plan_id: "P-BASIC", provider_subscription_id: input.subscriptionId, status: "pending", expires_at: new Date(Date.now() + 60_000).toISOString() });
+const pending = (): BillingIntent => ({ id, user_id: actor.userId, clinic_id: actor.clinicId, plan_id: "basic", provider_plan_id: "P-BASIC", provider_subscription_id: input.subscriptionId, status: "pending", expires_at: new Date(Date.now() + 60_000).toISOString(), creation_dispatched_at: null });
 
 function billing() {
   const state = { intent: pending() as BillingIntent | null, writes: 0, reads: 0, providers: 0, role: owner, providerStatus: "ACTIVE", providerId: input.subscriptionId, providerPlan: "P-BASIC", custom: id, failedProvider: false };
@@ -18,7 +18,8 @@ function billing() {
     authorize: async () => authorizeBillingActor(state.role),
     plan: (plan) => plan === "basic" ? "P-BASIC" : null,
     begin: async (who, plan, providerPlan) => { assert.deepEqual(who, actor); assert.equal(plan, "basic"); assert.equal(providerPlan, "P-BASIC"); state.writes++; return { ...pending(), provider_subscription_id: null }; },
-    create: async (intent) => ({ id: input.subscriptionId, plan_id: intent.provider_plan_id, custom_id: intent.id }),
+    claim: async () => true,
+    create: async (intent, claim) => { await claim(); return { id: input.subscriptionId, plan_id: intent.provider_plan_id, custom_id: intent.id }; },
     bind: async () => { state.writes++; },
     find: async () => { state.reads++; return state.intent; },
     details: async () => { state.providers++; if (state.failedProvider) throw new Error("SECRET_PROVIDER_EMAIL_TOKEN"); return { id: state.providerId, plan_id: state.providerPlan, custom_id: state.custom, status: state.providerStatus }; },
@@ -34,7 +35,9 @@ function billing() {
 
 test("owner can initiate and approve; client clinic_id never supplies tenant", async () => {
   const { state, handlers } = billing();
+  state.providerStatus = "APPROVAL_PENDING";
   assert.equal((await handlers.initiate(request(input))).status, 200);
+  state.providerStatus = "ACTIVE";
   assert.equal((await handlers.approve(request(input))).status, 200);
   assert.equal(state.writes, 3);
 });
