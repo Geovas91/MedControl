@@ -1,13 +1,22 @@
-// PREPARED, NOT EXECUTED by V1-02. Requires separately authorized 0067 already
+// Requires separately authorized 0067 already
 // applied to this disposable local container. No dotenv, remote DB or PayPal.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+
+const [, , option, container] = process.argv;
+if (option !== '--container' || !/^clinicontrol-v102-acceptance-[a-z0-9]+$/.test(container ?? '') || process.argv.length !== 4) {
+  throw new Error('Explicit disposable V1-02 container required: --container clinicontrol-v102-acceptance-<id>');
+}
+const identity = JSON.parse(execFileSync('docker', ['inspect', container], { encoding: 'utf8' }))[0];
+assert.equal(identity.Config.Labels?.['clinicontrol.qa.disposable'], 'v102-15af16b');
+assert.equal(identity.HostConfig.NetworkMode, 'none');
+assert.equal(identity.Mounts.length, 0, 'No shared/persistent volumes allowed');
 
 function sql(statement) {
   return new Promise((resolve, reject) => {
-    const child = spawn('docker', ['exec', '-i', 'supabase_db_CliniControl', 'psql', '-X', '-qAt', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1']);
+    const child = spawn('docker', ['exec', '-i', container, 'psql', '-h', '/v102', '-X', '-qAt', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1']);
     let stdout = '', stderr = '';
     child.stdout.on('data', chunk => { stdout += chunk; });
     child.stderr.on('data', chunk => { stderr += chunk; });
@@ -47,6 +56,12 @@ test('real separate PostgreSQL connections serialize begin and allow only one cr
     assert.notEqual(retry.code, 0); assert.match(retry.stderr, /billing_creation_unknown/);
     const count = await sql(`select count(*) from public.paypal_billing_intents where clinic_id='${clinic}';`);
     assert.equal(count.code, 0, count.stderr); assert.equal(count.stdout, '1');
+    const expire = await sql(`update public.paypal_billing_intents set expires_at=now()-interval '1 day' where id='${intent}' and clinic_id='${clinic}';`);
+    assert.equal(expire.code, 0, expire.stderr);
+    const expiredRetry = await sql(begin);
+    assert.notEqual(expiredRetry.code, 0); assert.match(expiredRetry.stderr, /billing_creation_unknown/);
+    const repeatedClaim = await sql(claim);
+    assert.equal(repeatedClaim.code, 0, repeatedClaim.stderr); assert.equal(repeatedClaim.stdout, 'f');
   } finally {
     // Only the generated synthetic billing/identity fixtures in this local DB.
     const cleanup = await sql(`begin;

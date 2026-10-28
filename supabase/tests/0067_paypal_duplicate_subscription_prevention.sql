@@ -1,4 +1,4 @@
--- PREPARED, NOT EXECUTED. Local disposable DB with reviewed 0067 already applied.
+-- Local disposable DB only, with reviewed 0067 already applied.
 begin;
 select extensions.no_plan();
 insert into auth.users(id,email) values
@@ -63,5 +63,17 @@ select extensions.throws_ok($$select public.complete_paypal_billing_intent((sele
  '67100000-0000-4000-8000-000000000001','67000000-0000-4000-8000-000000000001','basic','I-V102LOCAL1','P-BASIC','active',null,null)$$,
  '23505','billing_subscription_exists','old approval cannot replace active plan');
 select extensions.is((select count(*)::integer from public.paypal_billing_intents where clinic_id='67100000-0000-4000-8000-000000000001'),1,'no replacement operation created');
+select extensions.ok((select indisunique and indisvalid and indpred is not null
+ from pg_index where indexrelid='public.paypal_billing_intents_one_pending_per_clinic'::regclass),'valid partial unique index exists');
+update public.paypal_billing_intents set expires_at=now()-interval '1 day' where id=(select id from v102_intent);
+select extensions.throws_ok($$insert into public.paypal_billing_intents(clinic_id,user_id,plan_id,provider_plan_id)
+ values('67100000-0000-4000-8000-000000000001','67000000-0000-4000-8000-000000000001','basic','P-DUP')$$,
+ '23505',null,'index rejects another pending intent even though existing one expired');
+set local role service_role;
+select extensions.throws_ok($$insert into public.paypal_billing_intents default values$$,'42501',null,'direct INSERT denied');
+select extensions.throws_ok($$update public.paypal_billing_intents set creation_dispatched_at=null where false$$,'42501',null,'direct permit reset denied');
+select extensions.throws_ok($$delete from public.paypal_billing_intents where false$$,'42501',null,'direct DELETE denied');
+select extensions.throws_ok($$truncate public.paypal_billing_intents$$,'42501',null,'direct TRUNCATE denied');
+reset role;
 select * from extensions.finish();
 rollback;

@@ -131,13 +131,9 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','35000000-0000-4000-8000-000000000001',true);
 select extensions.is((select count(*)::integer from public.clinic_subscriptions where clinic_id='35100000-0000-4000-8000-000000000001'),1,'owner reads own subscription');
 select extensions.is((select count(*)::integer from public.clinic_subscriptions where clinic_id='35100000-0000-4000-8000-000000000002'),0,'owner cannot read another tenant subscription');
--- UPDATE USING filters unauthorized rows rather than raising 42501. Check actual
--- writes and persisted state rather than assuming the final webhook fixture status.
-with unauthorized_update as (
-  update public.clinic_subscriptions set status='cancelled'
-  where clinic_id='35100000-0000-4000-8000-000000000001' returning id
-)
-select extensions.is((select count(*) from unauthorized_update),0::bigint,
+-- 0062 revokes UPDATE itself; the latest baseline rejects before RLS filtering.
+select extensions.throws_ok($$update public.clinic_subscriptions set status='cancelled'
+  where clinic_id='35100000-0000-4000-8000-000000000001'$$,'42501',null,
   'tenant owner cannot bypass billing and write subscription directly');
 select extensions.is((select status from public.clinic_subscriptions
   where clinic_id='35100000-0000-4000-8000-000000000001'),(select status from protected_subscription_snapshot),

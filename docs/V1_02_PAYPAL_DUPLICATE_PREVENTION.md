@@ -1,5 +1,10 @@
 # V1-02 — Prevención de suscripciones PayPal duplicadas
 
+Actualización: la aceptación PostgreSQL local fue ejecutada posteriormente.
+Resultados, correcciones del harness y límites en
+[V1_02_POSTGRESQL_ACCEPTANCE.md](V1_02_POSTGRESQL_ACCEPTANCE.md).
+Las menciones a pruebas pendientes abajo describen la entrega inicial.
+
 Base local/remota verificada mediante fetch: `3e9ad9171c34a185a793fc57c19bcc431ff73de4`.
 Rama: `codex/v1-02-paypal-duplicate-prevention`. Un commit local; sin push ni despliegue.
 
