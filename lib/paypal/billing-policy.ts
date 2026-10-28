@@ -66,6 +66,7 @@ export function validateBillingIntent(intent: BillingIntent | null, actor: Billi
 }
 
 export type ProviderSubscription = {
+  status_update_time?: string;
   id: string; plan_id?: string; custom_id?: string; status?: string;
   start_time?: string; billing_info?: { next_billing_time?: string };
 };

@@ -6,6 +6,7 @@ export type WebhookEvent = { id?: string; event_type?: string; resource?: {
 } };
 type Claim = { state: "processed" | "busy" | "claimed"; token?: string };
 type Dependencies = {
+  reconcile?(event: string, token: string, subscription: string): Promise<string>;
   verify(request: Request, event: WebhookEvent): Promise<boolean>;
   claim(event: string, type: string, subscription: string | null): Promise<Claim>;
   details(subscription: string): Promise<ProviderSubscription>;
@@ -16,7 +17,6 @@ const supportedEvents = new Set([
   "BILLING.SUBSCRIPTION.ACTIVATED", "BILLING.SUBSCRIPTION.CANCELLED", "BILLING.SUBSCRIPTION.EXPIRED",
   "BILLING.SUBSCRIPTION.SUSPENDED", "BILLING.SUBSCRIPTION.PAYMENT.FAILED", "PAYMENT.SALE.COMPLETED", "PAYMENT.SALE.DENIED"
 ]);
-const statuses: Record<string, string> = { ACTIVE: "active", APPROVED: "inactive", APPROVAL_PENDING: "inactive", SUSPENDED: "past_due", CANCELLED: "cancelled", EXPIRED: "cancelled" };
 const reply = (status: number, message: string) => Response.json({ message }, { status });
 
 export function createPaypalWebhookHandler(deps: Dependencies) {
@@ -43,15 +43,15 @@ export function createPaypalWebhookHandler(deps: Dependencies) {
       if (claim.state === "busy") return reply(503, "Webhook processing in progress.");
       token = claim.token;
       if (!token) throw new Error("lease_missing");
-      let details: ProviderSubscription | null = null;
-      let status: string | null = null;
+      const details: ProviderSubscription | null = null;
+      const status: string | null = null;
       if (supportedEvents.has(event.event_type)) {
         if (!subscription) throw new Error("subscription_missing");
+        if (!deps.reconcile) throw new Error('reconciliation_unavailable');
+        const outcome = await deps.reconcile(event.id, token, subscription);
+        if (outcome !== 'processed') throw new Error('reconciliation_pending');
+        return reply(200, 'Webhook processed.');
         // Use authoritative current state instead of replaying a stale activation/cancellation.
-        details = await deps.details(subscription);
-        status = statuses[details.status ?? ""] ?? null;
-        if (details.id !== subscription || !details.plan_id || !status) throw new Error("provider_mismatch");
-        if (status === "active" && ["PAYMENT.SALE.DENIED", "BILLING.SUBSCRIPTION.PAYMENT.FAILED"].includes(event.event_type)) status = "past_due";
       }
       const result = await deps.finish(event.id, token, status, details);
       return result === "processed" ? reply(200, "Webhook processed.") : reply(503, "Webhook processing failed.");

@@ -95,6 +95,13 @@ test("provider errors sanitized and no approval writes", async () => {
 function webhook() {
   const state = { status: "received", token: 0, lease: 0, now: 1000, attempts: 0, mutations: 0, valid: true, providerFails: false, databaseFails: false, failureMarkerFails: false, missingSubscription: false, providerState: "ACTIVE", appliedStatus: "", claims: 0, providerCalls: 0 };
   const handler = createPaypalWebhookHandler({
+    reconcile: async () => {
+      state.providerCalls++;
+      if(state.providerFails || state.databaseFails) throw new Error('private');
+      if(state.missingSubscription) {state.status='failed';return 'failed';}
+      state.mutations++; state.appliedStatus=({ACTIVE:'active',CANCELLED:'cancelled'} as Record<string,string>)[state.providerState];
+      state.status='processed';return 'processed';
+    },
     verify: async () => state.valid,
     claim: async () => {
       state.claims++;
@@ -158,10 +165,10 @@ test("cancellation uses current provider state", async () => {
   assert.equal((await deliver("BILLING.SUBSCRIPTION.CANCELLED")).status, 200); assert.equal(state.mutations, 1);
   assert.equal(state.appliedStatus, "cancelled");
 });
-test("payment failure preserves past_due without reviving cancelled subscriptions", async () => {
+test("payment failure preserves verified current state without reviving cancelled subscriptions", async () => {
   const first = webhook();
   assert.equal((await first.deliver("BILLING.SUBSCRIPTION.PAYMENT.FAILED")).status, 200);
-  assert.equal(first.state.appliedStatus, "past_due");
+  assert.equal(first.state.appliedStatus, "active");
   const cancelled = webhook(); cancelled.state.providerState = "CANCELLED";
   await cancelled.deliver("BILLING.SUBSCRIPTION.PAYMENT.FAILED");
   assert.equal(cancelled.state.appliedStatus, "cancelled");

@@ -16,6 +16,7 @@ type PaypalVerifyWebhookResponse = {
 };
 
 type PaypalSubscriptionDetails = {
+  status_update_time?: string;
   id: string;
   custom_id?: string;
   status?: string;
