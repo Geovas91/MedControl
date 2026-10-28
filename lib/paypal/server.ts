@@ -125,8 +125,11 @@ export async function getPaypalSubscriptionDetails(subscriptionId: string) {
   return (await response.json()) as PaypalSubscriptionDetails;
 }
 
-export async function createPaypalSubscription(intent: { id: string; provider_plan_id: string }) {
+export async function createPaypalSubscription(intent: { id: string; provider_plan_id: string }, claim: () => Promise<void>) {
   const accessToken = await getPaypalAccessToken();
+  // A failed OAuth request is safe to retry; after this one-use DB claim no
+  // further POST is allowed, even if the result or its persistence is lost.
+  await claim();
   const response = await fetch(`${getPaypalBaseUrl()}/v1/billing/subscriptions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "PayPal-Request-Id": intent.id },
@@ -137,7 +140,7 @@ export async function createPaypalSubscription(intent: { id: string; provider_pl
   if (!response.ok) throw new Error("paypal_creation_failed");
   const created = (await response.json()) as { id?: string };
   if (!created.id || !/^I-[A-Z0-9]{6,64}$/.test(created.id)) throw new Error("paypal_creation_failed");
-  return getPaypalSubscriptionDetails(created.id);
+  return { id: created.id };
 }
 
 export async function verifyPaypalWebhookSignature(headers: PaypalWebhookHeaders, webhookEvent: PaypalWebhookEvent) {

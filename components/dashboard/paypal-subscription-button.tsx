@@ -1,14 +1,18 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import type { PlanId } from "@/types/subscriptions";
+import { BillingError, billingErrorMessage } from "@/lib/paypal/billing-policy";
+import { createBillingSubmissionClient } from "@/lib/paypal/creation-client";
 
 type PaypalSubscriptionButtonProps = {
   clientId: string | null;
   planId: PlanId;
   paypalPlanId: string | null;
   label: string;
+  disabledReason?: string | null;
 };
 
 type PaypalButtons = {
@@ -25,6 +29,7 @@ type PaypalNamespace = {
     createSubscription(): Promise<string>;
     onApprove(data: { subscriptionID?: string }): Promise<void>;
     onError(error: unknown): void;
+    onCancel(): void;
   }): PaypalButtons;
 };
 
@@ -35,6 +40,7 @@ declare global {
 }
 
 let paypalScriptPromise: Promise<void> | null = null;
+const initiateSubscription = createBillingSubmissionClient((...args) => fetch(...args));
 
 function loadPaypalScript(clientId: string) {
   if (window.paypal) {
@@ -68,18 +74,19 @@ function loadPaypalScript(clientId: string) {
   return paypalScriptPromise;
 }
 
-export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label }: PaypalSubscriptionButtonProps) {
+export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label, disabledReason }: PaypalSubscriptionButtonProps) {
+  const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
   const renderedRef = useRef(false);
   const generatedId = useId();
-  const [status, setStatus] = useState<"idle" | "loading" | "approved" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "approved" | "error" | "blocked">("idle");
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let intentId: string | null = null;
 
-    if (!clientId || !paypalPlanId || !containerRef.current || renderedRef.current) {
+    if (disabledReason || !clientId || !paypalPlanId || !containerRef.current || renderedRef.current) {
       return;
     }
 
@@ -101,14 +108,19 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
               label: "subscribe"
             },
             async createSubscription() {
-              const response = await fetch("/api/paypal/subscription/create", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ planId })
-              });
-              const result = await response.json() as { intentId?: string; subscriptionId?: string };
-              if (!response.ok || !result.intentId || !result.subscriptionId) throw new Error("No se pudo iniciar la suscripción.");
-              intentId = result.intentId;
-              return result.subscriptionId;
+              setStatus("loading");
+              setMessage(null);
+              try {
+                const result = await initiateSubscription(planId);
+                intentId = result.intentId;
+                return result.subscriptionId;
+              } catch (error) {
+                const blocked = error instanceof BillingError && error.status === 409;
+                setStatus(blocked ? "blocked" : "error");
+                setMessage(billingErrorMessage(error instanceof BillingError ? error.message : "billing_unavailable"));
+                if (blocked) router.refresh();
+                throw error;
+              }
             },
             async onApprove(data) {
               if (!data.subscriptionID || !intentId) {
@@ -140,13 +152,19 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
 
               setStatus("approved");
               setMessage(result.message ?? "Suscripción registrada correctamente.");
+              router.refresh();
             },
             onError() {
-              setStatus("error");
-              setMessage("PayPal no pudo iniciar la suscripción. Intenta de nuevo.");
+              setStatus(previous => previous === "blocked" ? "blocked" : "error");
+              setMessage(previous => previous ?? "No se pudo confirmar la solicitud. Recarga facturación para verificar su estado antes de iniciar otra.");
+            },
+            onCancel() {
+              setStatus(previous => previous === "blocked" ? "blocked" : "idle");
+              setMessage(previous => previous ?? "La aprobación no se completó. Puedes continuar la misma solicitud; no se creará otra suscripción.");
             }
           })
-          .render(containerRef.current);
+          .render(containerRef.current)
+          .then(() => { if (!cancelled) setStatus("idle"); });
       })
       .catch(() => {
         setStatus("error");
@@ -156,7 +174,9 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
     return () => {
       cancelled = true;
     };
-  }, [clientId, paypalPlanId, planId]);
+  }, [clientId, paypalPlanId, planId, disabledReason, router]);
+
+  if (disabledReason) return <p className="clinical-surface p-3 text-sm text-slate-600" role="status">{disabledReason}</p>;
 
   if (!clientId || !paypalPlanId) {
     return (
@@ -168,7 +188,8 @@ export function PaypalSubscriptionButton({ clientId, planId, paypalPlanId, label
 
   return (
     <div className="clinical-surface grid gap-2 p-3">
-      <div id={`paypal-subscription-${generatedId}`} ref={containerRef} aria-label={label} />
+      <div id={`paypal-subscription-${generatedId}`} ref={containerRef} aria-label={label} aria-busy={status === "loading"}
+        inert={status === "loading" || status === "approved" || status === "blocked"} />
       {status === "loading" ? <p className="text-xs text-slate-500">Preparando suscripción segura...</p> : null}
       {message ? (
         <p className={status === "approved" ? "text-xs text-emerald-700" : "text-xs text-rose-700"}>{message}</p>

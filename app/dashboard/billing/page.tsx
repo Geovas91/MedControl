@@ -6,7 +6,8 @@ import { PaypalSubscriptionButton } from "@/components/dashboard/paypal-subscrip
 import { commercialPlans } from "@/config/plans";
 import { formatMXN } from "@/lib/format";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
-import { canManageBilling } from "@/lib/paypal/billing-policy";
+import { billingErrorMessage, canManageBilling } from "@/lib/paypal/billing-policy";
+import { getPaypalBillingCreationAvailability } from "@/lib/paypal/billing-server";
 import { getPaypalEnvironment, getPaypalPlanIdForPlan, hasPaypalPublicConfig } from "@/lib/paypal/server";
 import { getClinicPlanContext } from "@/lib/supabase/subscriptions";
 import type { SubscriptionStatus } from "@/types/subscriptions";
@@ -44,6 +45,7 @@ export default async function BillingPage() {
   const currentStatus = planContext?.subscription.status ?? "inactive";
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID?.trim() || null;
   const hasPublicPaypalConfig = hasPaypalPublicConfig();
+  const availability = canBill ? await getPaypalBillingCreationAvailability() : { code: "billing_unavailable", resumePlan: null };
 
   return (
     <>
@@ -83,7 +85,9 @@ export default async function BillingPage() {
         {commercialPlans.map((plan) => {
           const paypalPlanId = getPaypalPlanIdForPlan(plan);
           const isCurrentPlan = planContext?.planId === plan.id;
-          const actionLabel = isCurrentPlan ? `Mantener ${plan.name}` : `Cambiar a ${plan.name}`;
+          const actionLabel = availability.resumePlan === plan.id ? `Continuar suscripción a ${plan.name}` : `Suscribirse a ${plan.name}`;
+          const disabledReason = availability.code !== "ready" ? billingErrorMessage(availability.code)
+            : availability.resumePlan && availability.resumePlan !== plan.id ? billingErrorMessage("billing_intent_in_progress") : null;
 
           return (
             <article key={plan.id} className="glass-card flex flex-col p-5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--clinic-border)] hover:shadow-[var(--shadow-soft)]">
@@ -127,6 +131,7 @@ export default async function BillingPage() {
                   planId={plan.id}
                   paypalPlanId={paypalPlanId}
                   label={actionLabel}
+                  disabledReason={disabledReason}
                 /> : <p className="text-sm text-slate-600">Sólo el propietario puede gestionar la suscripción.</p>}
               </div>
             </article>
