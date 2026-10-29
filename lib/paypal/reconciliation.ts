@@ -20,7 +20,7 @@ export function verifyObservation(subscription: string, ticket: ReconciliationTi
   const updated = providerTime(details.status_update_time);
   const start = providerTime(details.start_time);
   const end = providerTime(details.billing_info?.next_billing_time);
-  if (start && end && Date.parse(end) < Date.parse(start)) throw new Error('provider_mismatch');
+  if (start && end && Date.parse(end) <= Date.parse(start)) throw new Error('provider_mismatch');
   return { id: subscription, plan: details.plan_id!, status: details.status!, custom: details.custom_id ?? null,
     updated, start, end, verified: new Date().toISOString() };
 }

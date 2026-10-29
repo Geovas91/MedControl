@@ -98,7 +98,7 @@ begin
   or (p_custom is not null and p_custom is distinct from a.custom_id) or p_verified is null
   or not isfinite(p_verified) or (p_updated is not null and not isfinite(p_updated))
   or (p_start is not null and not isfinite(p_start)) or (p_end is not null and not isfinite(p_end))
-  or coalesce(p_end,s.current_period_end)<coalesce(p_start,s.current_period_start)
+  or coalesce(p_end,s.current_period_end)<=coalesce(p_start,s.current_period_start)
   or p_updated>clock_timestamp()+interval '5 seconds' or p_verified>clock_timestamp()+interval '5 seconds' or p_verified<clock_timestamp()-interval '2 minutes' then why:='provider_mismatch';
  elsif f.provider_updated_at is not null and (p_updated is null or p_updated<f.provider_updated_at or (p_updated=f.provider_updated_at and mapped<>s.status)) then why:='stale_observation';
  -- status_update_time versions status, not the billing schedule. Equal status

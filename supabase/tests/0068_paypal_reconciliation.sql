@@ -124,5 +124,31 @@ select pg_temp.claim('terminal');
 select extensions.is(pg_temp.finish('terminal','ACTIVE'),'requires_review','cancelled cannot revive');
 select extensions.is((select status from public.clinic_subscriptions where provider_subscription_id='I-V103LOCAL1'),'cancelled','terminal state preserved');
 select extensions.ok((select indisunique and indisvalid and indisready from pg_index where indexrelid='public.paypal_billing_intents_one_pending_per_clinic'::regclass),'V1-02 unique pending index retained');
+-- Strict effective intervals: exercise both transaction paths with stored dates.
+-- Snapshot the entire subscription, so status, dates and updated_at must survive.
+create temp table period_before as select to_jsonb(s) row_value from public.clinic_subscriptions s where provider_subscription_id='I-V103LOCAL1';
+create function pg_temp.strict_period_tests() returns setof text language plpgsql as $$
+declare web boolean; scenario text; v_label text; v_start timestamptz; v_end timestamptz; result text;
+begin
+ foreach web in array array[false,true] loop
+  foreach scenario in array array['equal','offset-equal','earlier','start-only-equal','end-only-equal'] loop
+   v_label:='strict-'||web::text||'-'||scenario;
+   v_start:='2025-01-01T00:00:00Z'; v_end:=v_start;
+   if scenario='offset-equal' then v_end:='2024-12-31T18:00:00-06:00'; end if;
+   if scenario='earlier' then v_end:='2024-12-31T00:00:00Z'; end if;
+   if scenario='start-only-equal' then
+    select current_period_end into v_start from public.clinic_subscriptions where provider_subscription_id='I-V103LOCAL1'; v_end:=null;
+   elsif scenario='end-only-equal' then
+    select current_period_start into v_end from public.clinic_subscriptions where provider_subscription_id='I-V103LOCAL1'; v_start:=null;
+   end if;
+   perform pg_temp.claim(v_label,web);
+   result:=pg_temp.finish(v_label,'ACTIVE',v_start,v_end);
+   return next extensions.is(result,'requires_review',v_label||' rejected before update');
+   return next extensions.ok((select state='requires_review' and reason='provider_mismatch' from public.paypal_reconciliations where id=(select (t->>'id')::uuid from tickets where tickets.label=v_label)),v_label||' audit preserves provider mismatch');
+   return next extensions.is((select to_jsonb(s) from public.clinic_subscriptions s where provider_subscription_id='I-V103LOCAL1'),(select row_value from period_before),v_label||' entire subscription unchanged');
+  end loop;
+ end loop;
+end $$;
+select * from pg_temp.strict_period_tests();
 select * from extensions.finish();
 rollback;

@@ -56,7 +56,7 @@ Finalization rechecks its lease after waiting for the subscription lock and chec
 
 ## SQL artifacts and execution limits
 
-supabase/tests/0068_paypal_reconciliation.sql is PREPARED, NOT EXECUTED. It has 48 prepared pgTAP assertions (not an executed assertion count): grants, definer ownership/search_path, RLS, real owner of another clinic, cross-clinic binding rejection, all four optional date combinations in both finalization paths, persisted values, malformed/non-finite/inconsistent dates, trusted missing custom, unresolved historical binding, stale generations/provider times/backwards dates, equal status versions with schedule advancement/state conflict, terminal protection and expired leases. Sequential interleaving is not a real independent-connection concurrency result.
+supabase/tests/0068_paypal_reconciliation.sql is PREPARED, NOT EXECUTED. It has 78 prepared pgTAP assertions (48 existing plus 30 emitted by the strict-interval matrix) (not an executed assertion count): grants, definer ownership/search_path, RLS, real owner of another clinic, cross-clinic binding rejection, all four optional date combinations in both finalization paths, persisted values, malformed/non-finite/inconsistent dates, trusted missing custom, unresolved historical binding, stale generations/provider times/backwards dates, equal status versions with schedule advancement/state conflict, terminal protection and expired leases. Sequential interleaving is not a real independent-connection concurrency result.
 
 scripts/test-paypal-reconciliation-concurrency.mjs is PREPARED, NOT EXECUTED. It opens separate psql processes, waits for barriers and observes pg_blocking_pids rather than inferring overlap from sleeps. Scenarios: competing begins and inverted completion; independent versus webhook completion; three-way begin/queued owner revocation/finalize; existing approval locks and snapshot conflict; first approval uncommitted versus early webhook and recovery; lease expiry waiting for the fence and for the subscription. Only JavaScript syntax was checked locally. Execution also remains necessary to validate the harness itself.
 
@@ -77,8 +77,8 @@ Cancellation must claim the same fence BEFORE its provider operation, persist on
 
 ## Validation
 
-- Focused billing/provider/creation/reconciliation tests: 126 PASS, 0 FAIL, 0 SKIP.
-- Full unit suite: 931 PASS, 0 FAIL, 0 SKIP.
+- Focused billing/provider/creation/reconciliation tests: 133 PASS, 0 FAIL, 0 SKIP.
+- Full unit suite: 938 PASS, 0 FAIL, 0 SKIP.
 - TypeScript --noEmit --incremental false: PASS.
 - ESLint: 0 errors, two pre-existing patient-actions navigation warnings.
 - git diff --check: PASS.
@@ -96,3 +96,11 @@ Old application + 0068 is incompatible: old webhook writer loses EXECUTE. New ap
 Deployment requires independent review, approved SQL/concurrency acceptance, compatible protected application/migration cutover (old webhook writer loses EXECUTE), confirmed backup/recovery and separate authorization. No production/Staging/Supabase/PayPal mutation performed. Overall V1_03_B_IMPLEMENTATION=PARTIAL; not DONE.
 
 Remediation code/local validation: V1_03_B_REMEDIATION=PASS. Database acceptance: V1_03_B_SQL_ACCEPTANCE=BLOCKED. These separate statuses do not approve integration or provisioning. The next step is independent review of this remediation, then explicit authorization for a disposable lab and execution of the prepared migration/SQL/concurrency acceptance; retain the PR as Draft until those gates are resolved.
+
+## Strict billing period follow-up
+
+The final read-only review found that equal endpoints passed validation but violated the unchanged 0003 CHECK. verifyObservation now rejects end <= start using parsed instants, including equivalent timezone offsets. Malformed-date checks are unchanged. finish_paypal_reconciliation rejects effective_end <= effective_start using COALESCE with existing dates, before any subscription update, classifying the attempt requires_review/provider_mismatch. The comparison is shared by independent and webhook finalization. Migrations 0003 and 0067 and the existing period CHECK are unchanged.
+
+Seven additional unit tests cover identical and offset-equivalent instants, rejection through the production RPC adapter under both authorizations without calling finalization, safe audit reason projection, and a strictly later instant with an offset. Existing earlier-end, valid partial, absent-date and malformed-date tests remain. SQL adds a 2-path x 5-scenario x 3-assertion matrix: equal, offset-equal, earlier, start-only-equal and end-only-equal. It checks requires_review, durable provider_mismatch audit state (never applied), and equality of the entire stored subscription including status, dates and updated_at. Existing SQL assertions cover valid partial updates and absent fields. Partial validation is transactional SQL behavior, not established by unit mocks.
+
+Local results: 133 focused and 938 complete unit tests PASS, no failures/skips. PostgreSQL execution remains BLOCKED; 78 is the prepared assertion count, not an executed result. No lab was created and no remote migration or provider request was performed. V1_03_B_PERIOD_FIX=PASS applies only to this focused correction; V1_03_B_SQL_ACCEPTANCE=BLOCKED and the complete milestone remains PARTIAL pending database acceptance and independent review.

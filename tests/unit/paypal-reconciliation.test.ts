@@ -135,6 +135,24 @@ for(const bad of ['invalid','2026-02-31T00:00:00Z','2026-01-01','infinity','2026
  assert.throws(()=>verifyObservation(provider.id,trustedTicket,{...provider,...patch}),/provider_mismatch/);
 });
 test('inconsistent period rejected',()=>{assert.throws(()=>verifyObservation(provider.id,trustedTicket,{...provider,start_time:periodEnd,billing_info:{next_billing_time:periodStart}}),/provider_mismatch/);});
+for(const end of [periodStart,'2025-12-31T18:00:00-06:00']) {
+ test('equal period instants rejected: '+end,()=>{
+  assert.throws(()=>verifyObservation(provider.id,trustedTicket,{...provider,start_time:periodStart,billing_info:{next_billing_time:end}}),/provider_mismatch/);
+ });
+ for(const authorization of [{p_event:'WH-PERIOD',p_token:'token'},{p_clinic:'clinic',p_actor:'owner'}])test(`invalid equal interval never reaches SQL finalization (${end}, ${Object.keys(authorization)[0]})`,async()=>{
+  const calls:{name:string,args:Record<string,unknown>}[]=[];
+  const run=createRpcReconciler(async<T>(name:string,args:Record<string,unknown>)=>{
+   calls.push({name,args});return {...trustedTicket,state:'claimed'} as T;
+  },async()=>({...provider,start_time:periodStart,billing_info:{next_billing_time:end}}),authorization);
+  assert.equal(await run(provider.id),'requires_review');
+  assert.deepEqual(calls.map(c=>c.name),['begin_paypal_reconciliation','fail_paypal_reconciliation']);
+  assert.deepEqual(calls[1].args,{p_id:'ticket',p_generation:1,p_reason:'provider_mismatch'});
+ });
+}
+test('strictly later instant accepted despite offset spelling',()=>{
+ const end='2025-12-31T19:00:00-06:00';
+ assert.equal(verifyObservation(provider.id,trustedTicket,{...provider,start_time:periodStart,billing_info:{next_billing_time:end}}).end,end);
+});
 test('RPC review ticket prevents provider read and finalization',async()=>{
  let calls=0;const run=createRpcReconciler(async<T>()=>{calls++;return {...trustedTicket,state:'requires_review',identity_trusted:false} as T;},async()=>{throw new Error('must not read');},{});
  await assert.rejects(()=>run(provider.id),/reconciliation_review_required/);assert.equal(calls,1);
