@@ -10,6 +10,7 @@ export function blockers(flight: Preflight, now = Date.now()) {
     ...(flight.origin !== STAGING ? ['origin'] : []),
     ...(flight.project !== PROJECT ? ['project'] : []),
     ...(flight.checkedAt > now || now - flight.checkedAt > 60_000 ? ['stale_preflight'] : []),
+    ...(flight.runtime?.trust === 'authenticated' && (!Number.isSafeInteger(flight.runtime.validUntil) || flight.runtime.validUntil! <= now) ? ['runtime_evidence_expired'] : []),
     ...requiredGates.filter(key => flight.gates[key]?.state !== 'verified'),
     ...(flight.slots.length < 2 || flight.slots.some(slot => Date.parse(slot.startsAt) <= now || Date.parse(slot.endsAt) - Date.parse(slot.startsAt) !== 30 * 60_000 || !/^(?:[01]\d|2[0-3]):(?:00|30)$/.test(slot.time)) || flight.slots[0]?.startsAt === flight.slots[1]?.startsAt ? ['slots'] : [])
   ];
@@ -40,4 +41,7 @@ export interface LifecycleAdapter {
   isolation?(journal: Journal): Promise<boolean>;
 }
 export class QaError extends Error { readonly code: string; constructor(code: string) { super(code); this.code = code; } }
+// Raised only by the browser's authorization step before any click/dispatch.
+// Transport timeouts/aborted requests must NEVER be classified this way.
+export class MutationNotDispatched extends QaError { constructor() { super('mutation_not_dispatched'); } }
 export function requireQa(condition: unknown, code: string): asserts condition { if (!condition) throw new QaError(code); }
