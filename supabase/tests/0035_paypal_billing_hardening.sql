@@ -25,9 +25,10 @@ select extensions.ok((select count(*)=6 and bool_and(prosecdef and proconfig @> 
   from pg_proc where pronamespace='public'::regnamespace and proname in ('begin_paypal_billing_intent','bind_paypal_billing_intent',
   'complete_paypal_billing_intent','claim_paypal_webhook','fail_paypal_webhook','finish_paypal_webhook')),'all six RPCs use fixed search_path and SECURITY DEFINER');
 select extensions.ok((select bool_and(not has_function_privilege('anon',oid,'execute') and not has_function_privilege('authenticated',oid,'execute')
-  and has_function_privilege('service_role',oid,'execute')) from pg_proc where pronamespace='public'::regnamespace and proname in
+  and (case when proname='finish_paypal_webhook' and to_regprocedure('public.finish_paypal_reconciliation(uuid,bigint,text,text,text,text,timestamptz,timestamptz,timestamptz,timestamptz)') is not null
+    then not has_function_privilege('service_role',oid,'execute') else has_function_privilege('service_role',oid,'execute') end)) from pg_proc where pronamespace='public'::regnamespace and proname in
   ('begin_paypal_billing_intent','bind_paypal_billing_intent','complete_paypal_billing_intent','claim_paypal_webhook','fail_paypal_webhook','finish_paypal_webhook')),
-  'all provider RPC grants deny clients and allow service role');
+  'client RPCs denied; service grants match historical or post-0068 fenced writer');
 select extensions.ok(not has_table_privilege('authenticated','public.paypal_billing_intents','insert,update,delete')
   and not has_table_privilege('authenticated','public.paypal_webhook_events','insert,update,delete')
   and not has_table_privilege('anon','public.paypal_webhook_events','select,insert,update,delete'),'internal tables deny every client mutation');
@@ -131,10 +132,15 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub','35000000-0000-4000-8000-000000000001',true);
 select extensions.is((select count(*)::integer from public.clinic_subscriptions where clinic_id='35100000-0000-4000-8000-000000000001'),1,'owner reads own subscription');
 select extensions.is((select count(*)::integer from public.clinic_subscriptions where clinic_id='35100000-0000-4000-8000-000000000002'),0,'owner cannot read another tenant subscription');
--- 0062 revokes UPDATE itself; the latest baseline rejects before RLS filtering.
-select extensions.throws_ok($$update public.clinic_subscriptions set status='cancelled'
+-- 0062 preserves CRUD. Accept either ACL denial or zero affected rows under RLS,
+-- but never an unauthorized write. Keep the subsequent stored-value assertion.
+select case when has_table_privilege('authenticated','public.clinic_subscriptions','UPDATE') then
+ extensions.results_eq($$with changed as (update public.clinic_subscriptions set status='cancelled'
+  where clinic_id='35100000-0000-4000-8000-000000000001' returning 1)
+  select count(*)::integer from changed$$,$$values (0)$$,'tenant owner update affects zero rows under RLS')
+ else extensions.throws_ok($$update public.clinic_subscriptions set status='cancelled'
   where clinic_id='35100000-0000-4000-8000-000000000001'$$,'42501',null,
-  'tenant owner cannot bypass billing and write subscription directly');
+  'tenant owner cannot bypass billing and write subscription directly') end;
 select extensions.is((select status from public.clinic_subscriptions
   where clinic_id='35100000-0000-4000-8000-000000000001'),(select status from protected_subscription_snapshot),
   'unauthorized owner update leaves the persisted subscription unchanged');

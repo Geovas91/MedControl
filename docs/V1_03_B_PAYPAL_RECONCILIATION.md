@@ -104,3 +104,32 @@ The final read-only review found that equal endpoints passed validation but viol
 Seven additional unit tests cover identical and offset-equivalent instants, rejection through the production RPC adapter under both authorizations without calling finalization, safe audit reason projection, and a strictly later instant with an offset. Existing earlier-end, valid partial, absent-date and malformed-date tests remain. SQL adds a 2-path x 5-scenario x 3-assertion matrix: equal, offset-equal, earlier, start-only-equal and end-only-equal. It checks requires_review, durable provider_mismatch audit state (never applied), and equality of the entire stored subscription including status, dates and updated_at. Existing SQL assertions cover valid partial updates and absent fields. Partial validation is transactional SQL behavior, not established by unit mocks.
 
 Local results: 133 focused and 938 complete unit tests PASS, no failures/skips. PostgreSQL execution remains BLOCKED; 78 is the prepared assertion count, not an executed result. No lab was created and no remote migration or provider request was performed. V1_03_B_PERIOD_FIX=PASS applies only to this focused correction; V1_03_B_SQL_ACCEPTANCE=BLOCKED and the complete milestone remains PARTIAL pending database acceptance and independent review.
+## Persisted acceptance harness corrections (current status)
+
+At 1b30c32cf1b22f7b1f8855024af19926867a1cfb, an explicitly authorized ONE-container PostgreSQL 17.6 lab applied 0001–0068 successfully. Actual final results were 0068 78/78, 0067 29/29, TEMP-adapted 0035 63/63, and TEMP-adapted concurrency 7/7 groups. The original 0035 had two obsolete expectations; the original concurrency runner failed. The lab was removed. Earlier BLOCKED/PREPARED descriptions above record the pre-acceptance state; they are not a statement that no SQL execution ever occurred.
+
+Permanent changes affect tests/docs only:
+- 0035 remains version-aware: before the corrected 0068 finish RPC exists, service_role must retain legacy-finalizer EXECUTE; afterward it must lack it. All other original client-denial and service grants remain checked.
+- Unauthorized subscription UPDATE must either throw insufficient_privilege when the role lacks table UPDATE, or return zero changed rows under RLS when table UPDATE exists. The subsequent stored-status assertion remains. No permissions or RLS are changed. The suite still emits 63 assertions.
+- The runner revokes membership using suspended, attaches an immediate rejection handler while awaiting other sessions, and accepts only stale or owner_required from the superseded attempt. It checks successful revocation COMMIT and the suspended row, then explicitly requires owner_required on a new finalization call after that commit. It additionally compares the complete subscription snapshot and checks that the attempted reconciliation is not applied.
+- Separate psql processes, transaction barriers, pg_blocking_pids checks, container identity guards and generated-fixture cleanup are retained.
+
+These permanent files are not byte-identical to the TEMP copies: version detection, dual ACL/RLS handling and extra no-write/commit assertions strengthen reproducibility. Previous adapted SQL results must not be advertised as execution of these exact repository-native files. Current native SQL reproducibility is PENDING. No new laboratory is authorized by the consumed previous one-container authorization.
+
+After new explicit lab authorization and successful provisioning of the same documented isolated target (PostgreSQL 17+, pgTAP, authentic Supabase dependencies, reviewed migrations through 0068), run from the repository root in PowerShell:
+
+```powershell
+# Set $lab to the newly authorized container name; do not reuse a persistent DB.
+docker cp supabase/tests "${lab}:/lab/tests"
+foreach ($suite in @('0035_paypal_billing_hardening.sql', '0067_paypal_duplicate_subscription_prevention.sql', '0068_paypal_reconciliation.sql')) {
+  docker exec $lab psql -X -qAt -h /var/run/postgresql -U postgres -d clinicontrol_v103b_acceptance -v ON_ERROR_STOP=1 -f "/lab/tests/$suite"
+  if ($LASTEXITCODE -ne 0) { throw "SQL execution failed: $suite" }
+  # Inspect TAP as well: no 'not ok', correct plans 1..63, 1..29, 1..78.
+  # A zero psql exit code alone is not a TAP PASS.
+}
+node scripts/test-paypal-reconciliation-concurrency.mjs --container $lab
+if ($LASTEXITCODE -ne 0) { throw 'Concurrency acceptance failed' }
+```
+
+No temporary SQL or runner patch is needed by these commands. They have NOT been rerun in this harness-persistence task. Historical post-0035/pre-0068 compatibility also needs execution against its matching authorized baseline. No grants should be restored to satisfy tests. Independent review, a newly authorized native PostgreSQL run and integration authorization remain pending; V1-03-B is not DONE.
+Local validation after persistence: node --check runner PASS; complete unit suite 938/938 PASS, zero failures/skips; TypeScript --noEmit --incremental false PASS; ESLint zero errors and two pre-existing patient-actions navigation warnings; git diff --check PASS. No PostgreSQL tests rerun. V1_03_B_HARNESS_REMEDIATION=PASS; V1_03_B_REPOSITORY_SQL_REPRODUCIBILITY=PENDING.

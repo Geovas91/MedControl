@@ -108,12 +108,27 @@ try {
   // Original three-way lock inversion: begin holds membership+fence, revocation
   // queues for membership, finalize must wait BEFORE taking the fence.
   const pending = await claim();
+  const beforeRevocation = ok(await sql(`select to_jsonb(s) from public.clinic_subscriptions s where clinic_id='${clinic}';`));
   const ownerReader = connection(); ownerReader.write(`begin; set local role service_role; select ${begin()};`); await ownerReader.barrier();
-  const revoker = connection(); revoker.write(`begin; update public.clinic_members set status='inactive' where clinic_id='${clinic}' and user_id='${actor}';`);
-  const revoked = revoker.barrier(); await blocked(revoker.name);
+  const revoker = connection(); revoker.write(`begin; update public.clinic_members set status='suspended' where clinic_id='${clinic}' and user_id='${actor}';`);
+  const revoked = revoker.barrier();
+  // Observe rejection immediately while another session's lock wait is inspected.
+  // Awaiting the original promise below still propagates failures through cleanup.
+  void revoked.catch(() => {});
+  await blocked(revoker.name);
   const finalizer = connection(); const denied = finalizer.end(`set role service_role; select ${finish(pending)};`); await blocked(finalizer.name);
   ok(await ownerReader.end('commit;')); await revoked; ok(await revoker.end('commit;'));
-  const denial = await denied; assert.notEqual(denial.code, 0); assert.match(denial.errors, /owner_required/); assert.doesNotMatch(denial.errors, /deadlock detected/);
+  assert.equal(ok(await sql(`select status='suspended' from public.clinic_members where clinic_id='${clinic}' and user_id='${actor}';`)), 't');
+  const denial = await denied;
+  // The queued revocation need not win the membership lock. The intervening
+  // begin already superseded this generation; stale must also prevent any apply.
+  if (denial.code === 0) assert.equal(ok(denial), 'stale');
+  else assert.match(denial.errors, /owner_required/);
+  assert.doesNotMatch(denial.errors, /deadlock detected/);
+  const afterRevocation = await sql(`set role service_role; select ${finish(pending)};`);
+  assert.notEqual(afterRevocation.code, 0); assert.match(afterRevocation.errors, /owner_required/);
+  assert.equal(ok(await sql(`select to_jsonb(s) from public.clinic_subscriptions s where clinic_id='${clinic}';`)), beforeRevocation);
+  assert.equal(ok(await sql(`select state<>'applied' from public.paypal_reconciliations where id='${pending.id}';`)), 't');
   ok(await sql(`update public.clinic_members set status='active' where clinic_id='${clinic}' and user_id='${actor}';`));
   console.log('PASS queued owner revocation versus begin/finalize; no lock inversion');
 
