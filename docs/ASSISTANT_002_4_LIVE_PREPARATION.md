@@ -1,5 +1,9 @@
 # ASSISTANT-002.4B / 002.4E / 002.4F / 002.4G — controlled live preparation
 
+## 002.4I independent runtime verification
+
+See [trusted runtime protocol and read-only validation](ASSISTANT_002_4I_TRUSTED_RUNTIME.md). The QA client now verifies signed, fresh, scoped independent evidence and rejects caller-supplied approvals. The real authority/public policy are deliberately unprovisioned; deployment and WhatsApp stay UNKNOWN/BLOCKED. No live mutations or remote changes are authorized by this addition. Earlier operational sections retain their historical context.
+
 ## 002.4H integrated candidate
 
 Use `ASSISTANT_002_4H_STAGING.md` and the exact integrated SHA in the delivery report. Both reviewed PR heads are integrated on `codex/assistant-002-4h-integration`; main and the original drafts are unchanged. Integrated Node 22.23.2 validation passes; the two obsolete source assertions are replaced by runtime semantic coverage. The new preflight runtime boundary exposes only safe readiness observations and keeps deployment/WhatsApp blocked pending independently authenticated operator evidence. It accepts no receipt/flag approvals. No remote deployment or lifecycle mutation occurred.

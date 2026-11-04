@@ -1,5 +1,17 @@
 # ASSISTANT-002.4 / 002.4B / 002.4E / 002.4F — QA execution report
 
+## 002.4I final security and operational review
+
+See [findings, fixes, privilege separation, timing and recovery requirements](ASSISTANT_002_4I_SECURITY_REVIEW.md). Corrected dispatch-time expiry, pending-cancellation authorization and read-only resource reconciliation during authority failure; added private session continuity, monotonic/rollback protection and challenge-time freshness. Runtime policy stays null; operational recommendation **BLOCKED** pending independently verified privilege separation, authority/inventory and collection timing. No live PASS is claimed.
+
+Node 22.23.2 Windows: **863 unit PASS**, **332 Assistant QA PASS**, **70 focused PASS**, **14 browser PASS**; zero failures/skips in unit/focused suites. Lint, explicit TypeScript, build and diff check PASS. Seventeen new regressions use synthetic keys/persistence and HTTP/UI doubles. Remote Actions checks were absent at review time; no CI PASS is inferred. No remote configuration, actual provider calls or real lifecycle mutations. Historical initial results below retain their scope.
+
+## 002.4I trusted runtime verification
+
+Implemented a source-pinned Ed25519 evidence client/verifier and opaque in-memory proof boundary, with fresh nonce, scope/expiry, exact release/process/proxy/inventory/isolation checks and lease expiry enforcement. Public policy remains null: no independently provisioned authority/collector/inventory exists, no live evidence was collected and both runtime gates remain UNKNOWN/BLOCKED. Existing functional checks remain intact. See [design, operational prerequisites and read-only validation](ASSISTANT_002_4I_TRUSTED_RUNTIME.md).
+
+Local Node 22.23.2 Windows validation: full unit **846 PASS / 0 FAIL / 0 SKIP**; Assistant QA **315 PASS / 0 FAIL / 0 SKIP**, including 23 new signed-runtime tests; browser **14 PASS / 0 FAIL** with simulated persistence/provider boundaries. Lint, explicit TypeScript validation, production build and diff check pass. Synthetic signing keys and HTTP doubles do not establish a live trusted authority or attest DonWeb. No provider messages, fixtures, migrations, configuration/credential changes, application behavior changes or deployments.
+
 ## 002.4H integrated validation
 
 `codex/assistant-002-4h-integration` starts at latest main `eec7274b108394664f98daff52da03488a0ffe55` and integrates exact reviewed #94 `7db560edcef4310ae5c90e64716aa4970ec69ff3` then #93 `a8c8c206c29cf08d492ab54c6d6777a5133a0584`, without conflicts. Original PRs/branches/main remain unchanged. The final delivery report supplies the exact integrated revision pin.
