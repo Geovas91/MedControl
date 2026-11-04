@@ -6,6 +6,7 @@ import { appointmentDurations } from "@/lib/appointments/create";
 import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { getProfessionalAvailableSlots, type ProfessionalSlot } from "@/lib/server/professional-slots";
+import { listClinicMembersForClinic } from "@/lib/supabase/clinic-members";
 import { createClient } from "@/lib/supabase/server";
 import { logger } from "@/lib/logger";
 
@@ -43,13 +44,16 @@ export async function getAppointmentRescheduleForActiveTenant(
   const appointment = result.data as unknown as AppointmentRescheduleData["appointment"] | null;
   if (!appointment || !appointment.doctor_id) return { state: "not_found", data: null };
   if (role === "doctor" && appointment.doctor_id !== context.user.id) return { state: "forbidden", data: null };
-  const memberResult = await supabase.from("clinic_members").select("id").eq("clinic_id", clinicId).eq("user_id", appointment.doctor_id).eq("status", "active").maybeSingle();
-  if (memberResult.error || !memberResult.data) return { state: "error", data: null };
+  const memberResult = await listClinicMembersForClinic(clinicId);
+  if (memberResult.error) return { state: "error", data: null };
+  const clinicMember = memberResult.data?.find((member) =>
+    member.clinic_id === clinicId && member.user_id === appointment.doctor_id && member.status === "active" && member.is_professional
+  );
+  if (!clinicMember) return { state: "error", data: null };
   const duration = calculateAppointmentDuration(appointment.starts_at, appointment.ends_at);
   const current = appointmentTimestampToLocalParts(appointment.starts_at, context.tenant.clinic.timezone);
   if (!duration || !appointmentDurations.includes(duration as (typeof appointmentDurations)[number]) || !current) return { state: "error", data: null };
   const localDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : current.date;
-  const clinicMember = memberResult.data as unknown as { id: string };
   const slotsResult = await getProfessionalAvailableSlots({ clinicMemberId: clinicMember.id, localDate, durationMinutes: duration, slotIntervalMinutes: 15 });
   if (slotsResult.state !== "ready") return { state: "error", data: null };
   const slots = [...slotsResult.data];
