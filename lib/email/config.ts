@@ -1,4 +1,5 @@
 import type { InvitationEmailConfiguration } from "@/lib/email/types";
+import { appointmentOutboundPolicy } from "@/lib/outbound-policy";
 
 const compatibleEmail = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const compatibleFrom = /^(?:[^<>\r\n]+\s)?<([^<>\s]+@[^<>\s]+)>$|^([^<>\s]+@[^<>\s]+)$/;
@@ -27,6 +28,9 @@ function isValidPublicBaseUrl(value: string, nodeEnvironment: string | undefined
 }
 
 export function getInvitationEmailConfiguration(): InvitationEmailConfiguration {
+  const outbound = appointmentOutboundPolicy();
+  if (outbound === "isolated") return { state: "disabled" };
+  if (outbound === "blocked") return { state: "required_unavailable" };
   const required = process.env.EMAIL_REQUIRED === "true";
   const provider = process.env.EMAIL_PROVIDER?.trim().toLowerCase();
   const apiKey = process.env.RESEND_API_KEY?.trim();

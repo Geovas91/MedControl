@@ -1,4 +1,5 @@
 import "server-only";
+import { appointmentOutboundPolicy } from "@/lib/outbound-policy";
 
 import { randomUUID } from "node:crypto";
 import {
@@ -204,6 +205,9 @@ async function processReview(client: RpcClient, job: Job, context: Context, work
 }
 
 export async function runAppointmentAutomations(): Promise<AutomationRunCounters> {
+  const outbound = appointmentOutboundPolicy();
+  if (outbound === "blocked") throw new Error("outbound_configuration_blocked");
+  if (outbound === "isolated") return sanitizeAutomationCounters({});
   const client = createAdminClient() as unknown as RpcClient;
   const workerId = `worker_${randomUUID()}`;
   logger.info("Appointment automation runner started", {

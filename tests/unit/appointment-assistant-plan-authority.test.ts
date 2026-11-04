@@ -90,6 +90,7 @@ for (const jobType of ["reminder_email", "review_request_email"]) {
         return { data: true, error: null };
       } };
       const runner = load("lib/server/appointment-automation-runner.ts", {
+        "@/lib/outbound-policy": load("lib/outbound-policy.ts", {}),
         "@/lib/appointment-automations": automation,
         "@/lib/appointment-automation-heartbeat": { runWithAppointmentAutomationHeartbeat: async (_client: unknown, work: () => unknown) => work() },
         "@/lib/supabase/admin": { createAdminClient: () => client },

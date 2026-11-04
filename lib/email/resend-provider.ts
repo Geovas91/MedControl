@@ -4,10 +4,12 @@ import { Resend } from "resend";
 import type { SendEmailInput, SendEmailResult } from "@/lib/email/types";
 import { classifyResendError } from "@/lib/email/resend-errors";
 import { buildResendEmailPayload } from "@/lib/email/resend-payload";
+import { appointmentOutboundPolicy } from "@/lib/outbound-policy";
 
 const DELIVERY_TIMEOUT_MS = 12_000;
 
 export async function sendWithResend(configuration: { apiKey: string; from: string; replyTo?: string }, input: SendEmailInput): Promise<SendEmailResult> {
+  if (appointmentOutboundPolicy() !== "normal") return { ok: false, code: "disabled" };
   const resend = new Resend(configuration.apiKey);
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
