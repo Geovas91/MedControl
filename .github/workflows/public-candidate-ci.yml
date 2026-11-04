@@ -1,0 +1,33 @@
+name: Public candidate CI
+
+on:
+  pull_request:
+    branches:
+      - codex/public-candidate-security
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-unit:
+    name: Lint and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Record tested revision
+        run: |
+          printf 'PR head: %s\n' "$PR_HEAD"
+          printf 'Tested checkout: %s\n' "$(git rev-parse HEAD)"
+          node --version
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
