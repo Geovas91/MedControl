@@ -1,0 +1,29 @@
+name: Verify integrated candidate
+on:
+  push:
+    branches: [codex/verify-integrated-8cc8c66]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 8cc8c6624a75bc45c3503bf71910ede6b852ea50
+          persist-credentials: false
+      - name: Verify checkout identity
+        shell: bash
+        run: |
+          sha=$(git rev-parse HEAD)
+          tree=$(git rev-parse 'HEAD^{tree}')
+          printf 'Observed SHA: %s\nObserved tree: %s\n' "$sha" "$tree"
+          test "$sha" = 8cc8c6624a75bc45c3503bf71910ede6b852ea50
+          test "$tree" = 90e6c133e0b400cbffd81d38b9aab45930f1c8e8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
