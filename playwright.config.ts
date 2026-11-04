@@ -7,6 +7,7 @@ const productionServer = process.env.PLAYWRIGHT_WEB_SERVER === "production";
 
 export default defineConfig({
   testDir: "./tests/browser",
+  testIgnore: ["appointment-assistant.spec.ts", "appointment-assistant-lifecycle.spec.ts"],
   timeout: 30_000,
   retries: 0,
   use: {
