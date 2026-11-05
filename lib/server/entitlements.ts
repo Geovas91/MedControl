@@ -24,11 +24,11 @@ export type ClinicEntitlementsResult =
   | { state: "error"; message: string };
 
 export function resolveEffectiveSubscriptionAccess(
-  subscription: ClinicSubscription,
+  subscription: Pick<ClinicSubscription, "status" | "current_period_end">,
   now: Date = new Date()
 ): EffectiveSubscriptionAccess {
   if (subscription.status !== "trialing") return subscription.status;
-  if (!subscription.current_period_end || new Date(subscription.current_period_end).getTime() <= now.getTime()) {
+  if (!subscription.current_period_end || !(Date.parse(subscription.current_period_end) > now.getTime())) {
     return "trial_expired";
   }
   return "trialing";
@@ -66,10 +66,10 @@ export async function getClinicEntitlements(clinicId: string): Promise<ClinicEnt
       readOnlyReason: hasActiveAccess
         ? null
         : effectiveStatus === "trial_expired"
-          ? "La prueba de CliniControl venció. Puedes consultar la información existente y revisar facturación, pero no crear registros nuevos."
+          ? "La prueba de CliniControl venció. Puedes consultar la información que permite tu rol. Las escrituras clínicas requieren una suscripción activa."
           : isPastDue
           ? "La suscripción tiene un pago pendiente. El acceso clínico temporal continúa, pero las operaciones nuevas están bloqueadas."
-          : "La suscripción no está activa. Puedes consultar la información existente y revisar facturación, pero no crear registros nuevos."
+          : "La suscripción no está activa. Puedes consultar la información existente y revisar facturación, con los permisos de tu rol. Las escrituras clínicas requieren una suscripción activa."
     }
   };
 }

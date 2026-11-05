@@ -21,6 +21,19 @@ const readyTenant = { state: "ready", user: { id: "actor" }, tenant: { clinic: {
 const missing = { state: "missing", message: "Sin plan configurado" };
 const failed = { state: "error", message: "No fue posible verificar" };
 
+test("trial write access ends at the exact deadline and active legacy plans keep access", () => {
+  const { resolveEffectiveSubscriptionAccess } = load("lib/server/entitlements.ts", { "server-only": {} });
+  const end = "2026-12-04T22:09:00.000Z";
+  const deadline = Date.parse(end);
+  const trial = { status: "trialing", current_period_end: end };
+  assert.equal(resolveEffectiveSubscriptionAccess(trial, new Date(deadline - 1)), "trialing");
+  assert.equal(resolveEffectiveSubscriptionAccess(trial, new Date(deadline)), "trial_expired");
+  assert.equal(resolveEffectiveSubscriptionAccess(trial, new Date(deadline + 1)), "trial_expired");
+  assert.equal(resolveEffectiveSubscriptionAccess({ ...trial, current_period_end: null }, new Date(deadline)), "trial_expired");
+  assert.equal(resolveEffectiveSubscriptionAccess({ ...trial, current_period_end: "invalid" }, new Date(deadline)), "trial_expired");
+  assert.equal(resolveEffectiveSubscriptionAccess({ status: "active", current_period_end: null }, new Date(deadline)), "active");
+});
+
 test("canonical subscription reads distinguish missing from technical failure and never construct Basic", async () => {
   let queryError: { code: string } | null = null;
   const query = { select: () => query, eq: () => query, maybeSingle: async () => ({ data: null, error: queryError }) };

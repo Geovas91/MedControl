@@ -33,7 +33,7 @@ type DashboardShellProps = {
   children: React.ReactNode;
   footer?: React.ReactNode;
   account?: { name: string; subtitle: string };
-  subscriptionNotice?: string | null;
+  subscriptionNotice?: React.ReactNode;
   appointmentAssistantAvailable?: boolean;
   clinicalPaymentsAvailable?: boolean;
 };
