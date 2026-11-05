@@ -10,6 +10,7 @@ import { isValidPatientUuid } from "@/lib/patients/detail";
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canAccessClinicalPatientForActiveTenant } from "@/lib/server/patient-access";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveEffectiveSubscriptionAccess } from "@/lib/server/entitlements";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -165,6 +166,9 @@ async function materializeEvidence(row: MaterializationEvidence, clinicId: strin
     }
     const bytes = await renderSignedConsentPdf(toPdfEvidence(row, consentId), await loadPdfFont());
     const digest = sha256(bytes);
+    const subscription = await admin.from("clinic_subscriptions").select("status, current_period_end").eq("clinic_id", clinicId).maybeSingle();
+    const access = subscription.data && !subscription.error ? resolveEffectiveSubscriptionAccess(subscription.data) : null;
+    if (access !== "active" && access !== "trialing") return { state: "unavailable" as const };
     const upload = await admin.storage.from(row.storage_bucket).upload(row.storage_path, bytes, { contentType: "application/pdf", cacheControl: "0", upsert: true });
     if (upload.error) throw new Error("storage_upload_failed");
     const stored = await admin.storage.from(row.storage_bucket).download(row.storage_path);

@@ -4,6 +4,7 @@ import { isCanonicalAppointmentUuid } from "@/lib/appointments/query";
 import { logger } from "@/lib/logger";
 import { getActiveTenantContext, type ActiveTenant } from "@/lib/server/active-tenant";
 import { createClient } from "@/lib/supabase/server";
+import { listClinicMembersForClinic } from "@/lib/supabase/clinic-members";
 import type { Database } from "@/types/database";
 
 type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
@@ -108,6 +109,16 @@ export async function getAppointmentDetailForActiveTenant(
     return { state: "error", data: null };
   }
 
+  let doctor = (doctorResult.data as DoctorRelation | null) ?? null;
+  if (!doctor && appointment.doctor_id) {
+    const members = await listClinicMembersForClinic(clinicId);
+    if (members.error) return { state: "error", data: null };
+    const assigned = members.data?.find(member =>
+      member.clinic_id === clinicId && member.user_id === appointment.doctor_id
+    );
+    if (assigned?.full_name) doctor = { display_name: assigned.full_name };
+  }
+
   return {
     state: "ready",
     data: {
@@ -115,7 +126,7 @@ export async function getAppointmentDetailForActiveTenant(
       tenant: context.tenant,
       appointment,
       patient: (patientResult.data as PatientRelation | null) ?? null,
-      doctor: (doctorResult.data as DoctorRelation | null) ?? null
+      doctor
     }
   };
 }

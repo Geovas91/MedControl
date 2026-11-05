@@ -5,6 +5,7 @@ import { getClinicEntitlements, getEntitlementNotice, planIncludesFeature } from
 import { getActiveTenantContext } from "@/lib/server/active-tenant";
 import { canCreateClinicalPayments } from "@/lib/payments/create";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 async function getDashboardAccount() {
   const onboardingStatus = await getOnboardingStatus();
@@ -25,10 +26,20 @@ async function getDashboardAccount() {
   if (tenantContext.state !== "ready") throw new Error("Clinic access is temporarily unavailable.");
   const clinicId = tenantContext.tenant.clinic.id;
   const entitlements = await getClinicEntitlements(clinicId);
+  const trialEnd = entitlements.state === "ready" && entitlements.entitlements.persistedStatus === "trialing"
+    ? entitlements.entitlements.subscription.current_period_end
+    : null;
+  const trialDeadline = trialEnd && Number.isFinite(Date.parse(trialEnd))
+    ? new Intl.DateTimeFormat("es-MX", {
+      dateStyle: "long", timeStyle: "short", timeZone: tenantContext.tenant.clinic.timezone
+    }).format(new Date(trialEnd))
+    : null;
   return {
     name: fullName ?? onboardingStatus.user.email ?? "Usuario autenticado",
     subtitle: onboardingStatus.user.email ?? "Sesión activa en Supabase",
     subscriptionNotice: getEntitlementNotice(entitlements),
+    trialDeadline,
+    trialExpired: entitlements.state === "ready" && entitlements.entitlements.effectiveStatus === "trial_expired",
     appointmentAssistantAvailable: planIncludesFeature(entitlements, "appointment_assistant"),
     tenant: tenantContext.tenant
   };
@@ -40,7 +51,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <DashboardShell
       account={{ name: account.name, subtitle: account.subtitle }}
-      subscriptionNotice={account.subscriptionNotice}
+      subscriptionNotice={account.subscriptionNotice || account.trialDeadline ? (
+        <>
+          {account.subscriptionNotice}
+          {account.trialDeadline ? <p>Fin de la prueba: {account.trialDeadline} ({account.tenant.clinic.timezone}).</p> : null}
+          {account.trialExpired && account.tenant.membership.role === "owner" ? (
+            <Link className="underline" href="/dashboard/billing">Revisar planes y contratación</Link>
+          ) : null}
+        </>
+      ) : null}
       appointmentAssistantAvailable={account.appointmentAssistantAvailable}
       clinicalPaymentsAvailable={canCreateClinicalPayments(account.tenant.membership.role)}
       footer={
