@@ -126,7 +126,7 @@ export default function LandingPage() {
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
               Un SaaS claro para médicos y clínicas pequeñas que necesitan organizar pacientes, agenda, notas médicas,
-              consentimientos y pagos sin fricción administrativa.
+              consentimientos y pagos sin fricción administrativa. Las clínicas nuevas tienen 30 días de prueba sin cobro automático. Al vencer, cada usuario conserva las consultas que permite su rol.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <ButtonLink href="/dashboard">

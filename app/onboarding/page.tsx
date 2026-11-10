@@ -60,9 +60,9 @@ export default async function OnboardingPage({ searchParams }: OnboardingPagePro
             </p>
             <div className="mt-5 rounded-md bg-slate-50 p-4 text-sm leading-6 text-slate-600">
               Se creará una membresía owner activa y comenzará una prueba gratuita de 30 días del plan seleccionado.
-              No se realizará ningún cobro en este paso. Al terminar la prueba deberás activar una suscripción para
-              continuar creando o modificando registros; los datos históricos permanecerán disponibles según la
-              política establecida.
+              La prueba no tiene cobro automático. Al vencer, cada usuario conserva las consultas que permite su rol.
+              El propietario puede contratar un plan desde Facturación. Las escrituras clínicas se reactivan cuando
+              CliniControl confirma que la suscripción está activa.
             </div>
           </div>
 
