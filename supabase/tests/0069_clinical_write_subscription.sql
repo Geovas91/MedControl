@@ -1,6 +1,6 @@
 -- PostgreSQL disposable lab only. Run after 0001–0067 and 0069.
 begin;
-select extensions.plan(8);
+select extensions.plan(12);
 
 insert into auth.users(id,email) values
   ('69000000-0000-4000-8000-000000000001','trial-owner@example.test'),
@@ -15,20 +15,37 @@ insert into public.clinic_subscriptions(clinic_id,plan_id,status,billing_provide
   ('69100000-0000-4000-8000-000000000001','basic','trialing','manual',now(),now()+interval '30 days'),
   ('69100000-0000-4000-8000-000000000002','basic','active','manual',null,null);
 
-set local role authenticated;
-set local request.jwt.claim.sub = '69000000-0000-4000-8000-000000000001';
-select extensions.lives_ok($$insert into public.patients(id,clinic_id,full_name) values
-  ('69200000-0000-4000-8000-000000000001','69100000-0000-4000-8000-000000000001','Synthetic patient')$$,
-  'current trial permits direct writes');
-
-reset role;
+-- Seed the appointment's patient independently of the RPC assertions.
+insert into public.patients(id,clinic_id,full_name) values
+  ('69200000-0000-4000-8000-000000000001','69100000-0000-4000-8000-000000000001','Synthetic fixture patient');
 insert into public.appointments(id,clinic_id,patient_id,title,starts_at,ends_at) values
   ('69300000-0000-4000-8000-000000000001','69100000-0000-4000-8000-000000000001',
    '69200000-0000-4000-8000-000000000001','Synthetic appointment',now()+interval '1 day',now()+interval '25 hours');
+
+set local role authenticated;
+set local request.jwt.claim.sub = '69000000-0000-4000-8000-000000000001';
+select extensions.throws_ok($$insert into public.patients(clinic_id,full_name)
+  values ('69100000-0000-4000-8000-000000000001','Unauthorized direct insert')$$,
+  '42501','permission denied for table patients','current trial does not grant direct patient INSERT');
+select extensions.lives_ok($$select * from public.create_patient_with_record(
+  '69100000-0000-4000-8000-000000000001','Synthetic','Trialpatient')$$,
+  'current trial permits patient creation through the RPC');
+select extensions.is((select count(*) from public.patients
+  where clinic_id='69100000-0000-4000-8000-000000000001' and full_name='Synthetic Trialpatient'),1::bigint,
+  'the authorized RPC persisted the patient');
+
+reset role;
+-- Expire within this transaction. The baseline gate uses now() (transaction
+-- start), while the 0069 trigger checks clock_timestamp() (wall clock).
 update public.clinic_subscriptions set current_period_start=now()-interval '30 days',current_period_end=clock_timestamp()
 where clinic_id='69100000-0000-4000-8000-000000000001';
 
 set local role authenticated;
+select extensions.ok(public.clinic_has_write_entitlement('69100000-0000-4000-8000-000000000001'),
+  'the baseline entitlement still permits writes at the in-transaction expiry boundary');
+select extensions.throws_ok($$select * from public.create_patient_with_record(
+  '69100000-0000-4000-8000-000000000001','Synthetic','Trialpatient')$$,
+  '42501','clinical_workspace_read_only','0069 rejects the same patient RPC after wall-clock expiry');
 select extensions.is((select count(*) from public.patients where id='69200000-0000-4000-8000-000000000001'),1::bigint,
   'expired owner retains scoped reads');
 select extensions.throws_ok($$update public.patients set full_name='Denied' where id='69200000-0000-4000-8000-000000000001'$$,
@@ -42,15 +59,19 @@ select extensions.is((select status::text from public.appointments where id='693
 set local request.jwt.claim.sub = '69000000-0000-4000-8000-000000000002';
 select extensions.is((select count(*) from public.patients where id='69200000-0000-4000-8000-000000000001'),0::bigint,
   'another clinic cannot read the trial patient');
-select extensions.lives_ok($$insert into public.patients(clinic_id,full_name)
-  values ('69100000-0000-4000-8000-000000000002','Legacy patient')$$,'pre-existing active plan has write access');
+select extensions.lives_ok($$select * from public.create_patient_with_record(
+  '69100000-0000-4000-8000-000000000002','Legacy','Patient')$$,
+  'pre-existing active plan with null periods permits patient creation through the RPC');
 
 reset role;
 update public.clinic_subscriptions set status='active' where clinic_id='69100000-0000-4000-8000-000000000001';
 set local role authenticated;
 set local request.jwt.claim.sub = '69000000-0000-4000-8000-000000000001';
-select extensions.lives_ok($$update public.patients set full_name='Reactivated patient' where id='69200000-0000-4000-8000-000000000001'$$,
-  'confirmed active status restores writes');
+update public.patients set first_names='Reactivated patient' where id='69200000-0000-4000-8000-000000000001';
+select extensions.results_eq(
+  $$select first_names,full_name from public.patients where id='69200000-0000-4000-8000-000000000001'$$,
+  $$values ('Reactivated patient'::text,'Reactivated patient'::text)$$,
+  'confirmed active status restores writes and persists the source and normalized names');
 
 reset role;
 select * from extensions.finish();
